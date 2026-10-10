@@ -44,10 +44,10 @@ export const CHASSIS_BEETLE: ChassisDefinition = {
   modifiers: {},
   wheelCount: 4,
   wheelAnchors: [
-    { id: 'front_left', x: -14, y: -17, steers: true, driven: false },
-    { id: 'front_right', x: 14, y: -17, steers: true, driven: false },
-    { id: 'rear_left', x: -14, y: 17, steers: false, driven: true },
-    { id: 'rear_right', x: 14, y: 17, steers: false, driven: true },
+    { id: 'front_left', x: -14.5, y: -17, steers: true, driven: false },
+    { id: 'front_right', x: 14.5, y: -17, steers: true, driven: false },
+    { id: 'rear_left', x: -14.5, y: 17.5, steers: false, driven: true },
+    { id: 'rear_right', x: 14.5, y: 17.5, steers: false, driven: true },
   ],
   mounts: [
     mount('front_center', ['FRONT'], 0, -22, 20, 14),

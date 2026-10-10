@@ -10,3 +10,5 @@ playwright-report/
 # Generated art is reproducible from art/scripts; exported atlases are committed so a clean
 # checkout can run without a bake step, but intermediate previews are not.
 art/preview/
+tests/visual/out*/
+art/preview/cars/_z*.png

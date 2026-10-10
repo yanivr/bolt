@@ -1,0 +1,180 @@
+{
+  "version": 1,
+  "chassis": {
+    "chassis_beetle": {
+      "id": "chassis_beetle",
+      "body": {
+        "file": "chassis_beetle_body.png",
+        "frameWidth": 96,
+        "frameHeight": 96,
+        "columns": 16,
+        "rows": 1
+      },
+      "shadow": {
+        "file": "chassis_beetle_shadow.png",
+        "frameWidth": 96,
+        "frameHeight": 96,
+        "columns": 16,
+        "rows": 1
+      },
+      "brakeLights": {
+        "file": "chassis_beetle_brake.png",
+        "frameWidth": 96,
+        "frameHeight": 96,
+        "columns": 16,
+        "rows": 1
+      },
+      "headlights": {
+        "file": "chassis_beetle_head.png",
+        "frameWidth": 96,
+        "frameHeight": 96,
+        "columns": 16,
+        "rows": 1
+      },
+      "paintKey": [
+        "#2b0a1f",
+        "#5c1230",
+        "#941f34",
+        "#cf3440",
+        "#f0604c",
+        "#ffb08a"
+      ],
+      "wheelAnchors": [
+        {
+          "id": "front_left",
+          "x": -14.5,
+          "y": -17,
+          "steers": true
+        },
+        {
+          "id": "front_right",
+          "x": 14.5,
+          "y": -17,
+          "steers": true
+        },
+        {
+          "id": "rear_left",
+          "x": -14.5,
+          "y": 17.5,
+          "steers": false
+        },
+        {
+          "id": "rear_right",
+          "x": 14.5,
+          "y": 17.5,
+          "steers": false
+        }
+      ],
+      "engineAnchor": {
+        "x": 0,
+        "y": 20.6
+      },
+      "exhausts": [
+        {
+          "x": -4.6,
+          "y": 31
+        },
+        {
+          "x": 4.6,
+          "y": 31
+        }
+      ],
+      "headlightAnchors": [
+        {
+          "x": -10,
+          "y": -24.5
+        },
+        {
+          "x": 10,
+          "y": -24.5
+        }
+      ],
+      "brakeLightAnchors": [
+        {
+          "x": -9.9,
+          "y": 26
+        },
+        {
+          "x": 9.9,
+          "y": 26
+        }
+      ]
+    }
+  },
+  "wheels": {
+    "tires_street": {
+      "id": "tires_street",
+      "sheet": {
+        "file": "tires_street.png",
+        "frameWidth": 20,
+        "frameHeight": 20,
+        "columns": 32,
+        "rows": 3
+      },
+      "rollFrames": 3
+    }
+  },
+  "engines": {
+    "engine_four_cylinder": {
+      "id": "engine_four_cylinder",
+      "sheet": {
+        "file": "engine_four_cylinder.png",
+        "frameWidth": 40,
+        "frameHeight": 40,
+        "columns": 16,
+        "rows": 1
+      },
+      "exhaustStyle": "puff"
+    }
+  },
+  "paints": {
+    "paint_signal": {
+      "id": "paint_signal",
+      "displayName": "Signal Red",
+      "ramp": [
+        "#2b0a1f",
+        "#5c1230",
+        "#941f34",
+        "#cf3440",
+        "#f0604c",
+        "#ffb08a"
+      ]
+    },
+    "paint_cobalt": {
+      "id": "paint_cobalt",
+      "displayName": "Cobalt",
+      "ramp": [
+        "#0b1233",
+        "#16235e",
+        "#22409a",
+        "#2f69d2",
+        "#52a0ee",
+        "#a8e0ff"
+      ]
+    },
+    "paint_mint": {
+      "id": "paint_mint",
+      "displayName": "Mint",
+      "ramp": [
+        "#082a30",
+        "#0f4a4c",
+        "#178a70",
+        "#3cc79a",
+        "#7ae8b4",
+        "#d6ffd9"
+      ]
+    },
+    "paint_sunflare": {
+      "id": "paint_sunflare",
+      "displayName": "Sunflare",
+      "ramp": [
+        "#3a160c",
+        "#6e3212",
+        "#b3611a",
+        "#e89b2a",
+        "#f8cc5c",
+        "#fff3b0"
+      ]
+    }
+  }
+}

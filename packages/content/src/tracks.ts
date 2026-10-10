@@ -32,12 +32,12 @@ export const CITY_01: TrackDefinition = {
     shoulderSurface: 'cobble',
     points: [
       // Harbor Straight, heading west. Start line sits here.
-      A(2620, 2330, 160),
+      A(2620, 2340, 160),
       A(2050, 2340, 170),
       A(1450, 2340, 170),
-      A(920, 2320, 160),
+      A(920, 2340, 160),
       // Dockside sweeper.
-      A(610, 2200, 154),
+      A(600, 2215, 154),
       A(480, 1950, 150),
       // West Avenue with a kink around the clock tower.
       A(460, 1620, 150),
@@ -46,34 +46,34 @@ export const CITY_01: TrackDefinition = {
       // Arcade sweeper.
       A(505, 730, 150),
       A(690, 525, 156),
-      A(990, 450, 162),
+      A(990, 444, 162),
       // Billboard Row, heading east.
-      A(1500, 440, 168),
-      A(1950, 446, 160),
+      A(1500, 444, 168),
+      A(1950, 444, 160),
       // Switchback one: right-hand hairpin onto cobblestone.
       C(2215, 452, 134),
       C(2305, 488, 128),
       C(2340, 575, 126),
       C(2305, 662, 126),
       C(2215, 700, 126),
-      C(1900, 706, 128),
+      C(1900, 700, 128),
       C(1640, 700, 128),
       // Switchback two: left-hand hairpin.
       C(1552, 737, 126),
       C(1515, 825, 126),
       C(1552, 913, 126),
       C(1640, 950, 126),
-      C(1950, 946, 130),
+      C(1950, 950, 130),
       // Market Street, back onto asphalt.
       A(2400, 950, 140),
-      A(2760, 975, 156),
+      A(2760, 968, 156),
       // Overpass sweeper.
       A(3030, 1110, 156),
       A(3140, 1380, 152),
       A(3150, 1720, 152),
       // Harbor bend.
       A(3100, 2030, 154),
-      A(2930, 2250, 158),
+      A(2940, 2240, 158),
     ],
   },
   shortcuts: [

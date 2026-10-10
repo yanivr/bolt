@@ -32,6 +32,8 @@ export const STRINGS = {
     finalLap: 'FINAL LAP',
     finish: 'FINISH',
     best: 'BEST',
+    time: 'Time',
+    bestLap: 'Best lap',
     last: 'LAST',
     raceAgain: 'Race Again',
     backHome: 'Back Home',

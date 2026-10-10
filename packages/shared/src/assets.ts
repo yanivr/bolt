@@ -124,3 +124,16 @@ export type CarAtlasManifest = {
   engines: Record<string, EngineSpriteManifest>;
   paints: Record<string, PaintDefinition>;
 };
+
+// --- Effects -----------------------------------------------------------------------------------
+
+export type VfxStripManifest = {
+  id: string;
+  file: string;
+  frameWidth: number;
+  frameHeight: number;
+  frames: number;
+  fps: number;
+};
+
+export type VfxManifest = { version: 1; strips: Record<string, VfxStripManifest> };

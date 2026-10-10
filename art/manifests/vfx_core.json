@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "strips": {
+    "smoke_a": {
+      "id": "smoke_a",
+      "file": "smoke_a.png",
+      "frameWidth": 16,
+      "frameHeight": 16,
+      "frames": 7,
+      "fps": 14
+    },
+    "smoke_b": {
+      "id": "smoke_b",
+      "file": "smoke_b.png",
+      "frameWidth": 16,
+      "frameHeight": 16,
+      "frames": 7,
+      "fps": 14
+    },
+    "smoke_small": {
+      "id": "smoke_small",
+      "file": "smoke_small.png",
+      "frameWidth": 10,
+      "frameHeight": 10,
+      "frames": 5,
+      "fps": 14
+    },
+    "exhaust": {
+      "id": "exhaust",
+      "file": "exhaust.png",
+      "frameWidth": 8,
+      "frameHeight": 8,
+      "frames": 5,
+      "fps": 14
+    },
+    "spark": {
+      "id": "spark",
+      "file": "spark.png",
+      "frameWidth": 8,
+      "frameHeight": 8,
+      "frames": 5,
+      "fps": 24
+    },
+    "impact": {
+      "id": "impact",
+      "file": "impact.png",
+      "frameWidth": 16,
+      "frameHeight": 16,
+      "frames": 4,
+      "fps": 20
+    },
+    "skid_light": {
+      "id": "skid_light",
+      "file": "skid_light.png",
+      "frameWidth": 5,
+      "frameHeight": 8,
+      "frames": 4,
+      "fps": 1
+    },
+    "skid_heavy": {
+      "id": "skid_heavy",
+      "file": "skid_heavy.png",
+      "frameWidth": 5,
+      "frameHeight": 8,
+      "frames": 4,
+      "fps": 1
+    },
+    "headlight_cone": {
+      "id": "headlight_cone",
+      "file": "headlight_cone.png",
+      "frameWidth": 72,
+      "frameHeight": 96,
+      "frames": 1,
+      "fps": 1
+    }
+  }
+}

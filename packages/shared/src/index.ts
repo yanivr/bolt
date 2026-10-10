@@ -1,5 +1,7 @@
 export * from './assets.js';
 export * from './balance.js';
+export * from './compose.js';
+export * from './driver.js';
 export * from './input.js';
 export * from './math.js';
 export * from './physics.js';

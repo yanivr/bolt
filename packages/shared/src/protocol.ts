@@ -75,6 +75,24 @@ export type ErrorCode = (typeof ERROR_CODES)[number];
 
 export type ApiError = { error: { code: ErrorCode; message: string } };
 
+/**
+ * Colyseus join refusals only carry a number, so each refusal reason has a stable code in the
+ * application range. The client maps them back to player-facing screens.
+ */
+export const JOIN_ERROR_CODES = {
+  BAD_REQUEST: 4400,
+  UNAUTHORIZED: 4401,
+  UNKNOWN_TRACK: 4404,
+  VERSION_MISMATCH: 4409,
+  UNKNOWN_PART: 4422,
+  RATE_LIMITED: 4429,
+  INTERNAL: 4500,
+  SERVER_FULL: 4503,
+} as const satisfies Partial<Record<ErrorCode, number>>;
+export type JoinErrorCode = keyof typeof JOIN_ERROR_CODES;
+
+export type MatchPhaseMessage = { phase: MatchPhase; tick: number };
+
 export type RaceEvent =
   | { id: number; type: 'checkpoint'; tick: number; index: number }
   | { id: number; type: 'lap'; tick: number; lap: number; lapTimeMs: number }
@@ -93,6 +111,8 @@ export type CarSnapshot = {
   phase: MatchPhase;
   /** Whole seconds left on the start countdown, zero once racing. */
   countdown: number;
+  /** Exact simulation ticks left before GO, so a predicting client starts on the same tick. */
+  countdownTicks: number;
   motion: VehicleMotionState;
   progress: VehicleProgressState;
   bestLapMs: number;
