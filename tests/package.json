@@ -1,0 +1,1 @@
+{ "name": "@bolt/tests", "private": true, "type": "module", "dependencies": { "@bolt/shared": "workspace:*", "@bolt/content": "workspace:*" } }

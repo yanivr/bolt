@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.local
+coverage/
+test-results/
+playwright-report/
+.vite/
+# Generated art is reproducible from art/scripts; exported atlases are committed so a clean
+# checkout can run without a bake step, but intermediate previews are not.
+art/preview/

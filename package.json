@@ -1,0 +1,38 @@
+{
+  "name": "bolt-rivals",
+  "private": true,
+  "version": "0.1.0",
+  "description": "BOLT RIVALS: build smart, drive hard. A browser-first tactical racing game.",
+  "packageManager": "pnpm@10.28.0",
+  "engines": { "node": ">=22" },
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm art && pnpm -r --parallel --filter @bolt/server --filter @bolt/web dev",
+    "dev:web": "pnpm --filter @bolt/web dev",
+    "dev:server": "pnpm --filter @bolt/server dev",
+    "art": "tsx art/scripts/build-art.ts",
+    "art:check": "tsx art/scripts/build-art.ts --check",
+    "build": "pnpm art && pnpm --filter @bolt/web build && pnpm --filter @bolt/server build",
+    "start": "pnpm --filter @bolt/server start",
+    "typecheck": "tsc -b tsconfig.json",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "check": "pnpm lint && pnpm typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.37.0",
+    "@playwright/test": "1.56.0",
+    "@types/node": "^22.18.0",
+    "eslint": "^9.37.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^16.4.0",
+    "prettier": "^3.6.2",
+    "tsx": "^4.20.6",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.46.0",
+    "vitest": "^3.2.4"
+  }
+}

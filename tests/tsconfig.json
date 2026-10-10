@@ -1,0 +1,6 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": { "noEmit": true, "composite": false, "types": ["node"], "lib": ["ES2022", "DOM"] },
+  "include": ["**/*.ts"],
+  "references": [{ "path": "../packages/shared" }, { "path": "../packages/content" }]
+}

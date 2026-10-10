@@ -1,0 +1,7 @@
+pnpm-lock.yaml
+dist
+docs/MASTER_SPEC.md
+CLAUDE.md
+apps/web/public/assets
+art/manifests
+art/source
