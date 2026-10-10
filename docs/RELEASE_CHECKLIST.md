@@ -68,7 +68,7 @@ settings. G: load, security, Docker deployment, public HTTPS.
 - [ ] Low-effects settings preserve readability and touch responsiveness. _Reduced camera motion, shake amount and reduced flashes exist; particle quality tiers do not._
 - [ ] Device tests and network stress tests meet documented budgets.
 - [ ] Privacy disclosure, deletion controls, error handling, backups and HTTPS are in place. _Guest tokens carry no personal data and can be cleared locally; no privacy page yet._
-- [ ] Automated tests and clean install and build commands pass on the committed revision. _Passing locally at this revision. Clean-clone install and CI are unverified._
+- [ ] Automated tests and clean install and build commands pass on the committed revision. *A fresh clone installs from the lockfile, passes `pnpm check` (157 tests), builds and boots. Playwright passes 10 of 10 locally. CI itself has never run.*
 
 ## Launch blockers known today
 
