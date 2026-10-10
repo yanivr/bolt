@@ -199,6 +199,8 @@ export type RenderOptions = {
   tilt?: number;
   /** Exaggerates part heights so the tilted view reads clearly at small sizes. */
   zScale?: number;
+  /** Uniform magnification of the model, for icons. 1 is game size. */
+  scale?: number;
   /** Supersampling grid per pixel edge. */
   samples?: number;
   /** Where the model origin lands in the image. Defaults to the image centre. */
@@ -314,7 +316,8 @@ export function renderModel(model: Model, opts: RenderOptions): RenderResult {
   const { width, height } = opts;
   const n = opts.samples ?? 3;
   const tilt = opts.tilt ?? 0;
-  const zScale = opts.zScale ?? 1;
+  const scale = opts.scale ?? 1;
+  const zScale = (opts.zScale ?? 1) * scale;
   const ox = opts.originX ?? width / 2;
   const oy = opts.originY ?? height / 2;
   const cos = Math.cos(opts.heading);
@@ -356,8 +359,8 @@ export function renderModel(model: Model, opts: RenderOptions): RenderResult {
 
   for (let gy = 0; gy < sh; gy++) {
     for (let gx = 0; gx < sw; gx++) {
-      const px = (gx + 0.5) / n - ox;
-      const py = (gy + 0.5) / n - oy;
+      const px = ((gx + 0.5) / n - ox) / scale;
+      const py = ((gy + 0.5) / n - oy) / scale;
       // Screen-aligned ground position to model space: undo the clockwise heading rotation.
       const mx = px * cos + py * sin;
       const my = -px * sin + py * cos;
@@ -434,7 +437,10 @@ export function renderModel(model: Model, opts: RenderOptions): RenderResult {
         let shade = (-gxh * lx - gyh * ly + lz) / nl;
         // Cast shadow: march toward the light and see whether anything stands in the way.
         for (const step of [1.4, 2.8, 4.4]) {
-          if (topSolid(solids, active, mx + sx * step, my + sy * step, probe) && !solids[probe.solid]!.noShadow) {
+          if (
+            topSolid(solids, active, mx + sx * step, my + sy * step, probe) &&
+            !solids[probe.solid]!.noShadow
+          ) {
             if (probe.z - hit.z > step * slope + 0.6) {
               shade -= 0.26;
               break;
@@ -444,7 +450,13 @@ export function renderModel(model: Model, opts: RenderOptions): RenderResult {
         level = quantize(shade);
       }
       level = Math.max(0, Math.min(4, level + delta + (mat.bias ?? 0)));
-      put(gx, gy - Math.floor(tilt * hit.z * zScale * n), nameIndex.get(material)!, hit.solid, level);
+      put(
+        gx,
+        gy - Math.floor(tilt * hit.z * zScale * n),
+        nameIndex.get(material)!,
+        hit.solid,
+        level,
+      );
     }
   }
 
@@ -532,7 +544,12 @@ export function renderModel(model: Model, opts: RenderOptions): RenderResult {
  * Pulls the pixels of tagged parts out of a finished render and recolors them, for emissive
  * overlays such as lit headlights. Uses the same pixels as the body, so overlays always align.
  */
-export function extractTagged(result: RenderResult, model: Model, tags: string[], color: RGBA): PixelBuffer {
+export function extractTagged(
+  result: RenderResult,
+  model: Model,
+  tags: string[],
+  color: RGBA,
+): PixelBuffer {
   const { image, solidIndex } = result;
   const out = new PixelBuffer(image.width, image.height);
   for (let i = 0; i < solidIndex.length; i++) {

@@ -2,6 +2,7 @@ import type {
   CarPose,
   ChassisSpriteManifest,
   EngineSpriteManifest,
+  MountedPartSprite,
   WheelSpriteManifest,
 } from '@bolt/shared';
 import { layoutCar } from '@bolt/shared';
@@ -14,6 +15,8 @@ export type CarTextureKeys = {
   head: string;
   wheels: string;
   engine: string;
+  /** Texture key per mounted part id. */
+  parts: Record<string, string>;
 };
 
 /**
@@ -31,6 +34,7 @@ export class CarView {
   private engine: Phaser.GameObjects.Image;
   private head: Phaser.GameObjects.Image;
   private brake: Phaser.GameObjects.Image;
+  private partImages = new Map<string, Phaser.GameObjects.Image>();
 
   constructor(
     scene: Phaser.Scene,
@@ -38,6 +42,7 @@ export class CarView {
     private readonly wheelKit: WheelSpriteManifest,
     private readonly engineKit: EngineSpriteManifest,
     private readonly keys: CarTextureKeys,
+    private readonly parts: MountedPartSprite[] = [],
   ) {
     this.shadow = scene.add.image(0, 0, keys.shadow, 0);
     for (let i = 0; i < chassis.wheelAnchors.length; i++)
@@ -46,11 +51,20 @@ export class CarView {
     this.engine = scene.add.image(0, 0, keys.engine, 0);
     this.head = scene.add.image(0, 0, keys.head, 0);
     this.brake = scene.add.image(0, 0, keys.brake, 0);
+    const partList: Phaser.GameObjects.Image[] = [];
+    for (const part of parts) {
+      const key = keys.parts[part.partId];
+      if (!key) continue;
+      const image = scene.add.image(0, 0, key, 0);
+      this.partImages.set(part.instanceId, image);
+      partList.push(image);
+    }
     this.container = scene.add.container(0, 0, [
       this.shadow,
       ...this.wheels,
       this.body,
       this.engine,
+      ...partList,
       this.head,
       this.brake,
     ]);
@@ -58,7 +72,8 @@ export class CarView {
 
   /** Applies a pose: picks the frame for every layer and places it. */
   apply(pose: CarPose): void {
-    const ops = layoutCar(this.chassis, this.wheelKit, this.engineKit, pose);
+    const ops = layoutCar(this.chassis, this.wheelKit, this.engineKit, pose, this.parts);
+    let partDepth = 0;
     let wheel = 0;
     this.head.setVisible(false);
     this.brake.setVisible(false);
@@ -82,6 +97,15 @@ export class CarView {
           target = this.engine;
           frame = op.frame;
           break;
+        case 'part': {
+          const image = op.instanceId ? this.partImages.get(op.instanceId) : undefined;
+          if (!image) continue;
+          // Draw order follows the compositor: far parts first, lamps on top.
+          this.container.moveTo(image, 2 + this.wheels.length + 1 + partDepth++);
+          target = image;
+          frame = op.frame;
+          break;
+        }
         case 'headlight':
           target = this.head;
           frame = op.frame;

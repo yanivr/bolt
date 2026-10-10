@@ -1,5 +1,5 @@
-import { STRINGS } from '@bolt/content';
-import { resolveCarSprites } from '@bolt/shared';
+import { CATALOG, STRINGS } from '@bolt/content';
+import { mountedPartSprites, resolveCarSprites } from '@bolt/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TRACK_ID, WEATHER_PRESET_ID, bootAssets } from '../app/App.js';
 import { useApp, useHud } from '../app/store.js';
@@ -96,6 +96,7 @@ export function RaceScreen() {
           session: setup.session,
           link: setup.link,
           loadout: sprites,
+          parts: mountedPartSprites(m.cars, setup.blueprint, CATALOG),
           input,
           audio,
           autopilot: new URLSearchParams(window.location.search).get('autopilot') === '1',

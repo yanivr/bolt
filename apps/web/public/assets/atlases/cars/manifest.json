@@ -485,5 +485,33 @@
         "#fff3b0"
       ]
     }
-  }
+  },
+  "icons": [
+    {
+      "file": "icons_32.png",
+      "size": 32,
+      "columns": 16,
+      "index": {
+        "chassis_beetle": 0,
+        "chassis_arrow": 1,
+        "chassis_turtle": 2,
+        "chassis_spider": 3,
+        "engine_four_cylinder": 4,
+        "tires_street": 5
+      }
+    },
+    {
+      "file": "icons_24.png",
+      "size": 24,
+      "columns": 16,
+      "index": {
+        "chassis_beetle": 0,
+        "chassis_arrow": 1,
+        "chassis_turtle": 2,
+        "chassis_spider": 3,
+        "engine_four_cylinder": 4,
+        "tires_street": 5
+      }
+    }
+  ]
 }

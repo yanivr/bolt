@@ -78,6 +78,13 @@ export const CAR_HEADINGS = 64;
 /** Heading frames are packed in a grid this many columns wide to stay inside texture limits. */
 export const CAR_SHEET_COLUMNS = 8;
 export const WHEEL_HEADINGS = 32;
+/**
+ * Camera tilt of every vehicle sprite: screen pixels a point rises per unit of height, and the
+ * exaggeration applied to authored heights. The compositor uses the same numbers to lift a
+ * mounted part to the height of its mount, so parts sit on the bodywork at every heading.
+ */
+export const CAR_TILT = 0.62;
+export const CAR_Z_SCALE = 1.3;
 
 export type AnchorPoint = { x: number; y: number };
 
@@ -105,6 +112,8 @@ export type ChassisSpriteManifest = {
   exhausts: AnchorPoint[];
   headlightAnchors: AnchorPoint[];
   brakeLightAnchors: AnchorPoint[];
+  /** Height of the bodywork under each accessory mount, in authored units. Missing means 10. */
+  mountHeights?: Record<string, number>;
 };
 
 export type WheelSpriteManifest = {
@@ -131,6 +140,14 @@ export type PartSpriteManifest = {
   sheet: SpriteSheetRef;
 };
 
+/** Square part icons packed in one sheet per size; `index` maps a part id to its cell. */
+export type IconSheetManifest = {
+  file: string;
+  size: number;
+  columns: number;
+  index: Record<string, number>;
+};
+
 export type PaintDefinition = { id: string; displayName: string; ramp: string[] };
 
 export type CarAtlasManifest = {
@@ -140,6 +157,8 @@ export type CarAtlasManifest = {
   engines: Record<string, EngineSpriteManifest>;
   /** Mounted parts. Absent until the first accessory sprites are baked. */
   parts?: Record<string, PartSpriteManifest>;
+  /** Catalog icons at 32 and 24 pixels for every part that has art. */
+  icons?: IconSheetManifest[];
   paints: Record<string, PaintDefinition>;
 };
 

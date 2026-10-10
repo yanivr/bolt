@@ -4,7 +4,7 @@ import type {
   EngineSpriteManifest,
   WheelSpriteManifest,
 } from './assets.js';
-import { CAR_HEADINGS, WHEEL_HEADINGS } from './assets.js';
+import { CAR_HEADINGS, CAR_TILT, CAR_Z_SCALE, WHEEL_HEADINGS } from './assets.js';
 import { TAU } from './math.js';
 
 /**
@@ -16,7 +16,7 @@ import { TAU } from './math.js';
  * Pure layout only: callers own the actual drawing.
  */
 
-export type CarLayerKind = 'shadow' | 'wheel' | 'body' | 'engine' | 'brake' | 'headlight';
+export type CarLayerKind = 'shadow' | 'wheel' | 'body' | 'engine' | 'part' | 'brake' | 'headlight';
 
 export type CarDrawOp = {
   kind: CarLayerKind;
@@ -27,6 +27,20 @@ export type CarDrawOp = {
   /** Offset of the frame centre from the car origin, in sprite pixels. */
   dx: number;
   dy: number;
+  /** For mounted parts: the blueprint instance this sprite belongs to. */
+  instanceId?: string;
+};
+
+/** A mounted accessory to draw: where it sits on the chassis and how it is turned. */
+export type MountedPartSprite = {
+  instanceId: string;
+  partId: string;
+  /** Centre of the part in chassis-local pixels. */
+  x: number;
+  y: number;
+  /** Height of the bodywork it stands on, in authored units. */
+  z: number;
+  quarterTurns: number;
 };
 
 export type CarPose = {
@@ -61,6 +75,7 @@ export function layoutCar(
   wheels: WheelSpriteManifest,
   engine: EngineSpriteManifest,
   pose: CarPose,
+  parts: MountedPartSprite[] = [],
 ): CarDrawOp[] {
   const frame = headingFrame(pose.headingRad);
   const snapped = (frame * TAU) / CAR_HEADINGS;
@@ -96,10 +111,25 @@ export function layoutCar(
     dy: Math.round(e.y) + by,
   });
 
-  if (pose.headlights)
-    ops.push({ kind: 'headlight', sheetId: chassis.id, frame, dx: bx, dy: by });
-  if (pose.braking)
-    ops.push({ kind: 'brake', sheetId: chassis.id, frame, dx: bx, dy: by });
+  // Mounted parts, far side first so nearer parts overlap the ones behind them.
+  const placed = parts.map((part) => {
+    const p = rotated(part, snapped);
+    return { part, x: p.x, y: p.y };
+  });
+  placed.sort((a, b) => a.y - b.y || a.x - b.x);
+  for (const { part, x, y } of placed) {
+    ops.push({
+      kind: 'part',
+      sheetId: part.partId,
+      frame: headingFrame(snapped + (part.quarterTurns * TAU) / 4),
+      dx: Math.round(x) + bx,
+      dy: Math.round(y - CAR_TILT * CAR_Z_SCALE * part.z) + by,
+      instanceId: part.instanceId,
+    });
+  }
+
+  if (pose.headlights) ops.push({ kind: 'headlight', sheetId: chassis.id, frame, dx: bx, dy: by });
+  if (pose.braking) ops.push({ kind: 'brake', sheetId: chassis.id, frame, dx: bx, dy: by });
   return ops;
 }
 

@@ -1,4 +1,5 @@
 import type {
+  MountedPartSprite,
   CarPose,
   CarSnapshot,
   DriveSession,
@@ -42,6 +43,8 @@ export type RaceSceneConfig = {
   session: DriveSession;
   link: DriveLink;
   loadout: VehicleLoadout;
+  /** Mounted accessories that have art, positioned for the compositor. */
+  parts: MountedPartSprite[];
   input: DriveInput;
   audio: EngineAudio;
   /** Development aid: a centerline driver replaces the controls for capture and soak runs. */
@@ -131,6 +134,10 @@ export class RaceScene extends Phaser.Scene {
       manifests.carsBase,
       manifests.cars.engines[loadout.engineId]!.sheet,
     );
+    for (const partId of new Set(this.cfg.parts.map((p) => p.partId))) {
+      const ref = manifests.cars.parts?.[partId];
+      if (ref) sheet(`part:${partId}`, manifests.carsBase, ref.sheet);
+    }
     for (const strip of Object.values(manifests.vfx.strips))
       sheet(`vfx:${strip.id}`, manifests.vfxBase, strip);
     for (const chunk of manifests.terrain.ground)
@@ -204,7 +211,9 @@ export class RaceScene extends Phaser.Scene {
         head: `car:${chassis.id}:head`,
         wheels: `wheel:${loadout.tireKitId}`,
         engine: `engine:${loadout.engineId}`,
+        parts: Object.fromEntries(this.cfg.parts.map((p) => [p.partId, `part:${p.partId}`])),
       },
+      this.cfg.parts,
     );
     this.car.container.setDepth(DEPTH_CAR);
 
@@ -280,12 +289,7 @@ export class RaceScene extends Phaser.Scene {
     }
     // Carry the interpolation endpoints along with the correction; the predictor's decaying
     // error offset is what the player actually sees, so nothing pops.
-    this.pipeline.poses.rebase(
-      this.readPose(),
-      m.x - bx,
-      m.y - by,
-      angleDelta(bh, m.headingRad),
-    );
+    this.pipeline.poses.rebase(this.readPose(), m.x - bx, m.y - by, angleDelta(bh, m.headingRad));
   }
 
   private onRaceEvent(event: RaceEvent): void {

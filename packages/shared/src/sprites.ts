@@ -1,4 +1,6 @@
 import type { CarAtlasManifest } from './assets.js';
+import { resolveBlueprint } from './blueprint.js';
+import type { MountedPartSprite } from './compose.js';
 import type { Catalog, VehicleBlueprint, VehicleLoadout } from './types.js';
 
 /**
@@ -57,4 +59,31 @@ export function partsWithoutSprites(cars: CarAtlasManifest, catalog: Catalog): s
     ...Object.keys(catalog.tires).filter((id) => !has(cars.wheels, id)),
     ...Object.keys(catalog.parts).filter((id) => !has(mounted, id)),
   ];
+}
+
+const DEFAULT_MOUNT_HEIGHT = 10;
+
+/**
+ * Mounted accessories of a blueprint that have art, positioned for the compositor. Parts whose
+ * sprite sheet is not baked yet are left out of the drawing only.
+ */
+export function mountedPartSprites(
+  cars: CarAtlasManifest,
+  blueprint: VehicleBlueprint,
+  catalog: Catalog,
+): MountedPartSprite[] {
+  const build = resolveBlueprint(blueprint, catalog);
+  const sheets = cars.parts ?? {};
+  const heights = cars.chassis[blueprint.chassisId]?.mountHeights ?? {};
+  if (!build) return [];
+  return build.parts
+    .filter((placed) => has(sheets, placed.def.id))
+    .map((placed) => ({
+      instanceId: placed.instance.instanceId,
+      partId: placed.def.id,
+      x: placed.x,
+      y: placed.y,
+      z: has(heights, placed.mount.id) ? heights[placed.mount.id]! : DEFAULT_MOUNT_HEIGHT,
+      quarterTurns: placed.instance.rotationQuarterTurns,
+    }));
 }

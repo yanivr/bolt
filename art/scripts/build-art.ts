@@ -7,16 +7,26 @@ import type {
   CarPose,
   ChassisSpriteManifest,
   EngineSpriteManifest,
+  IconSheetManifest,
   VfxManifest,
   WheelSpriteManifest,
 } from '@bolt/shared';
-import { CAR_HEADINGS, CAR_SHEET_COLUMNS, TAU, WHEEL_HEADINGS, layoutCar } from '@bolt/shared';
-import { BEETLE_ART } from './cars/beetle.js';
-import { ARROW_ART, SPIDER_ART, TURTLE_ART } from './cars/benchmarks.js';
-import { FOUR_CYLINDER_ART } from './cars/engines.js';
+import {
+  CAR_HEADINGS,
+  CAR_SHEET_COLUMNS,
+  CAR_TILT,
+  CAR_Z_SCALE,
+  TAU,
+  WHEEL_HEADINGS,
+  layoutCar,
+} from '@bolt/shared';
+import { ALL_CHASSIS_ART } from './cars/registry-chassis.js';
+import { ALL_ENGINE_ART } from './cars/registry-engines.js';
+import { ALL_PART_ART } from './cars/registry-parts.js';
+import { ALL_WHEEL_ART } from './cars/registry-wheels.js';
 import { CAR_MATERIALS, PAINTS, PAINT_KEY, PAINT_OUTLINE_KEY } from './cars/materials.js';
-import type { ChassisArt, EngineArt, WheelArt } from './cars/types.js';
-import { STREET_WHEEL_ART } from './cars/wheels.js';
+import type { ChassisArt, EngineArt, PartArt, WheelArt } from './cars/types.js';
+import type { Model } from './lib/model.js';
 import { addGlow, extractTagged, footprintShadow, renderModel, silhouette } from './lib/model.js';
 import type { RGBA } from './lib/pixels.js';
 import { PixelBuffer, hex, readPng, writePng } from './lib/pixels.js';
@@ -43,6 +53,8 @@ const PREVIEW_DIR = join(ROOT, 'art/preview/cars');
 const args = new Set(process.argv.slice(2));
 const carsOnly = args.has('--cars');
 const check = args.has('--check');
+const onlyArg = [...args].find((a) => a.startsWith('--only='));
+const only = onlyArg ? new Set(onlyArg.slice(7).split(',')) : null;
 
 const SHADOW: RGBA = [8, 10, 22, 120];
 const SHADOW_RIM: RGBA = [8, 10, 22, 56];
@@ -67,16 +79,18 @@ type Baked = {
     wheels: Record<string, PixelBuffer[][]>;
     wheelFeet: Record<string, PixelBuffer[]>;
     engines: Record<string, PixelBuffer[]>;
+    parts: Record<string, PixelBuffer[]>;
   };
 };
 
-/**
- * Camera for every vehicle sprite: seen from the south at an angle, as in the product owner's
- * reference. Heights are exaggerated a little so roofs, fenders and weapons read at game size.
- */
-const CAR_TILT = 0.62;
-const CAR_Z_SCALE = 1.3;
-const view = (heading: number, cell: number) => ({ heading, width: cell, height: cell, tilt: CAR_TILT, zScale: CAR_Z_SCALE });
+/** Camera for every vehicle sprite: the shared tilt and height exaggeration. */
+const view = (heading: number, cell: number) => ({
+  heading,
+  width: cell,
+  height: cell,
+  tilt: CAR_TILT,
+  zScale: CAR_Z_SCALE,
+});
 
 function bakeChassis(art: ChassisArt, wheelArt: WheelArt, baked: Baked): void {
   const def = CHASSIS[art.id];
@@ -136,6 +150,7 @@ function bakeChassis(art: ChassisArt, wheelArt: WheelArt, baked: Baked): void {
     exhausts: art.exhausts,
     headlightAnchors: art.headlightAnchors,
     brakeLightAnchors: art.brakeLightAnchors,
+    ...(art.mountHeights ? { mountHeights: art.mountHeights } : {}),
   };
   baked.manifest.chassis[art.id] = entry;
 }
@@ -191,6 +206,71 @@ function bakeEngine(art: EngineArt, baked: Baked): void {
     exhaustStyle: art.exhaustStyle,
   };
   baked.manifest.engines[art.id] = entry;
+}
+
+function bakePart(art: PartArt, baked: Baked): void {
+  const frames: PixelBuffer[] = [];
+  for (let h = 0; h < CAR_HEADINGS; h++) {
+    frames.push(renderModel(art.model, view((h * TAU) / CAR_HEADINGS, art.cell)).image);
+  }
+  baked.frames.parts[art.id] = frames;
+  baked.files.set(`${art.id}.png`, sheet(frames, CAR_SHEET_COLUMNS));
+  (baked.manifest.parts ??= {})[art.id] = {
+    id: art.id,
+    sheet: {
+      file: `${art.id}.png`,
+      frameWidth: art.cell,
+      frameHeight: art.cell,
+      columns: CAR_SHEET_COLUMNS,
+      rows: CAR_HEADINGS / CAR_SHEET_COLUMNS,
+    },
+  };
+}
+
+/**
+ * Catalog icons at 32 and 24 pixels, rendered straight from each part's model at icon scale
+ * (never by shrinking a sprite), turned to a three-quarter pose so the shape reads.
+ */
+const ICON_COLUMNS = 16;
+const ICON_HEADING = (-3 * TAU) / 32;
+function modelExtent(model: Model): number {
+  let extent = 4;
+  for (let y = -64; y <= 64; y += 1) {
+    for (let x = -64; x <= 64; x += 1) {
+      for (const solid of model.solids) {
+        if (solid.shape(x, y) <= 0) {
+          extent = Math.max(extent, Math.hypot(x, y) + (solid.z1 * CAR_Z_SCALE * CAR_TILT) / 2);
+          break;
+        }
+      }
+    }
+  }
+  return extent;
+}
+function bakeIcons(models: Array<{ id: string; model: Model }>, baked: Baked): void {
+  const sheets: IconSheetManifest[] = [];
+  for (const size of [32, 24]) {
+    const rows = Math.max(1, Math.ceil(models.length / ICON_COLUMNS));
+    const out = new PixelBuffer(ICON_COLUMNS * size, rows * size);
+    const index: Record<string, number> = {};
+    models.forEach(({ id, model }, i) => {
+      const scale = (size / 2 - 2) / modelExtent(model);
+      const icon = renderModel(model, {
+        heading: ICON_HEADING,
+        width: size,
+        height: size,
+        tilt: CAR_TILT,
+        zScale: CAR_Z_SCALE,
+        scale,
+        originY: size / 2 + 1,
+      }).image;
+      out.blit(icon, (i % ICON_COLUMNS) * size, Math.floor(i / ICON_COLUMNS) * size);
+      index[id] = i;
+    });
+    baked.files.set(`icons_${size}.png`, out);
+    sheets.push({ file: `icons_${size}.png`, size, columns: ICON_COLUMNS, index });
+  }
+  baked.manifest.icons = sheets;
 }
 
 /** All shipped chassis side by side, for the silhouette test in Section 13.8. */
@@ -259,7 +339,11 @@ function composeCar(
   );
   for (const op of ops) {
     let frame: PixelBuffer;
-    if (op.kind === 'wheel') frame = baked.frames.wheels[op.sheetId]![Math.floor(op.frame / WHEEL_HEADINGS)]![op.frame % WHEEL_HEADINGS]!;
+    if (op.kind === 'wheel')
+      frame =
+        baked.frames.wheels[op.sheetId]![Math.floor(op.frame / WHEEL_HEADINGS)]![
+          op.frame % WHEEL_HEADINGS
+        ]!;
     else if (op.kind === 'engine') frame = baked.frames.engines[op.sheetId]![op.frame]!;
     else {
       const set = baked.frames.chassis[op.sheetId]!;
@@ -434,7 +518,7 @@ function bakeCars(): Baked {
   const baked: Baked = {
     files: new Map(),
     manifest: { version: 1, chassis: {}, wheels: {}, engines: {}, paints: {} },
-    frames: { chassis: {}, wheels: {}, wheelFeet: {}, engines: {} },
+    frames: { chassis: {}, wheels: {}, wheelFeet: {}, engines: {}, parts: {} },
   };
   for (const [id, paint] of Object.entries(PAINTS)) {
     baked.manifest.paints[id] = {
@@ -443,10 +527,24 @@ function bakeCars(): Baked {
       ramp: [paint.outline, ...paint.ramp],
     };
   }
-  bakeWheels(STREET_WHEEL_ART, baked);
-  bakeEngine(FOUR_CYLINDER_ART, baked);
-  for (const art of [BEETLE_ART, ARROW_ART, TURTLE_ART, SPIDER_ART])
-    bakeChassis(art, STREET_WHEEL_ART, baked);
+  // `--only=id,id` bakes just those sheets, for quick iteration on one part.
+  const wanted = (id: string) => !only || only.has(id);
+  for (const art of ALL_WHEEL_ART)
+    if (wanted(art.id) || art === ALL_WHEEL_ART[0]) bakeWheels(art, baked);
+  for (const art of ALL_ENGINE_ART) if (wanted(art.id)) bakeEngine(art, baked);
+  for (const art of ALL_CHASSIS_ART) if (wanted(art.id)) bakeChassis(art, ALL_WHEEL_ART[0]!, baked);
+  for (const art of ALL_PART_ART) if (wanted(art.id)) bakePart(art, baked);
+  if (!only) {
+    bakeIcons(
+      [
+        ...ALL_CHASSIS_ART.map((a) => ({ id: a.id, model: a.model })),
+        ...ALL_ENGINE_ART.map((a) => ({ id: a.id, model: a.model })),
+        ...ALL_WHEEL_ART.map((a) => ({ id: a.id, model: a.model(0) })),
+        ...ALL_PART_ART.map((a) => ({ id: a.id, model: a.model })),
+      ],
+      baked,
+    );
+  }
   // No non-paint material may collide with the paint key, or the runtime swap would recolor it.
   const key = new Set([PAINT_OUTLINE_KEY, ...PAINT_KEY].map((c) => c.toLowerCase()));
   for (const [name, mat] of Object.entries(CAR_MATERIALS)) {
@@ -499,6 +597,20 @@ function main(): void {
   mkdirSync(MANIFEST_DIR, { recursive: true });
   let bytes = 0;
   for (const [name, buf] of baked.files) bytes += writePng(join(ATLAS_DIR, name), buf);
+  if (only) {
+    // Partial bake: keep everything already on disk and replace just the requested entries.
+    const disk = JSON.parse(
+      readFileSync(join(ATLAS_DIR, 'manifest.json'), 'utf8'),
+    ) as CarAtlasManifest;
+    baked.manifest = {
+      ...disk,
+      chassis: { ...disk.chassis, ...baked.manifest.chassis },
+      wheels: { ...disk.wheels, ...baked.manifest.wheels },
+      engines: { ...disk.engines, ...baked.manifest.engines },
+      parts: { ...(disk.parts ?? {}), ...(baked.manifest.parts ?? {}) },
+      paints: baked.manifest.paints,
+    };
+  }
   const manifestText = `${JSON.stringify(baked.manifest, null, 2)}\n`;
   writeFileSync(join(ATLAS_DIR, 'manifest.json'), manifestText);
   writeFileSync(join(MANIFEST_DIR, 'cars.json'), manifestText);
@@ -513,6 +625,13 @@ function main(): void {
     writePng(join(SOURCE_DIR, `${id}.png`), frames[0]!);
   for (const [id, rows] of Object.entries(baked.frames.wheels))
     writePng(join(SOURCE_DIR, `${id}.png`), rows[0]![0]!);
+
+  if (only) {
+    console.log(
+      `partial bake: ${[...only].join(', ')} in ${((performance.now() - started) / 1000).toFixed(1)} s`,
+    );
+    return;
+  }
 
   const vfx: VfxManifest = { version: 1, strips: {} };
   mkdirSync(VFX_DIR, { recursive: true });
