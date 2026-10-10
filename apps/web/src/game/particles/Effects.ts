@@ -1,5 +1,5 @@
 import type { VfxManifest } from '@bolt/shared';
-import Phaser from 'phaser';
+import type Phaser from 'phaser';
 
 type Particle = {
   sprite: Phaser.GameObjects.Image;

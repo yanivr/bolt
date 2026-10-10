@@ -296,15 +296,19 @@ input:focus-visible {
 }
 
 .home-stage {
-  position: relative;
   height: 100%;
-  display: grid;
-  place-items: center;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
 }
 
 .turntable {
   position: relative;
-  width: min(46vw, 78vh);
+  flex: 0 1 auto;
+  height: min(58vh, 44vw);
   aspect-ratio: 1;
   display: grid;
   place-items: center;
@@ -353,6 +357,107 @@ input:focus-visible {
 .track-card-meta {
   font-size: 14px;
   color: var(--ivory-dim);
+}
+
+.car-pick {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: min(100%, 520px);
+  padding: 8px 10px;
+}
+
+.car-pick-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.car-pick-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.car-pick-name {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.car-pick-name strong {
+  font-size: 18px;
+}
+
+.car-pick-name span {
+  font-size: 13px;
+  color: var(--ivory-dim);
+  line-height: 1.3;
+}
+
+.icon-arrow {
+  display: block;
+  width: 12px;
+  height: 16px;
+  background: var(--ivory);
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+.icon-arrow-left {
+  transform: scaleX(-1);
+}
+
+.swatches {
+  display: flex;
+  gap: 10px;
+}
+
+.swatch {
+  appearance: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--steel-dark);
+  box-shadow:
+    inset 2px 2px 0 rgba(255, 255, 255, 0.35),
+    inset -2px -2px 0 rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.swatch.is-selected {
+  outline: 3px solid var(--ivory);
+  outline-offset: 2px;
+}
+
+.swatch:focus-visible {
+  outline: 3px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.swatch-paint_signal {
+  background: #cf3440;
+}
+
+.swatch-paint_cobalt {
+  background: #2f69d2;
+}
+
+.swatch-paint_mint {
+  background: #3cc79a;
+}
+
+.swatch-paint_sunflare {
+  background: #e89b2a;
+}
+
+.debug {
+  position: absolute;
+  left: calc(var(--safe-left) + 10px);
+  bottom: calc(var(--safe-bottom) + 8px);
+  padding: 3px 6px;
+  font: 11px/1.3 ui-monospace, Menlo, Consolas, monospace;
+  color: var(--mint);
+  background: rgba(14, 19, 32, 0.8);
 }
 
 /* --- Race -------------------------------------------------------------------------------- */
@@ -615,6 +720,7 @@ input:focus-visible {
   inset: 0;
   z-index: 10;
   display: grid;
+  grid-template-rows: minmax(0, 1fr);
   place-items: center;
   padding: calc(var(--safe-top) + 12px) calc(var(--safe-right) + 12px) calc(var(--safe-bottom) + 12px)
     calc(var(--safe-left) + 12px);
@@ -679,6 +785,7 @@ input:focus-visible {
 .settings {
   width: min(520px, 100%);
   max-height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   padding: 14px 16px;
@@ -698,6 +805,8 @@ input:focus-visible {
 }
 
 .settings-body {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
@@ -734,24 +843,40 @@ input:focus-visible {
   flex-wrap: wrap;
 }
 
-.setting-choice legend {
-  float: left;
-  padding: 0;
-  font-weight: 600;
+.setting-options {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
-.setting-choice label {
+.setting-options label {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
   min-height: 44px;
-  padding: 0 4px;
+  padding: 0 12px;
+  font-size: 15px;
+  background: #1c2536;
+  border: 1px solid var(--steel-dark);
+  cursor: pointer;
 }
 
-.setting-choice input {
-  width: 22px;
-  height: 22px;
-  accent-color: var(--cyan);
+.setting-options label.is-selected {
+  color: var(--navy);
+  background: var(--cyan);
+}
+
+/* The radio stays in the accessibility tree and keyboard order; the label is the visual. */
+.setting-options input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.setting-options label:focus-within {
+  outline: 2px solid var(--ivory);
+  outline-offset: 2px;
 }
 
 .settings-actions {
@@ -810,10 +935,24 @@ input:focus-visible {
 
 /* --- Small landscape phones and portrait ------------------------------------------------- */
 
-@media (max-height: 400px) {
+@media (max-height: 470px) {
   .btn-large {
     min-height: 56px;
     font-size: 20px;
+  }
+  .car-pick-name span {
+    display: none;
+  }
+  .swatch {
+    width: 40px;
+    height: 40px;
+  }
+  .emblem-tag {
+    font-size: 14px;
+  }
+  .emblem-plate {
+    padding: 10px 14px 9px;
+    gap: 6px;
   }
   .minimap {
     width: 104px;
@@ -830,7 +969,10 @@ input:focus-visible {
     justify-items: center;
   }
   .turntable {
-    width: min(70vw, 40vh);
+    height: min(30vh, 70vw);
+  }
+  .car-pick {
+    flex-wrap: wrap;
   }
   .home-menu {
     width: 100%;

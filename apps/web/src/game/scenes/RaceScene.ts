@@ -488,6 +488,10 @@ export class RaceScene extends Phaser.Scene {
       fps: Math.round(this.fpsSmooth),
       hasSteered: input.steered,
       hasBraked: input.braked,
+      pendingInputs: this.predictor.pendingCount,
+      corrections: this.predictor.corrections,
+      maxCorrection: this.predictor.maxCorrection,
+      renderer: this.game.config.renderType === Phaser.WEBGL ? 'webgl' : 'canvas',
     });
   }
 }

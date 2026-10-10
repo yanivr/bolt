@@ -1,6 +1,6 @@
 import type { CarPose, ChassisSpriteManifest, EngineSpriteManifest, WheelSpriteManifest } from '@bolt/shared';
 import { layoutCar } from '@bolt/shared';
-import Phaser from 'phaser';
+import type Phaser from 'phaser';
 
 export type CarTextureKeys = {
   body: string;

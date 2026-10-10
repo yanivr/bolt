@@ -3,6 +3,6 @@
   "compilerOptions": { "noEmit": true, "composite": false, "types": ["node"], "lib": ["ES2022", "DOM"],
     "paths": { "colyseus.js": ["../apps/server/node_modules/colyseus.js/lib/index.d.ts"] }
   },
-  "include": ["**/*.ts"],
+  "include": ["**/*.ts", "../playwright.config.ts"],
   "references": [{ "path": "../packages/shared" }, { "path": "../packages/content" }]
 }

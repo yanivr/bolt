@@ -211,6 +211,35 @@ function solidHeight(solid: Solid, x: number, y: number, d: number): number {
 }
 
 type Hit = { solid: number; z: number };
+type Box = { x0: number; y0: number; x1: number; y1: number };
+
+/**
+ * Conservative model-space bounds per shape, found once by coarse sampling. Shapes are cheap
+ * individually but a frame evaluates them millions of times; rejecting by box first keeps a
+ * full bake fast without changing a single output pixel.
+ */
+const boxCache = new WeakMap<Shape, Box>();
+const BOX_EXTENT = 64;
+function boundsOf(shape: Shape): Box {
+  const cached = boxCache.get(shape);
+  if (cached) return cached;
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (let y = -BOX_EXTENT; y <= BOX_EXTENT; y += 1) {
+    for (let x = -BOX_EXTENT; x <= BOX_EXTENT; x += 1) {
+      if (shape(x, y) > 1.5) continue;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+  }
+  const box = x1 < x0 ? { x0: 0, y0: 0, x1: -1, y1: -1 } : { x0: x0 - 2, y0: y0 - 2, x1: x1 + 2, y1: y1 + 2 };
+  boxCache.set(shape, box);
+  return box;
+}
 
 function topSolid(solids: Solid[], active: boolean[], x: number, y: number, out: Hit): boolean {
   let best = -1;
@@ -218,6 +247,8 @@ function topSolid(solids: Solid[], active: boolean[], x: number, y: number, out:
   for (let i = 0; i < solids.length; i++) {
     if (!active[i]) continue;
     const s = solids[i]!;
+    const box = boundsOf(s.shape);
+    if (x < box.x0 || x > box.x1 || y < box.y0 || y > box.y1) continue;
     const d = s.shape(x, y);
     if (d > 0) continue;
     const z = solidHeight(s, x, y, d);
@@ -286,6 +317,8 @@ export function renderModel(model: Model, opts: RenderOptions): RenderResult {
           let delta = 0;
           for (const decal of model.decals) {
             if (decal.on && !(solid.tag && decal.on.includes(solid.tag))) continue;
+            const dbox = boundsOf(decal.shape);
+            if (mx < dbox.x0 || mx > dbox.x1 || my < dbox.y0 || my > dbox.y1) continue;
             if (decal.shape(mx, my) > 0) continue;
             if (decal.material) material = decal.material;
             if (decal.shade) delta += decal.shade;

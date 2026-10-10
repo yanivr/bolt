@@ -30,6 +30,23 @@ function Slider({ label, value, onChange }: { label: string; value: number; onCh
   );
 }
 
+function Choice<T extends string>({ label, name, value, options, onChange }: { label: string; name: string; value: T; options: Array<[T, string]>; onChange: (v: T) => void }) {
+  const id = `setting-${name}`;
+  return (
+    <div className="setting-row setting-choice" role="radiogroup" aria-labelledby={id}>
+      <span id={id}>{label}</span>
+      <div className="setting-options">
+        {options.map(([key, text]) => (
+          <label key={key} className={value === key ? 'is-selected' : undefined}>
+            <input type="radio" name={name} checked={value === key} onChange={() => onChange(key)} />
+            <span>{text}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** Settings shared by the home screen and the in-race menu (Section 5.13, Milestone A subset). */
 export function SettingsPanel({ onClose, notice, actions, closeLabel }: Props) {
   const settings = useApp((s) => s.settings);
@@ -57,34 +74,32 @@ export function SettingsPanel({ onClose, notice, actions, closeLabel }: Props) {
         </header>
         {notice}
         <div className="settings-body">
-          <fieldset className="setting-row setting-choice">
-            <legend>{STRINGS.settings.drivingHand}</legend>
-            <label>
-              <input type="radio" name="hand" checked={settings.drivingHand === 'left'} onChange={() => update({ drivingHand: 'left' })} />
-              <span>{STRINGS.settings.leftThumb}</span>
-            </label>
-            <label>
-              <input type="radio" name="hand" checked={settings.drivingHand === 'right'} onChange={() => update({ drivingHand: 'right' })} />
-              <span>{STRINGS.settings.rightThumb}</span>
-            </label>
-          </fieldset>
+          <Choice
+            label={STRINGS.settings.drivingHand}
+            name="hand"
+            value={settings.drivingHand}
+            options={[
+              ['left', STRINGS.settings.leftThumb],
+              ['right', STRINGS.settings.rightThumb],
+            ]}
+            onChange={(v) => update({ drivingHand: v })}
+          />
           <Toggle label={STRINGS.settings.reducedCamera} checked={settings.reducedCamera} onChange={(v) => update({ reducedCamera: v })} />
           <Toggle label={STRINGS.settings.reduceFlashes} checked={settings.reduceFlashes} onChange={(v) => update({ reduceFlashes: v })} />
           <Slider label={STRINGS.settings.cameraShake} value={settings.cameraShake} onChange={(v) => update({ cameraShake: v })} />
           <Slider label={STRINGS.settings.engine} value={settings.engineVolume} onChange={(v) => update({ engineVolume: v })} />
           <Slider label={STRINGS.settings.effects} value={settings.effectsVolume} onChange={(v) => update({ effectsVolume: v })} />
           <Toggle label={STRINGS.settings.mute} checked={settings.muted} onChange={(v) => update({ muted: v })} />
-          <fieldset className="setting-row setting-choice">
-            <legend>{STRINGS.settings.speedUnit}</legend>
-            <label>
-              <input type="radio" name="unit" checked={settings.speedUnit === 'mph'} onChange={() => update({ speedUnit: 'mph' })} />
-              <span>MPH</span>
-            </label>
-            <label>
-              <input type="radio" name="unit" checked={settings.speedUnit === 'kmh'} onChange={() => update({ speedUnit: 'kmh' })} />
-              <span>KM/H</span>
-            </label>
-          </fieldset>
+          <Choice
+            label={STRINGS.settings.speedUnit}
+            name="unit"
+            value={settings.speedUnit}
+            options={[
+              ['mph', 'MPH'],
+              ['kmh', 'KM/H'],
+            ]}
+            onChange={(v) => update({ speedUnit: v })}
+          />
         </div>
         {actions && <footer className="settings-actions">{actions}</footer>}
       </div>

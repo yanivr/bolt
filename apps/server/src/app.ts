@@ -194,8 +194,9 @@ function createExpressApp(deps: AppDeps): Express {
       express.static(config.webDist, {
         index: false,
         setHeaders: (res, filePath) => {
-          // Vite fingerprints everything under /assets, so those files can be cached forever.
-          const fingerprinted = filePath.includes(`${path.sep}assets${path.sep}`);
+          // Vite writes content-hashed bundles to /app (see build.assetsDir), so those can be
+          // cached forever. Game art under /assets keeps stable names and must revalidate.
+          const fingerprinted = filePath.includes(`${path.sep}app${path.sep}`);
           res.setHeader(
             'Cache-Control',
             fingerprinted ? 'public, max-age=31536000, immutable' : 'no-cache',

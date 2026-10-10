@@ -12,3 +12,4 @@ playwright-report/
 art/preview/
 tests/visual/out*/
 art/preview/cars/_z*.png
+docs/evidence/**/*.webm

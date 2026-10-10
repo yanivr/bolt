@@ -12,6 +12,7 @@ import type {
 } from '@bolt/shared';
 import { CAR_HEADINGS, TAU, WHEEL_HEADINGS, layoutCar } from '@bolt/shared';
 import { BEETLE_ART } from './cars/beetle.js';
+import { ARROW_ART, SPIDER_ART, TURTLE_ART } from './cars/benchmarks.js';
 import { FOUR_CYLINDER_ART } from './cars/engines.js';
 import { CAR_MATERIALS, PAINTS, PAINT_KEY, PAINT_OUTLINE_KEY } from './cars/materials.js';
 import type { ChassisArt, EngineArt, WheelArt } from './cars/types.js';
@@ -174,6 +175,30 @@ function bakeEngine(art: EngineArt, baked: Baked): void {
   baked.manifest.engines[art.id] = entry;
 }
 
+/** All shipped chassis side by side, for the silhouette test in Section 13.8. */
+function writeLineup(baked: Baked): void {
+  const ids = Object.keys(baked.manifest.chassis);
+  const cell = 96;
+  const paints = ['paint_signal', 'paint_cobalt', 'paint_mint', 'paint_sunflare'];
+  const headings = [0, 2, 4, 6, 9, 13];
+  const sheet = new PixelBuffer(cell * headings.length, cell * ids.length);
+  sheet.fill(hex('#3a4257'));
+  const dark = new PixelBuffer(cell * ids.length, cell);
+  dark.fill(hex('#3a4257'));
+  ids.forEach((id, row) => {
+    headings.forEach((h, col) => {
+      const pose: CarPose = { headingRad: (h * TAU) / CAR_HEADINGS, steer: col === 1 ? 1 : col === 4 ? -1 : 0, roll: col, braking: col === 5, headlights: col >= 3, bodyShiftX: 0, bodyShiftY: 0 };
+      sheet.blit(composeCar(baked, id, 'tires_street', 'engine_four_cylinder', pose, paints[row % paints.length]!), col * cell, row * cell);
+    });
+    // Pure silhouettes: can each chassis be told apart without color or detail?
+    const shadow = baked.frames.chassis[id]!.shadow[0]!;
+    for (let y = 0; y < cell; y++) for (let x = 0; x < cell; x++) if (shadow.alphaAt(x, y) > 100) dark.set(row * cell + x, y, hex('#0e1320'));
+  });
+  writePng(join(PREVIEW_DIR, 'lineup_1x.png'), sheet);
+  writePng(join(PREVIEW_DIR, 'lineup_3x.png'), sheet.scaled(3));
+  writePng(join(PREVIEW_DIR, 'silhouettes_3x.png'), dark.scaled(3));
+}
+
 /** Node-side renderer for review sheets. Uses the same layout function as the game client. */
 function composeCar(baked: Baked, chassisId: string, wheelId: string, engineId: string, pose: CarPose, paintId: string): PixelBuffer {
   const chassis = baked.manifest.chassis[chassisId]!;
@@ -220,6 +245,7 @@ function repaint(src: PixelBuffer, paintId: string): PixelBuffer {
 
 function writePreviews(baked: Baked): void {
   mkdirSync(PREVIEW_DIR, { recursive: true });
+  writeLineup(baked);
   const cell = 96;
   const bg = hex('#3a4257');
   const basePose: CarPose = { headingRad: 0, steer: 0, roll: 0, braking: false, headlights: false, bodyShiftX: 0, bodyShiftY: 0 };
@@ -297,7 +323,7 @@ function bakeCars(): Baked {
   }
   bakeWheels(STREET_WHEEL_ART, baked);
   bakeEngine(FOUR_CYLINDER_ART, baked);
-  bakeChassis(BEETLE_ART, STREET_WHEEL_ART, baked);
+  for (const art of [BEETLE_ART, ARROW_ART, TURTLE_ART, SPIDER_ART]) bakeChassis(art, STREET_WHEEL_ART, baked);
   // No non-paint material may collide with the paint key, or the runtime swap would recolor it.
   const key = new Set([PAINT_OUTLINE_KEY, ...PAINT_KEY].map((c) => c.toLowerCase()));
   for (const [name, mat] of Object.entries(CAR_MATERIALS)) {

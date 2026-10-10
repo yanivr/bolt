@@ -14,7 +14,9 @@ export const STRINGS = {
     testDrive: 'Test Drive',
     howToPlay: 'How to Play',
     settings: 'Settings',
-    comingSoon: 'In the workshop',
+    previousCar: 'Previous car',
+    nextCar: 'Next car',
+    paint: 'Paint',
   },
   loading: {
     garage: 'Loading garage',

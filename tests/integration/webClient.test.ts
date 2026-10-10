@@ -12,12 +12,14 @@ let webDist: string;
 
 beforeAll(async () => {
   webDist = fs.mkdtempSync(path.join(os.tmpdir(), 'bolt-web-dist-'));
+  fs.mkdirSync(path.join(webDist, 'app'));
   fs.mkdirSync(path.join(webDist, 'assets'));
+  fs.writeFileSync(path.join(webDist, 'assets', 'manifest.json'), '{}');
   fs.writeFileSync(
     path.join(webDist, 'index.html'),
     '<!doctype html><title>BOLT RIVALS</title><div id="root"></div>',
   );
-  fs.writeFileSync(path.join(webDist, 'assets', 'app-abc123.js'), 'console.log("app");');
+  fs.writeFileSync(path.join(webDist, 'app', 'app-abc123.js'), 'console.log("app");');
   fs.writeFileSync(path.join(webDist, 'manifest.webmanifest'), '{}');
   ctx = await startTestServer({ webDist });
 });
@@ -40,7 +42,7 @@ describe('built web client', () => {
   });
 
   it('caches fingerprinted assets forever and everything else not at all', async () => {
-    const asset = await fetch(`${ctx.url}/assets/app-abc123.js`);
+    const asset = await fetch(`${ctx.url}/app/app-abc123.js`);
     expect(asset.status).toBe(200);
     expect(asset.headers.get('content-type')).toContain('javascript');
     expect(asset.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
@@ -48,6 +50,11 @@ describe('built web client', () => {
     const manifest = await fetch(`${ctx.url}/manifest.webmanifest`);
     expect(manifest.status).toBe(200);
     expect(manifest.headers.get('cache-control')).toBe('no-cache');
+
+    // Game art keeps stable file names, so it must revalidate rather than cache forever.
+    const art = await fetch(`${ctx.url}/assets/manifest.json`);
+    expect(art.status).toBe(200);
+    expect(art.headers.get('cache-control')).toBe('no-cache');
   });
 
   it('answers a missing asset or API route with JSON, never the app shell', async () => {

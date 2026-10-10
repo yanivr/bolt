@@ -1,4 +1,5 @@
-import type { MatchPhase } from '@bolt/shared';
+import { DEFAULT_LOADOUT } from '@bolt/content';
+import type { MatchPhase, VehicleLoadout } from '@bolt/shared';
 import { create } from 'zustand';
 import type { LinkMode, LinkStatus } from '../network/link.js';
 
@@ -32,6 +33,17 @@ export const DEFAULT_SETTINGS: Settings = {
 
 const SETTINGS_KEY = 'bolt.settings.v1';
 const MILESTONES_KEY = 'bolt.tutorial.v1';
+const LOADOUT_KEY = 'bolt.loadout.v1';
+
+function loadLoadout(): VehicleLoadout {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(LOADOUT_KEY) ?? 'null') as Partial<VehicleLoadout> | null;
+    // Unknown ids are caught again by the server; this only restores the last pick.
+    return parsed ? { ...DEFAULT_LOADOUT, ...parsed } : { ...DEFAULT_LOADOUT };
+  } catch {
+    return { ...DEFAULT_LOADOUT };
+  }
+}
 
 function loadSettings(): Settings {
   try {
@@ -62,11 +74,13 @@ type AppState = {
   boot: BootState;
   settings: Settings;
   milestones: Record<string, boolean>;
+  loadout: VehicleLoadout;
   paused: boolean;
   setScreen: (screen: Screen) => void;
   setBoot: (boot: BootState) => void;
   updateSettings: (patch: Partial<Settings>) => void;
   completeMilestone: (id: string) => void;
+  setLoadout: (patch: Partial<VehicleLoadout>) => void;
   setPaused: (paused: boolean) => void;
 };
 
@@ -75,6 +89,7 @@ export const useApp = create<AppState>((set, get) => ({
   boot: { stage: 'garage', progress: 0 },
   settings: loadSettings(),
   milestones: loadMilestones(),
+  loadout: loadLoadout(),
   paused: false,
   setScreen: (screen) => set({ screen, paused: false }),
   setBoot: (boot) => set({ boot }),
@@ -96,6 +111,15 @@ export const useApp = create<AppState>((set, get) => ({
       // Tutorial prompts may repeat next visit; they stay skippable.
     }
     set({ milestones });
+  },
+  setLoadout: (patch) => {
+    const loadout = { ...get().loadout, ...patch };
+    try {
+      window.localStorage.setItem(LOADOUT_KEY, JSON.stringify(loadout));
+    } catch {
+      // The pick still applies for this session.
+    }
+    set({ loadout });
   },
   setPaused: (paused) => set({ paused }),
 }));
@@ -126,6 +150,11 @@ export type HudState = {
   fps: number;
   hasSteered: boolean;
   hasBraked: boolean;
+  /** Prediction diagnostics, shown only with ?debug=1. */
+  pendingInputs: number;
+  corrections: number;
+  maxCorrection: number;
+  renderer: string;
 };
 
 export const useHud = create<HudState>(() => ({
@@ -151,4 +180,8 @@ export const useHud = create<HudState>(() => ({
   fps: 60,
   hasSteered: false,
   hasBraked: false,
+  pendingInputs: 0,
+  corrections: 0,
+  maxCorrection: 0,
+  renderer: '',
 }));

@@ -99,6 +99,315 @@
           "y": 26
         }
       ]
+    },
+    "chassis_arrow": {
+      "id": "chassis_arrow",
+      "body": {
+        "file": "chassis_arrow_body.png",
+        "frameWidth": 96,
+        "frameHeight": 96,
+        "columns": 16,
+        "rows": 1
+      },
+      "shadow": {
+        "file": "chassis_arrow_shadow.png",
+        "frameWidth": 96,
+        "frameHeight": 96,
+        "columns": 16,
+        "rows": 1
+      },
+      "brakeLights": {
+        "file": "chassis_arrow_brake.png",
+        "frameWidth": 96,
+        "frameHeight": 96,
+        "columns": 16,
+        "rows": 1
+      },
+      "headlights": {
+        "file": "chassis_arrow_head.png",
+        "frameWidth": 96,
+        "frameHeight": 96,
+        "columns": 16,
+        "rows": 1
+      },
+      "paintKey": [
+        "#2b0a1f",
+        "#5c1230",
+        "#941f34",
+        "#cf3440",
+        "#f0604c",
+        "#ffb08a"
+      ],
+      "wheelAnchors": [
+        {
+          "id": "front_left",
+          "x": -11.5,
+          "y": -14,
+          "steers": true
+        },
+        {
+          "id": "front_right",
+          "x": 11.5,
+          "y": -14,
+          "steers": true
+        },
+        {
+          "id": "rear_left",
+          "x": -13,
+          "y": 19,
+          "steers": false
+        },
+        {
+          "id": "rear_right",
+          "x": 13,
+          "y": 19,
+          "steers": false
+        }
+      ],
+      "engineAnchor": {
+        "x": 0,
+        "y": 20
+      },
+      "exhausts": [
+        {
+          "x": -4.6,
+          "y": 31
+        },
+        {
+          "x": 4.6,
+          "y": 31
+        }
+      ],
+      "headlightAnchors": [
+        {
+          "x": -5.5,
+          "y": -23
+        },
+        {
+          "x": 5.5,
+          "y": -23
+        }
+      ],
+      "brakeLightAnchors": [
+        {
+          "x": -7.4,
+          "y": 30
+        },
+        {
+          "x": 7.4,
+          "y": 30
+        }
+      ]
+    },
+    "chassis_turtle": {
+      "id": "chassis_turtle",
+      "body": {
+        "file": "chassis_turtle_body.png",
+        "frameWidth": 96,
+        "frameHeight": 96,
+        "columns": 16,
+        "rows": 1
+      },
+      "shadow": {
+        "file": "chassis_turtle_shadow.png",
+        "frameWidth": 96,
+        "frameHeight": 96,
+        "columns": 16,
+        "rows": 1
+      },
+      "brakeLights": {
+        "file": "chassis_turtle_brake.png",
+        "frameWidth": 96,
+        "frameHeight": 96,
+        "columns": 16,
+        "rows": 1
+      },
+      "headlights": {
+        "file": "chassis_turtle_head.png",
+        "frameWidth": 96,
+        "frameHeight": 96,
+        "columns": 16,
+        "rows": 1
+      },
+      "paintKey": [
+        "#2b0a1f",
+        "#5c1230",
+        "#941f34",
+        "#cf3440",
+        "#f0604c",
+        "#ffb08a"
+      ],
+      "wheelAnchors": [
+        {
+          "id": "front_left",
+          "x": -15.5,
+          "y": -19,
+          "steers": true
+        },
+        {
+          "id": "front_right",
+          "x": 15.5,
+          "y": -19,
+          "steers": true
+        },
+        {
+          "id": "rear_left",
+          "x": -15.5,
+          "y": 19.5,
+          "steers": false
+        },
+        {
+          "id": "rear_right",
+          "x": 15.5,
+          "y": 19.5,
+          "steers": false
+        }
+      ],
+      "engineAnchor": {
+        "x": 0,
+        "y": 21.5
+      },
+      "exhausts": [
+        {
+          "x": -4.6,
+          "y": 32.5
+        },
+        {
+          "x": 4.6,
+          "y": 32.5
+        }
+      ],
+      "headlightAnchors": [
+        {
+          "x": -13.2,
+          "y": -23
+        },
+        {
+          "x": 13.2,
+          "y": -23
+        }
+      ],
+      "brakeLightAnchors": [
+        {
+          "x": -13.2,
+          "y": 23.5
+        },
+        {
+          "x": 13.2,
+          "y": 23.5
+        }
+      ]
+    },
+    "chassis_spider": {
+      "id": "chassis_spider",
+      "body": {
+        "file": "chassis_spider_body.png",
+        "frameWidth": 96,
+        "frameHeight": 96,
+        "columns": 16,
+        "rows": 1
+      },
+      "shadow": {
+        "file": "chassis_spider_shadow.png",
+        "frameWidth": 96,
+        "frameHeight": 96,
+        "columns": 16,
+        "rows": 1
+      },
+      "brakeLights": {
+        "file": "chassis_spider_brake.png",
+        "frameWidth": 96,
+        "frameHeight": 96,
+        "columns": 16,
+        "rows": 1
+      },
+      "headlights": {
+        "file": "chassis_spider_head.png",
+        "frameWidth": 96,
+        "frameHeight": 96,
+        "columns": 16,
+        "rows": 1
+      },
+      "paintKey": [
+        "#2b0a1f",
+        "#5c1230",
+        "#941f34",
+        "#cf3440",
+        "#f0604c",
+        "#ffb08a"
+      ],
+      "wheelAnchors": [
+        {
+          "id": "front_left",
+          "x": -22.5,
+          "y": -24,
+          "steers": true
+        },
+        {
+          "id": "front_right",
+          "x": 22.5,
+          "y": -24,
+          "steers": true
+        },
+        {
+          "id": "mid_left",
+          "x": -24.5,
+          "y": 0,
+          "steers": false
+        },
+        {
+          "id": "mid_right",
+          "x": 24.5,
+          "y": 0,
+          "steers": false
+        },
+        {
+          "id": "rear_left",
+          "x": -22.5,
+          "y": 24,
+          "steers": false
+        },
+        {
+          "id": "rear_right",
+          "x": 22.5,
+          "y": 24,
+          "steers": false
+        }
+      ],
+      "engineAnchor": {
+        "x": 0,
+        "y": 24.5
+      },
+      "exhausts": [
+        {
+          "x": -4.6,
+          "y": 35.5
+        },
+        {
+          "x": 4.6,
+          "y": 35.5
+        }
+      ],
+      "headlightAnchors": [
+        {
+          "x": -4.3,
+          "y": -27
+        },
+        {
+          "x": 4.3,
+          "y": -27
+        }
+      ],
+      "brakeLightAnchors": [
+        {
+          "x": -5,
+          "y": 32
+        },
+        {
+          "x": 5,
+          "y": 32
+        }
+      ]
     }
   },
   "wheels": {

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useApp, useHud } from '../app/store.js';
 import { PixelText } from '../components/PixelText.js';
 import type { GameManifests } from '../game/assets.js';
+import { HudButton } from './HudButton.js';
 import { Minimap } from './Minimap.js';
 
 export function formatRaceTime(ms: number): string {
@@ -56,6 +57,24 @@ function Countdown() {
     );
   }
   return null;
+}
+
+const DEBUG = new URLSearchParams(window.location.search).get('debug') === '1';
+
+/** Development readout for hardware testing: frame rate, link quality and prediction health. */
+function DebugReadout() {
+  const fps = useHud((s) => s.fps);
+  const latency = useHud((s) => s.latencyMs);
+  const pending = useHud((s) => s.pendingInputs);
+  const corrections = useHud((s) => s.corrections);
+  const maxCorrection = useHud((s) => s.maxCorrection);
+  const mode = useHud((s) => s.linkMode);
+  const renderer = useHud((s) => s.renderer);
+  return (
+    <div className="debug" data-testid="debug">
+      {fps} fps · {renderer} · {mode} · {Math.round(latency)} ms · pending {pending} · corrections {corrections} · max {maxCorrection.toFixed(2)} px
+    </div>
+  );
 }
 
 type Props = { manifests: GameManifests; onPause: () => void };
@@ -123,9 +142,9 @@ export function Hud({ manifests, onPause }: Props) {
           <div className="panel hud-map">
             <Minimap manifests={manifests} />
           </div>
-          <button className="btn btn-icon" onClick={onPause} aria-label={STRINGS.home.settings}>
+          <HudButton className="btn btn-icon" onPress={onPause} label={STRINGS.home.settings}>
             <span className="icon-menu" aria-hidden="true" />
-          </button>
+          </HudButton>
         </div>
       </div>
 
@@ -136,6 +155,7 @@ export function Hud({ manifests, onPause }: Props) {
       )}
       <Countdown />
       {hint && <div className="hint">{STRINGS.race.steerHint}</div>}
+      {DEBUG && <DebugReadout />}
 
       <div className="hud-speed panel">
         <PixelText text={String(speed).padStart(3, ' ')} scale={5} color="#F6C35B" shadow="#151C2C" />

@@ -62,7 +62,7 @@ export function RaceScreen() {
 
     void (async () => {
       try {
-        const [m, setup] = await Promise.all([bootAssets(), startDrive(TRACK_ID, WEATHER_PRESET_ID)]);
+        const [m, setup] = await Promise.all([bootAssets(), startDrive(TRACK_ID, WEATHER_PRESET_ID, useApp.getState().loadout)]);
         if ('error' in setup) {
           if (!cancelled) setLoad({ kind: 'error', reason: setup.error });
           return;
