@@ -108,10 +108,22 @@ export function rotate(shape: Shape, rad: number, cx = 0, cy = 0): Shape {
 }
 
 /** Half-plane helpers for clipping decals. */
-export const above = (yLimit: number): Shape => (_x, y) => y - yLimit;
-export const below = (yLimit: number): Shape => (_x, y) => yLimit - y;
-export const band = (y0: number, y1: number): Shape => (_x, y) => Math.max(y0 - y, y - y1);
-export const strip = (x0: number, x1: number): Shape => (x) => Math.max(x0 - x, x - x1);
+export const above =
+  (yLimit: number): Shape =>
+  (_x, y) =>
+    y - yLimit;
+export const below =
+  (yLimit: number): Shape =>
+  (_x, y) =>
+    yLimit - y;
+export const band =
+  (y0: number, y1: number): Shape =>
+  (_x, y) =>
+    Math.max(y0 - y, y - y1);
+export const strip =
+  (x0: number, x1: number): Shape =>
+  (x) =>
+    Math.max(x0 - x, x - x1);
 
 // --- Materials ---------------------------------------------------------------------------------
 
@@ -125,8 +137,20 @@ export type Material = {
   flat?: boolean;
 };
 
-export function ramp(deep: string, shadow: string, base: string, light: string, high: string, outline: string, extra: Partial<Material> = {}): Material {
-  return { ramp: [hex(deep), hex(shadow), hex(base), hex(light), hex(high)], outline: hex(outline), ...extra };
+export function ramp(
+  deep: string,
+  shadow: string,
+  base: string,
+  light: string,
+  high: string,
+  outline: string,
+  extra: Partial<Material> = {},
+): Material {
+  return {
+    ramp: [hex(deep), hex(shadow), hex(base), hex(light), hex(high)],
+    outline: hex(outline),
+    ...extra,
+  };
 }
 
 // --- Model -------------------------------------------------------------------------------------
@@ -236,7 +260,8 @@ function boundsOf(shape: Shape): Box {
       if (y > y1) y1 = y;
     }
   }
-  const box = x1 < x0 ? { x0: 0, y0: 0, x1: -1, y1: -1 } : { x0: x0 - 2, y0: y0 - 2, x1: x1 + 2, y1: y1 + 2 };
+  const box =
+    x1 < x0 ? { x0: 0, y0: 0, x1: -1, y1: -1 } : { x0: x0 - 2, y0: y0 - 2, x1: x1 + 2, y1: y1 + 2 };
   boxCache.set(shape, box);
   return box;
 }
@@ -296,7 +321,10 @@ export function renderModel(model: Model, opts: RenderOptions): RenderResult {
   const hit: Hit = { solid: -1, z: 0 };
   const probe: Hit = { solid: -1, z: 0 };
   const total = n * n;
-  const keys = new Map<string, { count: number; shade: number; solid: number; material: string; delta: number }>();
+  const keys = new Map<
+    string,
+    { count: number; shade: number; solid: number; material: string; delta: number }
+  >();
   const eps = 0.3;
 
   for (let py = 0; py < height; py++) {
@@ -355,7 +383,13 @@ export function renderModel(model: Model, opts: RenderOptions): RenderResult {
         }
       }
       if (covered * 2 < total) continue;
-      let win: { count: number; shade: number; solid: number; material: string; delta: number } | null = null;
+      let win: {
+        count: number;
+        shade: number;
+        solid: number;
+        material: string;
+        delta: number;
+      } | null = null;
       for (const slot of keys.values()) if (!win || slot.count > win.count) win = slot;
       if (!win) continue;
       const mat = model.materials[win.material]!;
@@ -416,7 +450,12 @@ export function silhouette(src: PixelBuffer, color: RGBA, rim: RGBA): PixelBuffe
         rimmed.set(x, y, color);
         continue;
       }
-      if (out.alphaAt(x + 1, y) || out.alphaAt(x - 1, y) || out.alphaAt(x, y + 1) || out.alphaAt(x, y - 1)) {
+      if (
+        out.alphaAt(x + 1, y) ||
+        out.alphaAt(x - 1, y) ||
+        out.alphaAt(x, y + 1) ||
+        out.alphaAt(x, y - 1)
+      ) {
         rimmed.set(x, y, rim);
       }
     }
@@ -430,7 +469,12 @@ export function addGlow(src: PixelBuffer, glow: RGBA): PixelBuffer {
   for (let y = 0; y < src.height; y++) {
     for (let x = 0; x < src.width; x++) {
       if (src.alphaAt(x, y) !== 0) continue;
-      if (src.alphaAt(x + 1, y) || src.alphaAt(x - 1, y) || src.alphaAt(x, y + 1) || src.alphaAt(x, y - 1)) {
+      if (
+        src.alphaAt(x + 1, y) ||
+        src.alphaAt(x - 1, y) ||
+        src.alphaAt(x, y + 1) ||
+        src.alphaAt(x, y - 1)
+      ) {
         out.set(x, y, glow);
       }
     }

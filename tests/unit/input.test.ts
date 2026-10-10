@@ -1,4 +1,11 @@
-import { JOYSTICK_DEAD_ZONE, JOYSTICK_RADIUS_PX, clampToDisc, joystickToControl, keysToControl, shapeAxis } from '@bolt/shared';
+import {
+  JOYSTICK_DEAD_ZONE,
+  JOYSTICK_RADIUS_PX,
+  clampToDisc,
+  joystickToControl,
+  keysToControl,
+  shapeAxis,
+} from '@bolt/shared';
 import { describe, expect, it } from 'vitest';
 
 describe('floating joystick math (Section 7.1)', () => {

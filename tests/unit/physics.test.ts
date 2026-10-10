@@ -33,7 +33,8 @@ function rig(env = CLEAR, t = track) {
   const telemetry = createTelemetry();
   const scratch = createStepScratch();
   const step = (input: ControlInput, seconds: number, p = params) => {
-    for (let i = 0; i < Math.round(seconds / SIM_DT); i++) stepVehicle(state, input, p, env, t, SIM_DT, scratch, telemetry);
+    for (let i = 0; i < Math.round(seconds / SIM_DT); i++)
+      stepVehicle(state, input, p, env, t, SIM_DT, scratch, telemetry);
   };
   return { state, telemetry, step };
 }
@@ -218,11 +219,14 @@ describe('walls', () => {
     const loc = createLocation();
     let input: ControlInput = FULL;
     for (let i = 0; i < 30 * 120; i++) {
-      if (i % 20 === 0) input = { steer: rng() * 2 - 1, brake: rng() < 0.2 ? rng() : 0, coast: rng() < 0.05 };
+      if (i % 20 === 0)
+        input = { steer: rng() * 2 - 1, brake: rng() < 0.2 ? rng() : 0, coast: rng() < 0.05 };
       step(input, SIM_DT);
       locate(track, state.x, state.y, loc);
       expect(loc.edge).toBeLessThan(2);
-      expect(Number.isFinite(state.x + state.y + state.headingRad + state.velocityX + state.velocityY)).toBe(true);
+      expect(
+        Number.isFinite(state.x + state.y + state.headingRad + state.velocityX + state.velocityY),
+      ).toBe(true);
     }
   });
 

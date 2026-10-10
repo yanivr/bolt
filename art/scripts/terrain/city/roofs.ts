@@ -8,7 +8,19 @@ import type { LightPool } from '../lighting.js';
 import type { CityLayout, Lot, Rect } from './layout.js';
 import { GLYPHS, NEON, SHOP_NAMES, drawNeonSign, neonSignSize } from './neon.js';
 import type { NeonSignSpec } from './neon.js';
-import { PAL, ROOFS, ROOF_CONCRETE, ROOF_MAROON, ROOF_OLIVE, ROOF_PLUM, ROOF_SLATE, ROOF_TEAL, TINT_CYAN, TINT_WARM, contactShade } from './palette.js';
+import {
+  PAL,
+  ROOFS,
+  ROOF_CONCRETE,
+  ROOF_MAROON,
+  ROOF_OLIVE,
+  ROOF_PLUM,
+  ROOF_SLATE,
+  ROOF_TEAL,
+  TINT_CYAN,
+  TINT_WARM,
+  contactShade,
+} from './palette.js';
 import type { RoofRamp } from './palette.js';
 import { box, discShadow, dropShadow, emissive } from './sprites.js';
 
@@ -85,7 +97,8 @@ export function paintRoofBase(ctx: BakeContext, layout: CityLayout): void {
   const { w, h, roofId, lots } = layout;
   const data = world.data;
   const heightPlane = world.height!;
-  const same = (x: number, y: number, id: number): boolean => x >= 0 && y >= 0 && x < w && y < h && roofId[y * w + x] === id;
+  const same = (x: number, y: number, id: number): boolean =>
+    x >= 0 && y >= 0 && x < w && y < h && roofId[y * w + x] === id;
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
@@ -163,7 +176,11 @@ function skylight(cv: Canvas, x: number, y: number, w: number, h: number, lit: b
       for (let yy = 1; yy < h - 1; yy++) {
         for (let xx = 1; xx < w - 1; xx++) {
           const mullion = xx % 4 === 0 || (h > 7 && yy === h >> 1);
-          cv.set(x + xx, y + yy, mullion ? PAL.windowDim : yy === 1 ? PAL.windowWarm : PAL.windowMid);
+          cv.set(
+            x + xx,
+            y + yy,
+            mullion ? PAL.windowDim : yy === 1 ? PAL.windowWarm : PAL.windowMid,
+          );
         }
       }
     });
@@ -171,7 +188,11 @@ function skylight(cv: Canvas, x: number, y: number, w: number, h: number, lit: b
     for (let yy = 1; yy < h - 1; yy++) {
       for (let xx = 1; xx < w - 1; xx++) {
         const mullion = xx % 4 === 0;
-        cv.set(x + xx, y + yy, mullion ? PAL.steelDark : (xx + yy) % 6 === 0 ? PAL.glassLight : PAL.glass);
+        cv.set(
+          x + xx,
+          y + yy,
+          mullion ? PAL.steelDark : (xx + yy) % 6 === 0 ? PAL.glassLight : PAL.glass,
+        );
       }
     }
   }
@@ -262,7 +283,15 @@ function garden(cv: Canvas, x: number, y: number, w: number, h: number, rnd: () 
   for (let yy = 0; yy < h; yy++) {
     for (let xx = 0; xx < w; xx++) {
       const seam = yy % 3 === 2 || (xx + (Math.floor(yy / 3) % 2) * 5) % 11 === 0;
-      cv.set(x + xx, y + yy, seam ? PAL.woodDark : hash2(x + xx, Math.floor((y + yy) / 3), 31) < 0.3 ? PAL.woodLight : PAL.wood);
+      cv.set(
+        x + xx,
+        y + yy,
+        seam
+          ? PAL.woodDark
+          : hash2(x + xx, Math.floor((y + yy) / 3), 31) < 0.3
+            ? PAL.woodLight
+            : PAL.wood,
+      );
     }
   }
   // Planter beds along two sides.
@@ -301,7 +330,11 @@ function helipad(cv: Canvas, cx: number, cy: number, r: number): void {
   emissive(cv, () => {
     for (let k = 0; k < 8; k++) {
       const a = (k / 8) * Math.PI * 2 + Math.PI / 8;
-      cv.set(Math.round(cx + Math.cos(a) * (r + 2)), Math.round(cy + Math.sin(a) * (r + 2)), k % 2 === 0 ? PAL.mint : PAL.red);
+      cv.set(
+        Math.round(cx + Math.cos(a) * (r + 2)),
+        Math.round(cy + Math.sin(a) * (r + 2)),
+        k % 2 === 0 ? PAL.mint : PAL.red,
+      );
     }
   });
 }
@@ -315,14 +348,22 @@ function pool(cv: Canvas, x: number, y: number, w: number, h: number): void {
     cv.hline(x, y, w, PAL.glass);
     cv.vline(x, y, h, PAL.glass);
     for (let yy = 2; yy < h - 1; yy += 3) {
-      for (let xx = 2 + ((yy / 3) & 1) * 3; xx < w - 3; xx += 7) cv.hline(x + xx, y + yy, 3, PAL.cyan);
+      for (let xx = 2 + ((yy / 3) & 1) * 3; xx < w - 3; xx += 7)
+        cv.hline(x + xx, y + yy, 3, PAL.cyan);
     }
     cv.set(x + 2, y + 2, PAL.cyanHi);
     cv.set(x + 3, y + 2, PAL.cyanHi);
   });
 }
 
-function billboard(cv: Canvas, x: number, y: number, w: number, h: number, rnd: () => number): void {
+function billboard(
+  cv: Canvas,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  rnd: () => number,
+): void {
   dropShadow(cv, x, y, w, h, 3);
   cv.rect(x, y, w, h, PAL.steelDark);
   cv.hline(x, y, w, PAL.steelLight);
@@ -342,9 +383,16 @@ function billboard(cv: Canvas, x: number, y: number, w: number, h: number, rnd: 
       }
     }
     const g = GLYPHS[(rnd() * GLYPHS.length) | 0]!;
-    if (g.h + 4 <= h && g.w + 8 <= w) cv.stamp(x + w - g.w - 4, y + ((h - g.h) >> 1), g, { a: b.c, b: b.hi });
+    if (g.h + 4 <= h && g.w + 8 <= w)
+      cv.stamp(x + w - g.w - 4, y + ((h - g.h) >> 1), g, { a: b.c, b: b.hi });
     // Wordmark bars: abstract, no real brand.
-    for (let k = 0; k < 3; k++) cv.hline(x + 4, y + 4 + k * 3, Math.max(4, Math.round((w * 0.4 - k * 3) * (0.6 + rnd() * 0.4))), k === 0 ? PAL.ivory : b.c);
+    for (let k = 0; k < 3; k++)
+      cv.hline(
+        x + 4,
+        y + 4 + k * 3,
+        Math.max(4, Math.round((w * 0.4 - k * 3) * (0.6 + rnd() * 0.4))),
+        k === 0 ? PAL.ivory : b.c,
+      );
     // Footlights.
     for (let k = 4; k < w - 3; k += 8) cv.set(x + k, y + h - 1, PAL.lamp);
   });
@@ -378,7 +426,8 @@ export function dressRoofs(
     if (lot.cut) occ.push(lot.cut);
     const pre = taken.get(lot.id);
     if (pre) occ.push(pre);
-    const inside = (x: number, y: number): boolean => x >= 0 && y >= 0 && x < layout.w && y < layout.h && roofId[y * w + x] === lot.id;
+    const inside = (x: number, y: number): boolean =>
+      x >= 0 && y >= 0 && x < layout.w && y < layout.h && roofId[y * w + x] === lot.id;
     const fits = (x: number, y: number, bw: number, bh: number): boolean => {
       // The whole footprint plus a margin must be on this roof, clear of the parapet.
       for (const [px, py] of [
@@ -393,7 +442,9 @@ export function dressRoofs(
       ] as const) {
         if (!inside(px, py)) return false;
       }
-      for (const o of occ) if (x < o.x + o.w + 2 && o.x < x + bw + 2 && y < o.y + o.h + 2 && o.y < y + bh + 2) return false;
+      for (const o of occ)
+        if (x < o.x + o.w + 2 && o.x < x + bw + 2 && y < o.y + o.h + 2 && o.y < y + bh + 2)
+          return false;
       return true;
     };
     const place = (bw: number, bh: number, tries = 10): { x: number; y: number } | null => {
@@ -427,8 +478,14 @@ export function dressRoofs(
       world.frame(lot.x + inset + 1, lot.y + inset + 1, tw - 2, th - 2, r.par);
       world.hline(lot.x + inset + 2, lot.y + inset + th - 2, tw - 3, r.dark);
       world.vline(lot.x + inset + tw - 2, lot.y + inset + 2, th - 3, r.dark);
-      occ.push({ x: lot.x, y: lot.y, w: lot.w, h: inset + 2 }, { x: lot.x, y: lot.y + lot.h - inset - 2, w: lot.w, h: inset + 2 });
-      occ.push({ x: lot.x, y: lot.y, w: inset + 2, h: lot.h }, { x: lot.x + lot.w - inset - 2, y: lot.y, w: inset + 2, h: lot.h });
+      occ.push(
+        { x: lot.x, y: lot.y, w: lot.w, h: inset + 2 },
+        { x: lot.x, y: lot.y + lot.h - inset - 2, w: lot.w, h: inset + 2 },
+      );
+      occ.push(
+        { x: lot.x, y: lot.y, w: inset + 2, h: lot.h },
+        { x: lot.x + lot.w - inset - 2, y: lot.y, w: inset + 2, h: lot.h },
+      );
       const c = center(5, 5);
       if (c) antenna(world, c.x + 2, c.y + 2, 9, true);
     }
@@ -441,8 +498,21 @@ export function dressRoofs(
       if (p) {
         hasBillboard = true;
         billboard(world, p.x, p.y, bw, 22, rnd);
-        out.pools.push({ x: p.x + bw / 2, y: p.y + 24, radii: [bw * 0.4, bw * 0.62], tint: TINT_WARM, level: lot.id, squashY: 1.6 });
-        out.lights.push({ x: Math.round(p.x + bw / 2), y: p.y + 11, radius: Math.round(bw * 0.62), color: '#FFC47A', intensity: 0.4 });
+        out.pools.push({
+          x: p.x + bw / 2,
+          y: p.y + 24,
+          radii: [bw * 0.4, bw * 0.62],
+          tint: TINT_WARM,
+          level: lot.id,
+          squashY: 1.6,
+        });
+        out.lights.push({
+          x: Math.round(p.x + bw / 2),
+          y: p.y + 11,
+          radius: Math.round(bw * 0.62),
+          color: '#FFC47A',
+          intensity: 0.4,
+        });
       }
     }
 
@@ -467,14 +537,28 @@ export function dressRoofs(
         const p = place(pw + 4, 18, 6);
         if (p) {
           pool(world, p.x + 2, p.y + 2, pw, 14);
-          out.pools.push({ x: p.x + 2 + pw / 2, y: p.y + 9, radii: [pw * 0.55, pw * 0.8], tint: TINT_CYAN, level: lot.id, squashY: 1.5 });
+          out.pools.push({
+            x: p.x + 2 + pw / 2,
+            y: p.y + 9,
+            radii: [pw * 0.55, pw * 0.8],
+            tint: TINT_CYAN,
+            level: lot.id,
+            squashY: 1.5,
+          });
         }
       } else if (roll < 0.86) {
         const bw = 40 + ((rnd() * 12) | 0);
         const p = place(bw, 22, 6);
         if (p) {
           billboard(world, p.x, p.y, bw, 22, rnd);
-          out.pools.push({ x: p.x + bw / 2, y: p.y + 24, radii: [bw * 0.4, bw * 0.62], tint: TINT_WARM, level: lot.id, squashY: 1.6 });
+          out.pools.push({
+            x: p.x + bw / 2,
+            y: p.y + 24,
+            radii: [bw * 0.4, bw * 0.62],
+            tint: TINT_WARM,
+            level: lot.id,
+            squashY: 1.6,
+          });
         }
       }
     }
@@ -502,9 +586,23 @@ export function dressRoofs(
         const nc = NEON[spec.color]!;
         const cx = p.x + size.w / 2;
         const cy = p.y + size.h / 2;
-        out.pools.push({ x: cx, y: cy, radii: [size.w * 0.5 + 3, size.w * 0.5 + 10], tint: nc.tint, level: lot.id, squashY: 1.5 });
-        if (lot.roadDist < 40) out.pools.push({ x: cx, y: cy, radii: [30, 46], tint: nc.tint, level: 0 });
-        out.lights.push({ x: Math.round(cx), y: Math.round(cy), radius: 46, color: nc.hex, intensity: 0.5 });
+        out.pools.push({
+          x: cx,
+          y: cy,
+          radii: [size.w * 0.5 + 3, size.w * 0.5 + 10],
+          tint: nc.tint,
+          level: lot.id,
+          squashY: 1.5,
+        });
+        if (lot.roadDist < 40)
+          out.pools.push({ x: cx, y: cy, radii: [30, 46], tint: nc.tint, level: 0 });
+        out.lights.push({
+          x: Math.round(cx),
+          y: Math.round(cy),
+          radius: 46,
+          color: nc.hex,
+          intensity: 0.5,
+        });
       }
     }
 
@@ -533,7 +631,13 @@ export function dressRoofs(
           const p = place(hw, 9);
           if (p) {
             hut(world, p.x, p.y, hw, 9, r);
-            out.pools.push({ x: p.x + hw / 2 + 1, y: p.y + 10, radii: [4, 8], tint: TINT_WARM, level: lot.id });
+            out.pools.push({
+              x: p.x + hw / 2 + 1,
+              y: p.y + 10,
+              radii: [4, 8],
+              tint: TINT_WARM,
+              level: lot.id,
+            });
           }
         }
       } else if (roll < 14.5) {
@@ -543,7 +647,15 @@ export function dressRoofs(
         if (p) {
           const lit = rnd() < 0.62;
           skylight(world, p.x, p.y, sw, sh2, lit);
-          if (lit) out.pools.push({ x: p.x + sw / 2, y: p.y + sh2 / 2, radii: [sw * 0.5 + 2, sw * 0.5 + 6], tint: TINT_WARM, level: lot.id, squashY: 1.3 });
+          if (lit)
+            out.pools.push({
+              x: p.x + sw / 2,
+              y: p.y + sh2 / 2,
+              radii: [sw * 0.5 + 2, sw * 0.5 + 6],
+              tint: TINT_WARM,
+              level: lot.id,
+              squashY: 1.3,
+            });
         }
       } else if (roll < 16) {
         if (tanks++ === 0 && minDim >= 34) {

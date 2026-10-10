@@ -112,7 +112,8 @@ export function surfaceGrip(
   surface: SurfaceId,
   onShoulder: boolean,
 ): number {
-  let grip = SURFACE_GRIP[env.weather][surface] * params.tireGrip * (params.tireSurfaceGrip[surface] ?? 1);
+  let grip =
+    SURFACE_GRIP[env.weather][surface] * params.tireGrip * (params.tireSurfaceGrip[surface] ?? 1);
   if (WET_WEATHER[env.weather]) grip *= params.tireWetGripFactor;
   if (onShoulder) grip *= SHOULDER_GRIP_FACTOR;
   return Math.min(MAX_COMBINED_GRIP, grip);
@@ -123,7 +124,10 @@ export function driveForceAt(params: VehicleParams, forwardSpeed: number): numbe
   const v = Math.max(0, forwardSpeed);
   let taper = 1;
   if (v > params.forceTaperSpeed) {
-    taper = Math.max(0, 1 - (v - params.forceTaperSpeed) / (params.forceZeroSpeed - params.forceTaperSpeed));
+    taper = Math.max(
+      0,
+      1 - (v - params.forceTaperSpeed) / (params.forceZeroSpeed - params.forceTaperSpeed),
+    );
   }
   const launch = 1 + params.launchBoost * Math.exp(-v / params.launchFadeSpeed);
   return params.driveForce * taper * launch;
@@ -145,11 +149,14 @@ export function stepVehicle(
   telemetry: VehicleTelemetry,
 ): void {
   // --- 1. Filter the commanded steering -------------------------------------------------------
-  const steerTarget = input.coast ? 0 : clamp(Number.isFinite(input.steer) ? input.steer : 0, -1, 1);
+  const steerTarget = input.coast
+    ? 0
+    : clamp(Number.isFinite(input.steer) ? input.steer : 0, -1, 1);
   const releasing =
     Math.abs(steerTarget) < Math.abs(state.steeringInput) || steerTarget * state.steeringInput < 0;
   state.steeringInput +=
-    (steerTarget - state.steeringInput) * expBlend(dt, releasing ? STEER_RELEASE_TIME : STEER_ENGAGE_TIME);
+    (steerTarget - state.steeringInput) *
+    expBlend(dt, releasing ? STEER_RELEASE_TIME : STEER_ENGAGE_TIME);
   if (Math.abs(state.steeringInput) < 1e-4 && steerTarget === 0) state.steeringInput = 0;
 
   // --- 2. Surface under the car --------------------------------------------------------------
@@ -168,7 +175,8 @@ export function stepVehicle(
 
   // --- 4. Pedals -----------------------------------------------------------------------------
   const pull = input.coast ? 0 : clamp(Number.isFinite(input.brake) ? input.brake : 0, 0, 1);
-  const lift = pull <= BRAKE_LIFT_THRESHOLD ? 0 : (pull - BRAKE_LIFT_THRESHOLD) / (1 - BRAKE_LIFT_THRESHOLD);
+  const lift =
+    pull <= BRAKE_LIFT_THRESHOLD ? 0 : (pull - BRAKE_LIFT_THRESHOLD) / (1 - BRAKE_LIFT_THRESHOLD);
   state.brakeInput = lift;
 
   if (lift > 0.5 && vf < 8) state.reverseHold += dt;
@@ -202,7 +210,8 @@ export function stepVehicle(
     const resist = rolling + lift * params.brakeDecel * grip;
     // Friction and brakes can stop the car but never push it backwards.
     if (vf > 0) vf = Math.max(0, vf - resist * dt);
-    else if (vf < 0) vf = Math.min(0, vf + (resist + params.brakeDecel * 0.4 * grip * throttle) * dt);
+    else if (vf < 0)
+      vf = Math.min(0, vf + (resist + params.brakeDecel * 0.4 * grip * throttle) * dt);
   }
 
   // --- 6. Yaw --------------------------------------------------------------------------------
@@ -340,7 +349,11 @@ export function stepVehicle(
       let tangent = vx * -ny + vy * nx;
       const along = Math.abs(tangent);
       if (closing > WALL_FORGIVE_SPEED && state.wallGrace <= 0) {
-        const severity = clamp((closing - WALL_FORGIVE_SPEED) / (WALL_SCRAPE_FULL_SPEED - WALL_FORGIVE_SPEED), 0, 1);
+        const severity = clamp(
+          (closing - WALL_FORGIVE_SPEED) / (WALL_SCRAPE_FULL_SPEED - WALL_FORGIVE_SPEED),
+          0,
+          1,
+        );
         tangent *= 1 - lerp(WALL_SCRAPE_LOSS_MIN, WALL_SCRAPE_LOSS_MAX, severity);
         state.wallGrace = WALL_GRACE_SECONDS;
         telemetry.wallImpactSpeed = closing;

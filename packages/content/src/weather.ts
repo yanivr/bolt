@@ -30,5 +30,7 @@ export const WEATHER_PRESETS: Record<string, WeatherPreset> = {
 };
 
 export function getWeatherPreset(id: string): WeatherPreset | undefined {
-  return Object.prototype.hasOwnProperty.call(WEATHER_PRESETS, id) ? WEATHER_PRESETS[id] : undefined;
+  return Object.prototype.hasOwnProperty.call(WEATHER_PRESETS, id)
+    ? WEATHER_PRESETS[id]
+    : undefined;
 }

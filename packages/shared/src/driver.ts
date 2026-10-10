@@ -3,7 +3,13 @@ import { angleDelta, clamp, headingFromVector } from './math.js';
 import type { ControlInput } from './physics.js';
 import { surfaceGrip } from './physics.js';
 import type { TrackLocation, TrackRuntime } from './track.js';
-import { TRACK_SAMPLE_SPACING, createLocation, lapPosition, locate, sampleBranch } from './track.js';
+import {
+  TRACK_SAMPLE_SPACING,
+  createLocation,
+  lapPosition,
+  locate,
+  sampleBranch,
+} from './track.js';
 import type { RaceEnvironment, VehicleMotionState, VehicleParams } from './types.js';
 
 /**
@@ -49,7 +55,10 @@ export function driveCenterline(
   const lapS = track.startS + lapPosition(track, loc);
   const speed = Math.hypot(motion.velocityX, motion.velocityY);
 
-  const aim = sampleBranch(track.main, lapS + tuning.lookAheadBase + speed * tuning.lookAheadPerSpeed);
+  const aim = sampleBranch(
+    track.main,
+    lapS + tuning.lookAheadBase + speed * tuning.lookAheadPerSpeed,
+  );
   const wanted = headingFromVector(aim.x - motion.x, aim.y - motion.y);
   const error = angleDelta(motion.headingRad, wanted);
   const steer = clamp(error * tuning.steerGain, -1, 1);
@@ -63,8 +72,12 @@ export function driveCenterline(
     const surface = track.main.surface[p.index] ?? 'asphalt';
     const grip = surfaceGrip(params, env, surface, false);
     const curvature = Math.max(Math.abs(p.curvature), 1e-5);
-    const cornerSpeed = Math.sqrt((params.lateralGripAccel * grip * tuning.cornerConfidence) / curvature);
-    const entry = Math.sqrt(cornerSpeed * cornerSpeed + 2 * params.brakeDecel * grip * tuning.brakeConfidence * d);
+    const cornerSpeed = Math.sqrt(
+      (params.lateralGripAccel * grip * tuning.cornerConfidence) / curvature,
+    );
+    const entry = Math.sqrt(
+      cornerSpeed * cornerSpeed + 2 * params.brakeDecel * grip * tuning.brakeConfidence * d,
+    );
     if (entry < allowed) allowed = entry;
   }
 

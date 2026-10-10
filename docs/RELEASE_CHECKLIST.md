@@ -44,31 +44,31 @@ settings. G: load, security, Docker deployment, public HTTPS.
 
 ## Launch acceptance (Section 19.7)
 
-- [ ] Public HTTPS browser build opens on target mobile devices. *No deployment; no URL exists.*
-- [ ] First-time onboarding and starter car work from a blank session. *Partial: a blank session reaches a drive with one steering hint. No garage or first race against AI yet.*
-- [ ] All seven principal screen families plus connection and error states are interactive. *Boot, a reduced Home, Race and Settings exist. Lobby, track preview, garage, load code, VS, results, blueprints do not.*
-- [ ] 20 chassis, 20 engines, 20 tire kits, 20 weapons, 20 defenses, 20 utilities. *4 chassis, 1 engine, 1 tire kit.*
+- [ ] Public HTTPS browser build opens on target mobile devices. _No deployment; no URL exists._
+- [ ] First-time onboarding and starter car work from a blank session. _Partial: a blank session reaches a drive with one steering hint. No garage or first race against AI yet._
+- [ ] All seven principal screen families plus connection and error states are interactive. _Boot, a reduced Home, Race and Settings exist. Lobby, track preview, garage, load code, VS, results, blueprints do not._
+- [ ] 20 chassis, 20 engines, 20 tire kits, 20 weapons, 20 defenses, 20 utilities. _4 chassis, 1 engine, 1 tire kit._
 - [ ] All 120 catalog parts covered by behavior or primitive tests.
-- [ ] Arbitrary legal assemblies composited and physically validated. *Compositor is general and tested for the three mandatory layers; mounted parts arrive in Milestone B.*
+- [ ] Arbitrary legal assemblies composited and physically validated. _Compositor is general and tested for the three mandatory layers; mounted parts arrive in Milestone B._
 - [ ] Multiplayer garage locks after 60 seconds and never spends more than 1,000 credits.
-- [ ] Every car has meaningful heat, energy, mass and stability behavior. *Mass and grip only.*
-- [ ] Top-down float steering, braking and left-handed actions work with two fingers. *Automated two-finger tests pass; real-device check open. No action buttons beyond the menu yet.*
+- [ ] Every car has meaningful heat, energy, mass and stability behavior. _Mass and grip only._
+- [ ] Top-down float steering, braking and left-handed actions work with two fingers. _Automated two-finger tests pass; real-device check open. No action buttons beyond the menu yet._
 - [ ] Two friends can enter by code or link and finish a synchronized match.
-- [ ] AI uses the same physics, funds and weapon rules as a human. *A centerline driver exists and uses the same controls and physics; no rival car yet.*
-- [ ] Sixteen directional chassis frames and coherent attachments render without flicker. *Sixteen frames per chassis are baked and tested; "without flicker" needs a device.*
+- [ ] AI uses the same physics, funds and weapon rules as a human. _A centerline driver exists and uses the same controls and physics; no rival car yet._
+- [ ] Sixteen directional chassis frames and coherent attachments render without flicker. _Sixteen frames per chassis are baked and tested; "without flicker" needs a device._
 - [ ] Each of 20 weapons has a unique visual and audible signature.
 - [ ] Rocket and mortar explosions have layered flashes, fire, debris and smoke.
 - [ ] Wet road reflections, rain spray, sand dust and forest ambience work on real phones.
 - [ ] Damage appears on the correct component and a spare wheel visibly repairs it.
-- [ ] All launch tracks, weather, checkpoints and shortcuts are operational. *1 of 8 tracks, 1 of its 2 weather presets is baked; the rain preset has physics but no art.*
+- [ ] All launch tracks, weather, checkpoints and shortcuts are operational. _1 of 8 tracks, 1 of its 2 weather presets is baked; the rain preset has physics but no art._
 - [ ] One authoritative result is shown consistently to both players.
 - [ ] Short car codes create, persist, import and validate across browsers.
 - [ ] Rematch, edit build, swap cars and share flows work without an account.
-- [ ] No placeholder buttons, stock images, generic square cars or empty scenes remain. *True of what exists: every control shown does what it says. The home scene is a plain workbench, not the animated garage of Section 5.3.*
-- [ ] Low-effects settings preserve readability and touch responsiveness. *Reduced camera motion, shake amount and reduced flashes exist; particle quality tiers do not.*
+- [ ] No placeholder buttons, stock images, generic square cars or empty scenes remain. _True of what exists: every control shown does what it says. The home scene is a plain workbench, not the animated garage of Section 5.3._
+- [ ] Low-effects settings preserve readability and touch responsiveness. _Reduced camera motion, shake amount and reduced flashes exist; particle quality tiers do not._
 - [ ] Device tests and network stress tests meet documented budgets.
-- [ ] Privacy disclosure, deletion controls, error handling, backups and HTTPS are in place. *Guest tokens carry no personal data and can be cleared locally; no privacy page yet.*
-- [ ] Automated tests and clean install and build commands pass on the committed revision. *Passing locally at this revision. Clean-clone install and CI are unverified.*
+- [ ] Privacy disclosure, deletion controls, error handling, backups and HTTPS are in place. _Guest tokens carry no personal data and can be cleared locally; no privacy page yet._
+- [ ] Automated tests and clean install and build commands pass on the committed revision. _Passing locally at this revision. Clean-clone install and CI are unverified._
 
 ## Launch blockers known today
 

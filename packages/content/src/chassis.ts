@@ -70,7 +70,10 @@ export const CHASSIS_BEETLE: ChassisDefinition = {
 
 /** Shared fields so each benchmark chassis only states what makes it different. */
 function chassis(
-  def: Omit<ChassisDefinition, 'category' | 'footprint' | 'compatibleMounts' | 'spriteKey' | 'modifiers'>,
+  def: Omit<
+    ChassisDefinition,
+    'category' | 'footprint' | 'compatibleMounts' | 'spriteKey' | 'modifiers'
+  >,
 ): ChassisDefinition {
   return {
     ...def,

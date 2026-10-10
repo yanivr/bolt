@@ -13,6 +13,16 @@ export type ChassisArt = {
   brakeLightAnchors: AnchorPoint[];
 };
 
-export type WheelArt = { id: string; cell: number; rollFrames: number; model: (rollPhase: number) => Model };
+export type WheelArt = {
+  id: string;
+  cell: number;
+  rollFrames: number;
+  model: (rollPhase: number) => Model;
+};
 
-export type EngineArt = { id: string; cell: number; model: Model; exhaustStyle: 'puff' | 'flame' | 'none' };
+export type EngineArt = {
+  id: string;
+  cell: number;
+  model: Model;
+  exhaustStyle: 'puff' | 'flame' | 'none';
+};

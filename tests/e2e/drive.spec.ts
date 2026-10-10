@@ -9,11 +9,21 @@ class Touch {
   private fingers = new Map<number, Finger>();
   constructor(private readonly page: Page) {}
 
-  private async send(type: 'touchStart' | 'touchMove' | 'touchEnd', points: Finger[] = [...this.fingers.values()]): Promise<void> {
+  private async send(
+    type: 'touchStart' | 'touchMove' | 'touchEnd',
+    points: Finger[] = [...this.fingers.values()],
+  ): Promise<void> {
     this.session ??= await this.page.context().newCDPSession(this.page);
     await this.session.send('Input.dispatchTouchEvent', {
       type,
-      touchPoints: points.map((f) => ({ x: f.x, y: f.y, id: f.id, radiusX: 8, radiusY: 8, force: 1 })),
+      touchPoints: points.map((f) => ({
+        x: f.x,
+        y: f.y,
+        id: f.id,
+        radiusX: 8,
+        radiusY: 8,
+        force: 1,
+      })),
     });
   }
   async down(f: Finger): Promise<void> {
@@ -57,7 +67,9 @@ async function startRace(page: Page, query = '?debug=1'): Promise<void> {
   await expect(page.locator('.hud')).toBeVisible({ timeout: 40_000 });
 }
 
-test('a blank session reaches the home screen and starts a server-authoritative drive', async ({ page }) => {
+test('a blank session reaches the home screen and starts a server-authoritative drive', async ({
+  page,
+}) => {
   const problems = collectProblems(page);
   await page.goto('/?debug=1');
   await expect(page.getByRole('img', { name: 'BOLT RIVALS' })).toBeVisible();
@@ -68,7 +80,9 @@ test('a blank session reaches the home screen and starts a server-authoritative 
   await expect(page.getByTestId('debug')).toContainText('webgl');
   await expect(page.getByText('Offline test drive')).toHaveCount(0);
   // The clock only runs once the server has started the race.
-  await expect(page.locator('.hud-clock canvas')).not.toHaveAttribute('aria-label', '0:00.00', { timeout: 20_000 });
+  await expect(page.locator('.hud-clock canvas')).not.toHaveAttribute('aria-label', '0:00.00', {
+    timeout: 20_000,
+  });
   expect(problems).toEqual([]);
 });
 
@@ -143,7 +157,9 @@ test('prediction stays on the authoritative car during a full autopilot lap', as
   expect(max).toBeLessThan(60);
 });
 
-test('falls back to a clearly badged offline drive when the server is unreachable', async ({ page }) => {
+test('falls back to a clearly badged offline drive when the server is unreachable', async ({
+  page,
+}) => {
   await page.route('**/api/v1/health', (route) => route.abort());
   await startRace(page);
   await expect(page.getByText('Offline test drive')).toBeVisible();

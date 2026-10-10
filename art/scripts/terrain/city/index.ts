@@ -42,7 +42,9 @@ export function paintCity(ctx: BakeContext): BiomeOutput {
   const onBillboardRow = (lot: Lot): boolean => {
     if (lot.roadDist > 46) return false;
     locate(ctx.track, lot.x + lot.w / 2, lot.y + lot.h / 2, loc);
-    return loc.branch === 0 && loc.s > BILLBOARD_ROW[0] && loc.s < BILLBOARD_ROW[1] && loc.lateral < 0;
+    return (
+      loc.branch === 0 && loc.s > BILLBOARD_ROW[0] && loc.s < BILLBOARD_ROW[1] && loc.lateral < 0
+    );
   };
   dressRoofs(ctx, layout, claimed, taken, onBillboardRow, { pools, lights });
   paintRoad(ctx, layout, plan);

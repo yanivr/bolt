@@ -9,7 +9,9 @@ const TOKEN_KEY = 'bolt.guest.v1';
  */
 export function serverOrigin(): string {
   const configured = import.meta.env.VITE_SERVER_URL as string | undefined;
-  return configured && configured.length > 0 ? configured.replace(/\/$/, '') : window.location.origin;
+  return configured && configured.length > 0
+    ? configured.replace(/\/$/, '')
+    : window.location.origin;
 }
 
 function readStoredToken(): string | null {
@@ -32,7 +34,10 @@ async function fetchJson<T>(path: string, init: RequestInit, timeoutMs: number):
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(`${serverOrigin()}${path}`, { ...init, signal: controller.signal });
+    const response = await fetch(`${serverOrigin()}${path}`, {
+      ...init,
+      signal: controller.signal,
+    });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return (await response.json()) as T;
   } finally {
@@ -56,7 +61,11 @@ export async function ensureGuest(): Promise<GuestSessionResponse> {
   const existing = readStoredToken();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (existing) headers.Authorization = `Bearer ${existing}`;
-  const guest = await fetchJson<GuestSessionResponse>('/api/v1/guest', { method: 'POST', headers, body: '{}' }, 5000);
+  const guest = await fetchJson<GuestSessionResponse>(
+    '/api/v1/guest',
+    { method: 'POST', headers, body: '{}' },
+    5000,
+  );
   storeToken(guest.token);
   return guest;
 }

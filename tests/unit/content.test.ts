@@ -1,10 +1,21 @@
-import { CHASSIS, CHASSIS_BEETLE, DEFAULT_LOADOUT, ENGINES, PAINTS, STRINGS, TIRES, TIRES_STREET, resolveLoadout } from '@bolt/content';
+import {
+  CHASSIS,
+  CHASSIS_BEETLE,
+  DEFAULT_LOADOUT,
+  ENGINES,
+  PAINTS,
+  STRINGS,
+  TIRES,
+  TIRES_STREET,
+  resolveLoadout,
+} from '@bolt/content';
 import { STARTING_CREDITS, deriveVehicleParams, wheelKitMass, wheelKitPrice } from '@bolt/shared';
 import { describe, expect, it } from 'vitest';
 
 function allStrings(value: unknown, out: string[] = []): string[] {
   if (typeof value === 'string') out.push(value);
-  else if (value && typeof value === 'object') for (const v of Object.values(value)) allStrings(v, out);
+  else if (value && typeof value === 'object')
+    for (const v of Object.values(value)) allStrings(v, out);
   return out;
 }
 
@@ -60,7 +71,8 @@ describe('catalog seed data', () => {
       for (const engine of Object.values(ENGINES)) {
         for (const tires of Object.values(TIRES)) {
           const p = deriveVehicleParams(chassis, engine, tires);
-          for (const v of Object.values(p)) if (typeof v === 'number') expect(Number.isFinite(v)).toBe(true);
+          for (const v of Object.values(p))
+            if (typeof v === 'number') expect(Number.isFinite(v)).toBe(true);
           expect(p.colliderRadius + p.colliderOffset).toBeCloseTo(chassis.bodyHalfLength, 6);
         }
       }

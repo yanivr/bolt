@@ -31,7 +31,14 @@ export const PAINTS: Record<string, { displayName: string; ramp: string[]; outli
 };
 
 export const CAR_MATERIALS: Record<string, Material> = {
-  paint: ramp(PAINT_KEY[0], PAINT_KEY[1], PAINT_KEY[2], PAINT_KEY[3], PAINT_KEY[4], PAINT_OUTLINE_KEY),
+  paint: ramp(
+    PAINT_KEY[0],
+    PAINT_KEY[1],
+    PAINT_KEY[2],
+    PAINT_KEY[3],
+    PAINT_KEY[4],
+    PAINT_OUTLINE_KEY,
+  ),
   ivory: ramp('#6e6684', '#aaa09f', '#ddd3bf', '#f5eed9', '#ffffff', '#3a3550'),
   glass: ramp('#0a1324', '#11233c', '#1a3a5e', '#2e6c94', '#93dcee', '#070c18'),
   steel: ramp('#1c2436', '#35425c', '#5d6d8a', '#95a5bf', '#dbe6f5', '#0e1320'),

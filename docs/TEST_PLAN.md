@@ -5,14 +5,14 @@ the specification is the requirement list; rows are added here as milestones lan
 
 ## Commands
 
-| Command | Scope |
-|:--|:--|
-| `pnpm lint` | ESLint over the whole workspace |
-| `pnpm typecheck` | `tsc -b` with strict settings across all packages |
-| `pnpm test` | Vitest: unit and integration (starts real servers on ephemeral ports) |
-| `pnpm test:e2e` | Playwright against the production build in a phone-sized touch viewport |
-| `pnpm art:check` | Car atlases match the pipeline byte for byte |
-| `npx tsx tests/visual/capture.ts` | Screenshots and a recording for visual review |
+| Command                           | Scope                                                                   |
+| :-------------------------------- | :---------------------------------------------------------------------- |
+| `pnpm lint`                       | ESLint over the whole workspace                                         |
+| `pnpm typecheck`                  | `tsc -b` with strict settings across all packages                       |
+| `pnpm test`                       | Vitest: unit and integration (starts real servers on ephemeral ports)   |
+| `pnpm test:e2e`                   | Playwright against the production build in a phone-sized touch viewport |
+| `pnpm art:check`                  | Car atlases match the pipeline byte for byte                            |
+| `npx tsx tests/visual/capture.ts` | Screenshots and a recording for visual review                           |
 
 ## Automated coverage in Milestone A
 

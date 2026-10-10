@@ -1,4 +1,9 @@
-import type { AnchorPoint, ChassisSpriteManifest, EngineSpriteManifest, WheelSpriteManifest } from './assets.js';
+import type {
+  AnchorPoint,
+  ChassisSpriteManifest,
+  EngineSpriteManifest,
+  WheelSpriteManifest,
+} from './assets.js';
 import { CAR_HEADINGS, WHEEL_HEADINGS } from './assets.js';
 import { TAU } from './math.js';
 
@@ -66,7 +71,8 @@ export function layoutCar(
 
   ops.push({ kind: 'shadow', sheetId: chassis.id, column: frame, row: 0, dx: 2, dy: 3 });
 
-  const rollRow = ((Math.floor(pose.roll) % wheels.rollFrames) + wheels.rollFrames) % wheels.rollFrames;
+  const rollRow =
+    ((Math.floor(pose.roll) % wheels.rollFrames) + wheels.rollFrames) % wheels.rollFrames;
   for (const anchor of chassis.wheelAnchors) {
     const yaw = anchor.steers ? pose.steer * MAX_WHEEL_YAW_RAD : 0;
     const p = rotated(anchor, snapped);
@@ -92,13 +98,20 @@ export function layoutCar(
     dy: Math.round(e.y) + by,
   });
 
-  if (pose.headlights) ops.push({ kind: 'headlight', sheetId: chassis.id, column: frame, row: 0, dx: bx, dy: by });
-  if (pose.braking) ops.push({ kind: 'brake', sheetId: chassis.id, column: frame, row: 0, dx: bx, dy: by });
+  if (pose.headlights)
+    ops.push({ kind: 'headlight', sheetId: chassis.id, column: frame, row: 0, dx: bx, dy: by });
+  if (pose.braking)
+    ops.push({ kind: 'brake', sheetId: chassis.id, column: frame, row: 0, dx: bx, dy: by });
   return ops;
 }
 
 /** World-space position of a chassis-local anchor for a car at an exact (unsnapped) heading. */
-export function anchorToWorld(anchor: AnchorPoint, x: number, y: number, headingRad: number): { x: number; y: number } {
+export function anchorToWorld(
+  anchor: AnchorPoint,
+  x: number,
+  y: number,
+  headingRad: number,
+): { x: number; y: number } {
   const p = rotated(anchor, headingRad);
   return { x: x + p.x, y: y + p.y };
 }

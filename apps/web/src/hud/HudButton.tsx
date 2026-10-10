@@ -30,7 +30,11 @@ export function HudButton({ onPress, label, className, children }: Props) {
         active.current = null;
         const rect = event.currentTarget.getBoundingClientRect();
         // Sliding off the button before lifting cancels the press.
-        const inside = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
+        const inside =
+          event.clientX >= rect.left &&
+          event.clientX <= rect.right &&
+          event.clientY >= rect.top &&
+          event.clientY <= rect.bottom;
         if (inside) onPress();
       }}
       onPointerCancel={() => {

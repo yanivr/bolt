@@ -42,7 +42,11 @@ export const playerInputMessageSchema = z
   .strict();
 export type PlayerInputMessage = z.infer<typeof playerInputMessageSchema>;
 
-const idSchema = z.string().min(1).max(48).regex(/^[a-z0-9_]+$/);
+const idSchema = z
+  .string()
+  .min(1)
+  .max(48)
+  .regex(/^[a-z0-9_]+$/);
 
 export const loadoutSchema = z
   .object({ chassisId: idSchema, engineId: idSchema, tireKitId: idSchema, paintId: idSchema })

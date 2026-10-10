@@ -4,7 +4,9 @@
   "version": "0.1.0",
   "description": "BOLT RIVALS: build smart, drive hard. A browser-first tactical racing game.",
   "packageManager": "pnpm@10.28.0",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "type": "module",
   "scripts": {
     "dev": "pnpm -r --parallel --filter @bolt/server --filter @bolt/web dev",

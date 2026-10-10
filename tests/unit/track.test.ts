@@ -31,7 +31,14 @@ beforeAll(() => {
 });
 
 /** Walks a branch centerline in small steps, feeding the checkpoint logic. */
-function walk(t: TrackRuntime, progress: ReturnType<typeof createProgress>, branch: number, from: number, to: number, time: { ms: number }) {
+function walk(
+  t: TrackRuntime,
+  progress: ReturnType<typeof createProgress>,
+  branch: number,
+  from: number,
+  to: number,
+  time: { ms: number },
+) {
   const b = t.branches[branch]!;
   const loc = createLocation();
   const dir = to >= from ? 1 : -1;
@@ -41,7 +48,19 @@ function walk(t: TrackRuntime, progress: ReturnType<typeof createProgress>, bran
     const p = sampleBranch(b, s);
     locate(t, p.x, p.y, loc);
     time.ms += 33;
-    const e = updateProgress(t, progress, prev.x, prev.y, p.x, p.y, Math.atan2(p.tx * dir, -p.ty * dir), 200, loc, time.ms, SIM_DT);
+    const e = updateProgress(
+      t,
+      progress,
+      prev.x,
+      prev.y,
+      p.x,
+      p.y,
+      Math.atan2(p.tx * dir, -p.ty * dir),
+      200,
+      loc,
+      time.ms,
+      SIM_DT,
+    );
     if (e !== 'none') events.push(e);
     prev = p;
   }
@@ -103,7 +122,8 @@ describe('track content contract (Section 9.1)', () => {
       expect(loc.edge).toBeLessThan(4);
       const main = createLocation();
       let nearest = Infinity;
-      for (let i = 0; i < track.main.count; i++) nearest = Math.min(nearest, Math.hypot(track.main.x[i]! - ob.x, track.main.y[i]! - ob.y));
+      for (let i = 0; i < track.main.count; i++)
+        nearest = Math.min(nearest, Math.hypot(track.main.x[i]! - ob.x, track.main.y[i]! - ob.y));
       expect(nearest).toBeGreaterThan(30);
       void main;
     }
@@ -115,7 +135,14 @@ describe('checkpoints and progress (Sections 3.4 and 19.1)', () => {
     const progress = createProgress();
     const time = { ms: 0 };
     const L = track.lapLength;
-    const events = walk(track, progress, 0, track.startS - 40, track.startS - 40 + L * 3 + 80, time);
+    const events = walk(
+      track,
+      progress,
+      0,
+      track.startS - 40,
+      track.startS - 40 + L * 3 + 80,
+      time,
+    );
     expect(events.filter((e) => e === 'lap')).toHaveLength(2);
     expect(events.filter((e) => e === 'finish')).toHaveLength(1);
     expect(progress.finishedAtMs).not.toBeNull();
@@ -139,10 +166,19 @@ describe('checkpoints and progress (Sections 3.4 and 19.1)', () => {
     const time = { ms: 0 };
     walk(track, progress, 0, track.startS - 40, track.startS + 200, time);
     // Jump most of the lap ahead without crossing the gates in between.
-    walk(track, progress, 0, track.startS + track.lapLength - 300, track.startS + track.lapLength + 200, time);
+    walk(
+      track,
+      progress,
+      0,
+      track.startS + track.lapLength - 300,
+      track.startS + track.lapLength + 200,
+      time,
+    );
     expect(progress.lap).toBe(1);
     expect(progress.checkpointIndex).toBe(1);
-    expect(progress.courseProgress).toBeLessThanOrEqual(track.lapLength / track.checkpoints.length + 1);
+    expect(progress.courseProgress).toBeLessThanOrEqual(
+      track.lapLength / track.checkpoints.length + 1,
+    );
   });
 
   it('gives the signed shortcut the same checkpoint credit as the road it bypasses', () => {
@@ -170,7 +206,19 @@ describe('checkpoints and progress (Sections 3.4 and 19.1)', () => {
       const p = sampleBranch(b, s);
       locate(track, p.x, p.y, loc);
       time.ms += 33;
-      updateProgress(track, progress, prev.x, prev.y, p.x, p.y, Math.atan2(p.tx, -p.ty), 200, loc, time.ms, SIM_DT);
+      updateProgress(
+        track,
+        progress,
+        prev.x,
+        prev.y,
+        p.x,
+        p.y,
+        Math.atan2(p.tx, -p.ty),
+        200,
+        loc,
+        time.ms,
+        SIM_DT,
+      );
       expect(progress.courseProgress).toBeGreaterThanOrEqual(last - 1e-6);
       last = progress.courseProgress;
       prev = p;
@@ -200,7 +248,8 @@ describe('simulated race length (Section 9.3)', () => {
       const e = environmentFor(preset)!;
       const session = createDriveSession(track, e, params);
       const scratch = createDriverScratch();
-      for (let i = 0; i < 30 * 200 && session.phase !== 'FINISHED'; i++) stepDriveSession(session, driveCenterline(track, session.motion, params, e, scratch));
+      for (let i = 0; i < 30 * 200 && session.phase !== 'FINISHED'; i++)
+        stepDriveSession(session, driveCenterline(track, session.motion, params, e, scratch));
       return session.raceTicks * SIM_DT;
     };
     const dry = run('city_clear_night');
@@ -211,7 +260,8 @@ describe('simulated race length (Section 9.3)', () => {
 
   it('ends at the 180 second limit even if nobody finishes', () => {
     const session = createDriveSession(track, env, params);
-    for (let i = 0; i < 30 * 190 && session.phase !== 'FINISHED'; i++) stepDriveSession(session, { steer: 0, brake: 1, coast: false });
+    for (let i = 0; i < 30 * 190 && session.phase !== 'FINISHED'; i++)
+      stepDriveSession(session, { steer: 0, brake: 1, coast: false });
     expect(session.phase).toBe('FINISHED');
     expect(session.raceTicks * SIM_DT).toBeCloseTo(RACE_LIMIT_SECONDS, 1);
     expect(session.progress.finishedAtMs).toBeNull();

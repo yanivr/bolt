@@ -60,7 +60,8 @@ function groundTone(kind: number, x: number, y: number): Color {
     default: {
       const tx = Math.floor(x / 8);
       const ty = Math.floor(y / 8);
-      if ((x - tx * 8 === 0 || y - ty * 8 === 0) && hash2(tx, ty, SEED + 8) < 0.55) return PAL.streetDark;
+      if ((x - tx * 8 === 0 || y - ty * 8 === 0) && hash2(tx, ty, SEED + 8) < 0.55)
+        return PAL.streetDark;
       const hsh = hash2(x >> 1, y >> 1, SEED + 7);
       return hsh < 0.1 ? PAL.yardAlt : PAL.yard;
     }
@@ -88,7 +89,11 @@ export function paintGround(ctx: BakeContext, layout: CityLayout, pools: LightPo
     return field.edge[i]! > WALL_OUT + 1 && layout.roofId[i] === 0 && layout.ground[i] === kind;
   };
   const clear = (x: number, y: number, bw: number, bh: number, kind: number): boolean =>
-    open(x, y, kind) && open(x + bw - 1, y, kind) && open(x, y + bh - 1, kind) && open(x + bw - 1, y + bh - 1, kind) && open(x + (bw >> 1), y + (bh >> 1), kind);
+    open(x, y, kind) &&
+    open(x + bw - 1, y, kind) &&
+    open(x, y + bh - 1, kind) &&
+    open(x + bw - 1, y + bh - 1, kind) &&
+    open(x + (bw >> 1), y + (bh >> 1), kind);
 
   // Side streets: a faint center line and narrow footways so they read as streets, quietly.
   for (const st of layout.streets) {
@@ -98,13 +103,17 @@ export function paintGround(ctx: BakeContext, layout: CityLayout, pools: LightPo
       const cy = st.y + (st.h >> 1);
       for (let x = st.x; x < st.x + st.w; x++) {
         if (open(x, cy, G_STREET) && ((x >> 3) & 3) < 2) world.set(x, cy, PAL.streetMark);
-        for (const yy of [st.y, st.y + 1, st.y + st.h - 2, st.y + st.h - 1]) if (open(x, yy, G_STREET)) world.set(x, yy, yy === st.y + 1 || yy === st.y + st.h - 2 ? PAL.yard : PAL.yardAlt);
+        for (const yy of [st.y, st.y + 1, st.y + st.h - 2, st.y + st.h - 1])
+          if (open(x, yy, G_STREET))
+            world.set(x, yy, yy === st.y + 1 || yy === st.y + st.h - 2 ? PAL.yard : PAL.yardAlt);
       }
     } else {
       const cx = st.x + (st.w >> 1);
       for (let y = st.y; y < st.y + st.h; y++) {
         if (open(cx, y, G_STREET) && ((y >> 3) & 3) < 2) world.set(cx, y, PAL.streetMark);
-        for (const xx of [st.x, st.x + 1, st.x + st.w - 2, st.x + st.w - 1]) if (open(xx, y, G_STREET)) world.set(xx, y, xx === st.x + 1 || xx === st.x + st.w - 2 ? PAL.yard : PAL.yardAlt);
+        for (const xx of [st.x, st.x + 1, st.x + st.w - 2, st.x + st.w - 1])
+          if (open(xx, y, G_STREET))
+            world.set(xx, y, xx === st.x + 1 || xx === st.x + st.w - 2 ? PAL.yard : PAL.yardAlt);
       }
     }
   }
@@ -119,27 +128,54 @@ export function paintGround(ctx: BakeContext, layout: CityLayout, pools: LightPo
 type ClearFn = (x: number, y: number, w: number, h: number, kind: number) => boolean;
 type OpenFn = (x: number, y: number, kind: number) => boolean;
 
-function paintPark(ctx: BakeContext, b: Block, clear: ClearFn, open: OpenFn, pools: LightPool[]): void {
+function paintPark(
+  ctx: BakeContext,
+  b: Block,
+  clear: ClearFn,
+  open: OpenFn,
+  pools: LightPool[],
+): void {
   const { world } = ctx;
   const rnd = mulberry32(b.seed);
   // Low hedge border.
   for (let x = b.x; x < b.x + b.w; x++) {
-    for (const y of [b.y, b.y + 1, b.y + b.h - 2, b.y + b.h - 1]) if (open(x, y, G_PARK)) world.set(x, y, (x + y) % 5 === 0 ? PAL.leafDark : PAL.leafDeep);
+    for (const y of [b.y, b.y + 1, b.y + b.h - 2, b.y + b.h - 1])
+      if (open(x, y, G_PARK)) world.set(x, y, (x + y) % 5 === 0 ? PAL.leafDark : PAL.leafDeep);
   }
   for (let y = b.y; y < b.y + b.h; y++) {
-    for (const x of [b.x, b.x + 1, b.x + b.w - 2, b.x + b.w - 1]) if (open(x, y, G_PARK)) world.set(x, y, (x + y) % 5 === 0 ? PAL.leafDark : PAL.leafDeep);
+    for (const x of [b.x, b.x + 1, b.x + b.w - 2, b.x + b.w - 1])
+      if (open(x, y, G_PARK)) world.set(x, y, (x + y) % 5 === 0 ? PAL.leafDark : PAL.leafDeep);
   }
   // Two crossing gravel paths.
   const px = Math.round(b.x + b.w * (0.35 + rnd() * 0.3));
   const py = Math.round(b.y + b.h * (0.35 + rnd() * 0.3));
   for (let x = b.x + 2; x < b.x + b.w - 2; x++) {
-    for (let k = -3; k < 3; k++) if (open(x, py + k, G_PARK)) world.set(x, py + k, k === -3 || k === 2 ? PAL.plazaLine : hash2(x, py + k, 5) < 0.2 ? PAL.plazaAlt : PAL.plaza);
+    for (let k = -3; k < 3; k++)
+      if (open(x, py + k, G_PARK))
+        world.set(
+          x,
+          py + k,
+          k === -3 || k === 2
+            ? PAL.plazaLine
+            : hash2(x, py + k, 5) < 0.2
+              ? PAL.plazaAlt
+              : PAL.plaza,
+        );
   }
   for (let y = b.y + 2; y < b.y + b.h - 2; y++) {
     for (let k = -3; k < 3; k++) {
       if (!open(px + k, y, G_PARK)) continue;
       if (y >= py - 3 && y < py + 3) world.set(px + k, y, PAL.plaza);
-      else world.set(px + k, y, k === -3 || k === 2 ? PAL.plazaLine : hash2(px + k, y, 5) < 0.2 ? PAL.plazaAlt : PAL.plaza);
+      else
+        world.set(
+          px + k,
+          y,
+          k === -3 || k === 2
+            ? PAL.plazaLine
+            : hash2(px + k, y, 5) < 0.2
+              ? PAL.plazaAlt
+              : PAL.plaza,
+        );
     }
   }
   // Fountain or pond at the crossing.
@@ -179,7 +215,8 @@ function paintPark(ctx: BakeContext, b: Block, clear: ClearFn, open: OpenFn, poo
     placed.push([cx, cy, r]);
   }
   placed.sort((a, c) => a[1] - c[1]);
-  for (const [cx, cy, r] of placed) tree(world, cx, cy, r, (cx * 31 + cy) | 0, hash2(cx, cy, 77) < 0.25);
+  for (const [cx, cy, r] of placed)
+    tree(world, cx, cy, r, (cx * 31 + cy) | 0, hash2(cx, cy, 77) < 0.25);
   world.curHeight = -1;
   // Benches by the path.
   for (let k = 0; k < 3; k++) {
@@ -192,7 +229,13 @@ function paintPark(ctx: BakeContext, b: Block, clear: ClearFn, open: OpenFn, poo
   }
 }
 
-function paintParking(ctx: BakeContext, b: Block, clear: ClearFn, open: OpenFn, pools: LightPool[]): void {
+function paintParking(
+  ctx: BakeContext,
+  b: Block,
+  clear: ClearFn,
+  open: OpenFn,
+  pools: LightPool[],
+): void {
   const { world } = ctx;
   const rnd = mulberry32(b.seed);
   const bayW = 24;
@@ -206,10 +249,13 @@ function paintParking(ctx: BakeContext, b: Block, clear: ClearFn, open: OpenFn, 
     const x0 = b.x + ((b.w - count * bayW) >> 1);
     for (let k = 0; k <= count; k++) {
       const lx = x0 + k * bayW;
-      for (let yy = y; yy < y + bayL; yy++) if (open(lx, yy, G_PARKING) && hash2(lx, yy >> 1, 9) < 0.86) world.set(lx, yy, PAL.streetMark);
+      for (let yy = y; yy < y + bayL; yy++)
+        if (open(lx, yy, G_PARKING) && hash2(lx, yy >> 1, 9) < 0.86)
+          world.set(lx, yy, PAL.streetMark);
     }
     const lineY = rowIndex % 2 === 0 ? y : y + bayL - 1;
-    for (let x = x0; x <= x0 + count * bayW; x++) if (open(x, lineY, G_PARKING)) world.set(x, lineY, PAL.streetMark);
+    for (let x = x0; x <= x0 + count * bayW; x++)
+      if (open(x, lineY, G_PARKING)) world.set(x, lineY, PAL.streetMark);
     for (let k = 0; k < count; k++) {
       if (rnd() < 0.42) continue;
       const cx = x0 + k * bayW + 3 + ((rnd() * 2) | 0);
@@ -240,7 +286,13 @@ function paintParking(ctx: BakeContext, b: Block, clear: ClearFn, open: OpenFn, 
   }
 }
 
-function paintPlaza(ctx: BakeContext, b: Block, clear: ClearFn, open: OpenFn, pools: LightPool[]): void {
+function paintPlaza(
+  ctx: BakeContext,
+  b: Block,
+  clear: ClearFn,
+  open: OpenFn,
+  pools: LightPool[],
+): void {
   const { world } = ctx;
   const rnd = mulberry32(b.seed);
   const cx = b.x + (b.w >> 1);
@@ -250,7 +302,13 @@ function paintPlaza(ctx: BakeContext, b: Block, clear: ClearFn, open: OpenFn, po
     for (let x = cx - 30; x <= cx + 30; x++) {
       const d = Math.hypot(x - cx, y - cy);
       if (d <= 30 && d > 27 && open(x, y, G_PLAZA)) world.set(x, y, PAL.kerbShade);
-      else if (d <= 27 && d > 12 && open(x, y, G_PLAZA) && (Math.floor((Math.atan2(y - cy, x - cx) / Math.PI) * 8 + 8) & 1) === 0) world.set(x, y, PAL.plazaLine);
+      else if (
+        d <= 27 &&
+        d > 12 &&
+        open(x, y, G_PLAZA) &&
+        (Math.floor((Math.atan2(y - cy, x - cx) / Math.PI) * 8 + 8) & 1) === 0
+      )
+        world.set(x, y, PAL.plazaLine);
     }
   }
   if (clear(cx - 12, cy - 12, 24, 24, G_PLAZA)) {

@@ -49,7 +49,8 @@ export function createPaintedBody(
   if (!texture) return sourceKey;
   const { frameWidth, frameHeight, columns, rows } = chassis.body;
   for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < columns; c++) texture.add(r * columns + c, 0, c * frameWidth, r * frameHeight, frameWidth, frameHeight);
+    for (let c = 0; c < columns; c++)
+      texture.add(r * columns + c, 0, c * frameWidth, r * frameHeight, frameWidth, frameHeight);
   }
   return key;
 }

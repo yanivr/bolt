@@ -117,7 +117,17 @@ export function CarTurntable({ manifests, chassisId, engineId, tireKitId, paintI
               fw = engine.sheet.frameWidth;
               fh = engine.sheet.frameHeight;
             }
-            ctx.drawImage(image, op.column * fw, op.row * fh, fw, fh, Math.round(size / 2 + op.dx - fw / 2), Math.round(size / 2 + op.dy - fh / 2), fw, fh);
+            ctx.drawImage(
+              image,
+              op.column * fw,
+              op.row * fh,
+              fw,
+              fh,
+              Math.round(size / 2 + op.dx - fw / 2),
+              Math.round(size / 2 + op.dy - fh / 2),
+              fw,
+              fh,
+            );
           }
           frame = (frame + 1) % CAR_HEADINGS;
           timer = window.setTimeout(draw, 170);
@@ -132,5 +142,14 @@ export function CarTurntable({ manifests, chassisId, engineId, tireKitId, paintI
     };
   }, [manifests, chassis, engineId, tireKitId, paintId, size]);
 
-  return <canvas ref={ref} className="turntable-car" width={size} height={size} style={{ width: size * scale, height: size * scale }} aria-hidden="true" />;
+  return (
+    <canvas
+      ref={ref}
+      className="turntable-car"
+      width={size}
+      height={size}
+      style={{ width: size * scale, height: size * scale }}
+      aria-hidden="true"
+    />
+  );
 }

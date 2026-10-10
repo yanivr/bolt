@@ -37,7 +37,9 @@ const LOADOUT_KEY = 'bolt.loadout.v1';
 
 function loadLoadout(): VehicleLoadout {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(LOADOUT_KEY) ?? 'null') as Partial<VehicleLoadout> | null;
+    const parsed = JSON.parse(
+      window.localStorage.getItem(LOADOUT_KEY) ?? 'null',
+    ) as Partial<VehicleLoadout> | null;
     // Unknown ids are caught again by the server; this only restores the last pick.
     return parsed ? { ...DEFAULT_LOADOUT, ...parsed } : { ...DEFAULT_LOADOUT };
   } catch {
@@ -58,7 +60,10 @@ function loadSettings(): Settings {
 
 function loadMilestones(): Record<string, boolean> {
   try {
-    return JSON.parse(window.localStorage.getItem(MILESTONES_KEY) ?? '{}') as Record<string, boolean>;
+    return JSON.parse(window.localStorage.getItem(MILESTONES_KEY) ?? '{}') as Record<
+      string,
+      boolean
+    >;
   } catch {
     return {};
   }

@@ -21,17 +21,35 @@ type Finger = { id: number; x: number; y: number };
 
 /** Dispatches real pointer events through CDP touch input, so pointer capture behaves. */
 let cdp: CDPSession | null = null;
-async function touch(page: Page, type: 'touchStart' | 'touchMove' | 'touchEnd', fingers: Finger[]): Promise<void> {
+async function touch(
+  page: Page,
+  type: 'touchStart' | 'touchMove' | 'touchEnd',
+  fingers: Finger[],
+): Promise<void> {
   // One session for the whole run: Chromium tracks active touches per session.
   cdp ??= await page.context().newCDPSession(page);
   await cdp.send('Input.dispatchTouchEvent', {
     type,
-    touchPoints: fingers.map((f) => ({ x: f.x, y: f.y, id: f.id, radiusX: 8, radiusY: 8, force: 1 })),
+    touchPoints: fingers.map((f) => ({
+      x: f.x,
+      y: f.y,
+      id: f.id,
+      radiusX: 8,
+      radiusY: 8,
+      force: 1,
+    })),
   });
 }
 
 async function main(): Promise<void> {
-  const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+  const browser = await chromium.launch({
+    args: [
+      '--use-gl=angle',
+      '--use-angle=swiftshader',
+      '--enable-unsafe-swiftshader',
+      '--ignore-gpu-blocklist',
+    ],
+  });
   const context = await browser.newContext({
     viewport: { width: 844, height: 390 },
     deviceScaleFactor: 2,
@@ -45,7 +63,9 @@ async function main(): Promise<void> {
     if (m.type() === 'error') problems.push(`console: ${m.text()}`);
   });
   page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
-  page.on('requestfailed', (r) => problems.push(`requestfailed: ${r.url()} ${r.failure()?.errorText ?? ''}`));
+  page.on('requestfailed', (r) =>
+    problems.push(`requestfailed: ${r.url()} ${r.failure()?.errorText ?? ''}`),
+  );
 
   await page.goto(autopilot ? `${baseUrl}/?autopilot=1` : baseUrl, { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'Start Racing' }).waitFor({ timeout: 20_000 });
@@ -99,7 +119,9 @@ async function main(): Promise<void> {
     await page.waitForTimeout(400);
   }
 
-  const hud = await page.evaluate(() => (document.querySelector('.hud') as HTMLElement | null)?.innerText ?? '');
+  const hud = await page.evaluate(
+    () => (document.querySelector('.hud') as HTMLElement | null)?.innerText ?? '',
+  );
   await page.getByRole('button', { name: 'Settings' }).tap();
   await page.waitForTimeout(300);
   await page.screenshot({ path: join(outDir, '11_pause_settings.png') });

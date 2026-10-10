@@ -49,12 +49,21 @@ export type LandmarkSites = {
 const HARBOR = { x0: 560, x1: 3060, y0: 2452, water: 2600 };
 export const VIADUCT_HALF = 17;
 
-const propAt = (ctx: BakeContext, kind: string, fx: number, fy: number): { x: number; y: number } => {
+const propAt = (
+  ctx: BakeContext,
+  kind: string,
+  fx: number,
+  fy: number,
+): { x: number; y: number } => {
   const p = ctx.def.props.find((q) => q.kind === kind);
   return p ? { x: Math.round(p.x), y: Math.round(p.y) } : { x: fx, y: fy };
 };
 
-export function planLandmarks(ctx: BakeContext): { reserves: Reserve[]; fixed: FixedLot[]; sites: LandmarkSites } {
+export function planLandmarks(ctx: BakeContext): {
+  reserves: Reserve[];
+  fixed: FixedLot[];
+  sites: LandmarkSites;
+} {
   const clock = propAt(ctx, 'landmark_clock_tower', 655, 1315);
   const arcade = propAt(ctx, 'landmark_arcade', 800, 800);
   const tower = propAt(ctx, 'landmark_neon_tower', 1900, 826);
@@ -67,20 +76,73 @@ export function planLandmarks(ctx: BakeContext): { reserves: Reserve[]; fixed: F
     { x: clockLot.x - 10, y: clockLot.y - 28, w: 152, h: 156, ground: G_PLAZA },
     { x: arcadeLot.x - 14, y: arcadeLot.y - 14, w: 258, h: 152, ground: G_PLAZA },
     { x: tower.x - 62, y: tower.y - 40, w: 410, h: 82, ground: G_PLAZA },
-    { x: HARBOR.x0, y: HARBOR.y0, w: HARBOR.x1 - HARBOR.x0, h: HARBOR.water - HARBOR.y0, ground: G_QUAY },
-    { x: HARBOR.x0, y: HARBOR.water, w: HARBOR.x1 - HARBOR.x0, h: h - HARBOR.water, ground: G_WATER },
+    {
+      x: HARBOR.x0,
+      y: HARBOR.y0,
+      w: HARBOR.x1 - HARBOR.x0,
+      h: HARBOR.water - HARBOR.y0,
+      ground: G_QUAY,
+    },
+    {
+      x: HARBOR.x0,
+      y: HARBOR.water,
+      w: HARBOR.x1 - HARBOR.x0,
+      h: h - HARBOR.water,
+      ground: G_WATER,
+    },
     { x: start.x - 124, y: start.y - 200, w: 248, h: 92, ground: G_PLAZA },
     { x: viaduct.x - 560, y: viaduct.y - 58, w: 132, h: 116, ground: G_PLAZA },
   ];
   const fixed: FixedLot[] = [
     { ...clockLot, family: ROOF_CONCRETE, height: 20, tag: 'clock' },
     { ...arcadeLot, family: ROOF_PLUM, height: 9, tag: 'arcade' },
-    { x: tower.x - 32, y: tower.y - 32, w: 64, h: 64, family: ROOF_SLATE, height: 16, tag: 'tower', round: true },
+    {
+      x: tower.x - 32,
+      y: tower.y - 32,
+      w: 64,
+      h: 64,
+      family: ROOF_SLATE,
+      height: 16,
+      tag: 'tower',
+      round: true,
+    },
     { x: tower.x + 196, y: tower.y - 24, w: 60, h: 46, family: ROOF_OLIVE, height: 5, tag: '' },
-    { x: HARBOR.x0 + 24, y: HARBOR.y0 + 14, w: 250, h: 96, family: ROOF_TEAL, height: 8, tag: 'warehouse' },
-    { x: HARBOR.x1 - 300, y: HARBOR.y0 + 14, w: 276, h: 96, family: ROOF_SLATE, height: 8, tag: 'warehouse' },
-    { x: start.x - 114, y: start.y - 190, w: 228, h: 76, family: ROOF_SLATE, height: 8, tag: 'grandstand' },
-    { x: viaduct.x - 550, y: viaduct.y - 48, w: 112, h: 96, family: ROOF_CONCRETE, height: 9, tag: 'station' },
+    {
+      x: HARBOR.x0 + 24,
+      y: HARBOR.y0 + 14,
+      w: 250,
+      h: 96,
+      family: ROOF_TEAL,
+      height: 8,
+      tag: 'warehouse',
+    },
+    {
+      x: HARBOR.x1 - 300,
+      y: HARBOR.y0 + 14,
+      w: 276,
+      h: 96,
+      family: ROOF_SLATE,
+      height: 8,
+      tag: 'warehouse',
+    },
+    {
+      x: start.x - 114,
+      y: start.y - 190,
+      w: 228,
+      h: 76,
+      family: ROOF_SLATE,
+      height: 8,
+      tag: 'grandstand',
+    },
+    {
+      x: viaduct.x - 550,
+      y: viaduct.y - 48,
+      w: 112,
+      h: 96,
+      family: ROOF_CONCRETE,
+      height: 9,
+      tag: 'station',
+    },
   ];
   // Where the viaduct crosses the corridor: found by scanning the field along its line.
   let roadX0 = viaduct.x;
@@ -102,16 +164,32 @@ export function planLandmarks(ctx: BakeContext): { reserves: Reserve[]; fixed: F
   };
 }
 
-function thickLine(cv: Canvas, x0: number, y0: number, x1: number, y1: number, c: Color, wide: number): void {
+function thickLine(
+  cv: Canvas,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  c: Color,
+  wide: number,
+): void {
   const dx = x1 - x0;
   const dy = y1 - y0;
   const len = Math.hypot(dx, dy) || 1;
   const nx = -dy / len;
   const ny = dx / len;
-  for (let k = -(wide - 1) / 2; k <= (wide - 1) / 2; k += 0.5) cv.line(x0 + nx * k, y0 + ny * k, x1 + nx * k, y1 + ny * k, c);
+  for (let k = -(wide - 1) / 2; k <= (wide - 1) / 2; k += 0.5)
+    cv.line(x0 + nx * k, y0 + ny * k, x1 + nx * k, y1 + ny * k, c);
 }
 
-function inStar(px: number, py: number, cx: number, cy: number, outer: number, inner: number): boolean {
+function inStar(
+  px: number,
+  py: number,
+  cx: number,
+  cy: number,
+  outer: number,
+  inner: number,
+): boolean {
   // Point in a five-pointed star, by angular sector.
   const dx = px - cx;
   const dy = py - cy;
@@ -155,7 +233,16 @@ function paintClock(ctx: BakeContext, lot: Lot, out: LandmarkOutput): void {
       for (let xx = 0; xx < 11; xx++) {
         const upper = xx + yy < 10;
         const left = xx < yy;
-        const c = xx === yy || xx + yy === 10 ? r.par : upper ? (left ? r.par : r.hi) : left ? r.dark : r.deep;
+        const c =
+          xx === yy || xx + yy === 10
+            ? r.par
+            : upper
+              ? left
+                ? r.par
+                : r.hi
+              : left
+                ? r.dark
+                : r.deep;
         cv.set(fx + xx, fy + yy, c);
       }
     }
@@ -171,7 +258,19 @@ function paintClock(ctx: BakeContext, lot: Lot, out: LandmarkOutput): void {
       if (d > 40.3 || d <= 35.3) continue;
       const lit = xx + yy < -22;
       const shade = xx + yy > 26;
-      cv.set(cx + xx, cy + yy, d > 39.3 || d <= 36.3 ? (lit ? PAL.gold : PAL.goldDim) : lit ? PAL.goldHi : shade ? PAL.woodDark : PAL.gold);
+      cv.set(
+        cx + xx,
+        cy + yy,
+        d > 39.3 || d <= 36.3
+          ? lit
+            ? PAL.gold
+            : PAL.goldDim
+          : lit
+            ? PAL.goldHi
+            : shade
+              ? PAL.woodDark
+              : PAL.gold,
+      );
     }
   }
   emissive(cv, () => {
@@ -184,7 +283,15 @@ function paintClock(ctx: BakeContext, lot: Lot, out: LandmarkOutput): void {
     for (let hour = 0; hour < 12; hour++) {
       const a = (hour / 12) * Math.PI * 2 - Math.PI / 2;
       const major = hour % 3 === 0;
-      thickLine(cv, cx + Math.cos(a) * (major ? 24 : 28), cy + Math.sin(a) * (major ? 24 : 28), cx + Math.cos(a) * 32, cy + Math.sin(a) * 32, PAL.ink, major ? 3 : 1.5);
+      thickLine(
+        cv,
+        cx + Math.cos(a) * (major ? 24 : 28),
+        cy + Math.sin(a) * (major ? 24 : 28),
+        cx + Math.cos(a) * 32,
+        cy + Math.sin(a) * 32,
+        PAL.ink,
+        major ? 3 : 1.5,
+      );
     }
     // Minute dots.
     for (let m = 0; m < 60; m++) {
@@ -195,8 +302,24 @@ function paintClock(ctx: BakeContext, lot: Lot, out: LandmarkOutput): void {
     // Hands at ten past ten.
     const ha = ((10 + 10 / 60) / 12) * Math.PI * 2 - Math.PI / 2;
     const ma = (10 / 60) * Math.PI * 2 - Math.PI / 2;
-    thickLine(cv, cx - Math.cos(ha) * 4, cy - Math.sin(ha) * 4, cx + Math.cos(ha) * 17, cy + Math.sin(ha) * 17, PAL.ink, 3.5);
-    thickLine(cv, cx - Math.cos(ma) * 5, cy - Math.sin(ma) * 5, cx + Math.cos(ma) * 27, cy + Math.sin(ma) * 27, PAL.inkSoft, 2.5);
+    thickLine(
+      cv,
+      cx - Math.cos(ha) * 4,
+      cy - Math.sin(ha) * 4,
+      cx + Math.cos(ha) * 17,
+      cy + Math.sin(ha) * 17,
+      PAL.ink,
+      3.5,
+    );
+    thickLine(
+      cv,
+      cx - Math.cos(ma) * 5,
+      cy - Math.sin(ma) * 5,
+      cx + Math.cos(ma) * 27,
+      cy + Math.sin(ma) * 27,
+      PAL.inkSoft,
+      2.5,
+    );
     cv.disc(cx, cy, 4, PAL.ink);
     cv.disc(cx, cy, 3, PAL.coral);
     cv.set(cx - 1, cy - 1, PAL.coralHi);
@@ -267,9 +390,12 @@ function paintArcade(ctx: BakeContext, lot: Lot, sites: LandmarkSites, out: Land
             const core = inStar(px, py, sx, sy, 41, 17.1) && !inStar(px, py, sx, sy, 39, 16.3);
             cv.set(px, py, core ? PAL.goldHi : PAL.gold);
           } else if (inStar(px, py, sx, sy, 33, 13.8)) {
-            if (!inStar(px, py, sx, sy, 28, 11.7)) cv.set(px, py, (xx + yy) % 2 === 0 ? PAL.purpleDim : PAL.inkSoft);
-            else if (inStar(px, py, sx, sy, 24, 10) && !inStar(px, py, sx, sy, 20, 8.4)) cv.set(px, py, PAL.cyan);
-            else if (inStar(px, py, sx, sy, 15, 6.3)) cv.set(px, py, inStar(px, py, sx, sy, 11, 4.6) ? PAL.coralHi : PAL.coral);
+            if (!inStar(px, py, sx, sy, 28, 11.7))
+              cv.set(px, py, (xx + yy) % 2 === 0 ? PAL.purpleDim : PAL.inkSoft);
+            else if (inStar(px, py, sx, sy, 24, 10) && !inStar(px, py, sx, sy, 20, 8.4))
+              cv.set(px, py, PAL.cyan);
+            else if (inStar(px, py, sx, sy, 15, 6.3))
+              cv.set(px, py, inStar(px, py, sx, sy, 11, 4.6) ? PAL.coralHi : PAL.coral);
             else cv.set(px, py, PAL.ink);
           } else {
             cv.set(px, py, PAL.ink);
@@ -295,16 +421,41 @@ function paintArcade(ctx: BakeContext, lot: Lot, sites: LandmarkSites, out: Land
   drawMarquee(cv, sites.marquee.x, sites.marquee.y, 0);
   // Glow.
   out.pools.push({ x: sx, y: sy, radii: [52, 62], tint: TINT_GOLD, level: lot.id });
-  out.pools.push({ x: tx + 44, y: lot.y + 66, radii: [50, 60], tint: TINT_CYAN, level: lot.id, squashY: 1.4 });
-  out.pools.push({ x: lot.x + lot.w / 2, y: lot.y + lot.h / 2, radii: [128, 156], tint: TINT_PURPLE, level: 0, squashY: 1.45 });
+  out.pools.push({
+    x: tx + 44,
+    y: lot.y + 66,
+    radii: [50, 60],
+    tint: TINT_CYAN,
+    level: lot.id,
+    squashY: 1.4,
+  });
+  out.pools.push({
+    x: lot.x + lot.w / 2,
+    y: lot.y + lot.h / 2,
+    radii: [128, 156],
+    tint: TINT_PURPLE,
+    level: 0,
+    squashY: 1.45,
+  });
   out.lights.push({ x: sx, y: sy, radius: 150, color: TINT_HEX[TINT_GOLD]!, intensity: 0.8 });
-  out.lights.push({ x: tx + 44, y: lot.y + 66, radius: 150, color: TINT_HEX[TINT_PURPLE]!, intensity: 0.7 });
+  out.lights.push({
+    x: tx + 44,
+    y: lot.y + 66,
+    radius: 150,
+    color: TINT_HEX[TINT_PURPLE]!,
+    intensity: 0.7,
+  });
 }
 
 // --- Neon tower ----------------------------------------------------------------------------
 
 /** Ring neon for the tower. `state` per ring: 0 dim, 1 on, 2 hot. Rings are outer, mid, inner. */
-export function drawTowerRings(cv: Canvas, cx: number, cy: number, state: readonly [number, number, number]): void {
+export function drawTowerRings(
+  cv: Canvas,
+  cx: number,
+  cy: number,
+  state: readonly [number, number, number],
+): void {
   const rings = [
     { r: 26, c: PAL.cyan, hi: PAL.cyanHi, dim: PAL.cyanDim },
     { r: 19, c: PAL.purple, hi: PAL.purpleHi, dim: PAL.purpleDim },
@@ -318,7 +469,12 @@ export function drawTowerRings(cv: Canvas, cx: number, cy: number, state: readon
       if (st === 2) cv.ring(cx - 0.5, cy - 0.5, ring.r, ring.hi, 2);
       else if (st === 1) {
         // Hot core on the lit quadrant only.
-        for (let a = Math.PI; a < Math.PI * 1.5; a += 0.02) cv.set(Math.round(cx - 0.5 + Math.cos(a) * (ring.r - 0.5)), Math.round(cy - 0.5 + Math.sin(a) * (ring.r - 0.5)), ring.hi);
+        for (let a = Math.PI; a < Math.PI * 1.5; a += 0.02)
+          cv.set(
+            Math.round(cx - 0.5 + Math.cos(a) * (ring.r - 0.5)),
+            Math.round(cy - 0.5 + Math.sin(a) * (ring.r - 0.5)),
+            ring.hi,
+          );
       }
     });
   });
@@ -358,7 +514,13 @@ function paintTower(ctx: BakeContext, lot: Lot, out: LandmarkOutput): void {
   // Radial struts.
   for (let k = 0; k < 8; k++) {
     const a = (k / 8) * Math.PI * 2 + Math.PI / 8;
-    cv.line(cx + Math.cos(a) * 7, cy + Math.sin(a) * 7, cx + Math.cos(a) * 28, cy + Math.sin(a) * 28, PAL.steelDark);
+    cv.line(
+      cx + Math.cos(a) * 7,
+      cy + Math.sin(a) * 7,
+      cx + Math.cos(a) * 28,
+      cy + Math.sin(a) * 28,
+      PAL.steelDark,
+    );
   }
   drawTowerRings(cv, cx, cy, [1, 1, 1]);
   drawTowerHub(cv, cx, cy, 2);
@@ -366,7 +528,12 @@ function paintTower(ctx: BakeContext, lot: Lot, out: LandmarkOutput): void {
   out.lights.push({ x: cx, y: cy, radius: 62, color: TINT_HEX[TINT_CYAN]!, intensity: 0.8 });
 }
 
-function paintTowerPlaza(ctx: BakeContext, layout: CityLayout, sites: LandmarkSites, out: LandmarkOutput): void {
+function paintTowerPlaza(
+  ctx: BakeContext,
+  layout: CityLayout,
+  sites: LandmarkSites,
+  out: LandmarkOutput,
+): void {
   const cv = ctx.world;
   const { field } = ctx;
   const ok = (x: number, y: number, m: number): boolean => {
@@ -377,7 +544,8 @@ function paintTowerPlaza(ctx: BakeContext, layout: CityLayout, sites: LandmarkSi
       [x + m, y + m],
     ] as const) {
       const i = py * field.w + px;
-      if (field.edge[i]! < 9 || layout.roofId[i] !== 0 || layout.ground[i] !== G_PLAZA) return false;
+      if (field.edge[i]! < 9 || layout.roofId[i] !== 0 || layout.ground[i] !== G_PLAZA)
+        return false;
     }
     return true;
   };
@@ -410,7 +578,14 @@ const HULL_HI = col('#8C4652');
 const DECK = col('#2F3850');
 const DECK_LINE = col('#262E44');
 
-function container(cv: Canvas, x: number, y: number, horizontal: boolean, paint: Color, stacked: boolean): void {
+function container(
+  cv: Canvas,
+  x: number,
+  y: number,
+  horizontal: boolean,
+  paint: Color,
+  stacked: boolean,
+): void {
   const w = horizontal ? 30 : 13;
   const h = horizontal ? 13 : 30;
   const base = stacked ? lighter(paint, 0.14) : paint;
@@ -428,7 +603,8 @@ function container(cv: Canvas, x: number, y: number, horizontal: boolean, paint:
     [x + w - 1, y],
     [x, y + h - 1],
     [x + w - 1, y + h - 1],
-  ] as const) cv.set(px, py, PAL.ink);
+  ] as const)
+    cv.set(px, py, PAL.ink);
   // Door end with lock rods.
   if (horizontal) {
     cv.vline(x + w - 3, y + 2, h - 4, darker(base, 0.34));
@@ -447,12 +623,15 @@ function crane(cv: Canvas, x: number, out: LandmarkOutput, seed: number): void {
   const top = 2474;
   const tip = 2748;
   // Boom shadow thrown onto quay and water.
-  for (let y = top; y <= tip; y++) for (let k = -8; k <= 8; k++) cv.map(x + k + 12, y + 12, contactShade);
-  for (let k = -28; k <= 28; k++) for (let j = 0; j < 30; j++) cv.map(x + k + 6, railA - 4 + j + 6, contactShade);
+  for (let y = top; y <= tip; y++)
+    for (let k = -8; k <= 8; k++) cv.map(x + k + 12, y + 12, contactShade);
+  for (let k = -28; k <= 28; k++)
+    for (let j = 0; j < 30; j++) cv.map(x + k + 6, railA - 4 + j + 6, contactShade);
   // Hanging load and its far shadow: the gap between them sells the height.
   const loadY = 2664;
   const livery = LIVERIES[seed % LIVERIES.length]!;
-  for (let yy = 0; yy < 13; yy++) for (let xx = 0; xx < 30; xx++) cv.map(x - 15 + xx + 16, loadY + yy + 16, contactShade);
+  for (let yy = 0; yy < 13; yy++)
+    for (let xx = 0; xx < 30; xx++) cv.map(x - 15 + xx + 16, loadY + yy + 16, contactShade);
   container(cv, x - 15, loadY, true, livery, false);
   // Portal: sill beams on the rails and two side frames.
   for (const ry of [railA, railB]) {
@@ -524,7 +703,8 @@ function ship(cv: Canvas, x0: number, yc: number, len: number, rnd: () => number
   };
   for (let u = 0; u < len; u++) {
     const hw = half(u);
-    for (let v = -Math.ceil(hw); v <= Math.ceil(hw); v++) if (Math.abs(v) <= hw) cv.map(x0 + u + 6, yc + v + 6, contactShade);
+    for (let v = -Math.ceil(hw); v <= Math.ceil(hw); v++)
+      if (Math.abs(v) <= hw) cv.map(x0 + u + 6, yc + v + 6, contactShade);
   }
   for (let u = 0; u < len; u++) {
     const hw = half(u);
@@ -535,7 +715,9 @@ function ship(cv: Canvas, x0: number, yc: number, len: number, rnd: () => number
       let c: Color;
       if (rim) c = v < 0 || u < 2 ? HULL_HI : HULL;
       else if (av > hw - 3.4) c = PAL.kerbIvoryDark;
-      else c = u % 16 === 0 || v === 0 ? DECK_LINE : hash2(x0 + u, yc + v, 12) < 0.05 ? DECK_LINE : DECK;
+      else
+        c =
+          u % 16 === 0 || v === 0 ? DECK_LINE : hash2(x0 + u, yc + v, 12) < 0.05 ? DECK_LINE : DECK;
       cv.set(x0 + u, yc + v, c);
     }
   }
@@ -558,7 +740,8 @@ function ship(cv: Canvas, x0: number, yc: number, len: number, rnd: () => number
   cv.rect(x0 + 40, yc - 14, 5, 5, PAL.steelDark);
   cv.hline(x0 + 38, yc - 12, 9, PAL.steelLight);
   emissive(cv, () => {
-    for (let v = -24; v <= 24; v += 4) cv.rect(x0 + 52, yc + v - 1, 2, 2, v % 8 === 0 ? PAL.windowWarm : PAL.windowMid);
+    for (let v = -24; v <= 24; v += 4)
+      cv.rect(x0 + 52, yc + v - 1, 2, 2, v % 8 === 0 ? PAL.windowWarm : PAL.windowMid);
     cv.set(x0 + 42, yc - 12, PAL.red);
     cv.set(x0 + len - 6, yc, PAL.mint);
   });
@@ -578,7 +761,17 @@ function boat(cv: Canvas, x: number, y: number, paint: Color): void {
     const lx = x + 5 - (wRow >> 1);
     for (let j = 0; j < wRow; j++) {
       const rim = j === 0 || j === wRow - 1 || k === 0 || k === rows.length - 1;
-      cv.set(lx + j, y + k, rim ? (j === 0 || k === 0 ? PAL.kerbIvory : PAL.kerbIvoryDark) : k > 5 && k < 12 ? paint : PAL.wood);
+      cv.set(
+        lx + j,
+        y + k,
+        rim
+          ? j === 0 || k === 0
+            ? PAL.kerbIvory
+            : PAL.kerbIvoryDark
+          : k > 5 && k < 12
+            ? paint
+            : PAL.wood,
+      );
     }
   });
   cv.rect(x + 3, y + 7, 5, 3, PAL.glass);
@@ -611,7 +804,8 @@ function paintHarbor(ctx: BakeContext, layout: CityLayout, out: LandmarkOutput):
       [H.x1 - 3, PAL.wallHi],
       [H.x1 - 2, PAL.wallCap],
       [H.x1 - 1, PAL.wallShade],
-    ] as const) cv.set(x, y, c);
+    ] as const)
+      cv.set(x, y, c);
   }
   // Crane rails.
   for (let x = 880; x < 2740; x++) {
@@ -650,7 +844,17 @@ function paintHarbor(ctx: BakeContext, layout: CityLayout, out: LandmarkOutput):
   for (let y = H.water; y < H.water + 96; y++) {
     for (let k = 0; k < 22; k++) {
       const edge = k === 0 || k === 21;
-      cv.set(px + k, y, edge ? PAL.woodDark : (y - H.water) % 4 === 3 ? PAL.woodDark : hash2(k >> 2, y >> 2, 44) < 0.3 ? PAL.woodLight : PAL.wood);
+      cv.set(
+        px + k,
+        y,
+        edge
+          ? PAL.woodDark
+          : (y - H.water) % 4 === 3
+            ? PAL.woodDark
+            : hash2(k >> 2, y >> 2, 44) < 0.3
+              ? PAL.woodLight
+              : PAL.wood,
+      );
     }
     for (let k = 1; k <= 3; k++) cv.map(px + 21 + k, y + k, contactShade);
   }
@@ -692,7 +896,8 @@ function paintHarbor(ctx: BakeContext, layout: CityLayout, out: LandmarkOutput):
     [1900, 2776, 1],
     [1320, 2770, 2],
     [2700, 2760, 1],
-  ] as const) out.pools.push({ x: bx + 1, y: by + 1, radii: [5, 10], tint, level: 0 });
+  ] as const)
+    out.pools.push({ x: bx + 1, y: by + 1, radii: [5, 10], tint, level: 0 });
   // Warehouses.
   for (const lot of layout.lots) {
     if (!lot || lot.tag !== 'warehouse') continue;
@@ -711,16 +916,39 @@ function paintHarbor(ctx: BakeContext, layout: CityLayout, out: LandmarkOutput):
         cv.hline(sx, sy, 20, PAL.steel);
         if (lit) {
           emissive(cv, () => {
-            for (let yy = 1; yy < 8; yy++) for (let xx = 1; xx < 19; xx++) cv.set(sx + xx, sy + yy, xx % 5 === 0 ? PAL.windowDim : yy === 1 ? PAL.windowWarm : PAL.windowMid);
+            for (let yy = 1; yy < 8; yy++)
+              for (let xx = 1; xx < 19; xx++)
+                cv.set(
+                  sx + xx,
+                  sy + yy,
+                  xx % 5 === 0 ? PAL.windowDim : yy === 1 ? PAL.windowWarm : PAL.windowMid,
+                );
           });
-          out.pools.push({ x: sx + 10, y: sy + 4, radii: [13, 18], tint: TINT_WARM, level: lot.id, squashY: 1.4 });
+          out.pools.push({
+            x: sx + 10,
+            y: sy + 4,
+            radii: [13, 18],
+            tint: TINT_WARM,
+            level: lot.id,
+            squashY: 1.4,
+          });
         } else {
-          for (let yy = 1; yy < 8; yy++) for (let xx = 1; xx < 19; xx++) cv.set(sx + xx, sy + yy, xx % 5 === 0 ? PAL.steelDark : PAL.glass);
+          for (let yy = 1; yy < 8; yy++)
+            for (let xx = 1; xx < 19; xx++)
+              cv.set(sx + xx, sy + yy, xx % 5 === 0 ? PAL.steelDark : PAL.glass);
         }
       }
     }
     const label = lot.x < 1500 ? 'DOCK 7' : 'PIER 12';
-    drawText(cv, lot.x + ((lot.w - textWidth(label, 'micro', 3)) >> 1), ridge - 22, label, r.par, 'micro', 3);
+    drawText(
+      cv,
+      lot.x + ((lot.w - textWidth(label, 'micro', 3)) >> 1),
+      ridge - 22,
+      label,
+      r.par,
+      'micro',
+      3,
+    );
     cv.clipMap = null;
   }
 }
@@ -731,7 +959,15 @@ const BALLAST = col('#2B2F40');
 const BALLAST_LIGHT = col('#353A4D');
 
 /** Draws the rail deck between world x0 and x1 onto `cv`, whose origin is at (ox, oy). */
-export function drawViaduct(cv: Canvas, ox: number, oy: number, yc: number, x0: number, x1: number, caps = true): void {
+export function drawViaduct(
+  cv: Canvas,
+  ox: number,
+  oy: number,
+  yc: number,
+  x0: number,
+  x1: number,
+  caps = true,
+): void {
   for (let x = x0; x < x1; x++) {
     for (let dy = -VIADUCT_HALF; dy < VIADUCT_HALF; dy++) {
       let c: Color;
@@ -756,7 +992,11 @@ export function drawViaduct(cv: Canvas, ox: number, oy: number, yc: number, x0: 
     if (caps && x % 64 < 6) {
       for (const dy of [-20, -19, -18, 17, 18, 19]) {
         const lit = dy === -20 || x % 64 === 0;
-        cv.set(x - ox, yc + dy - oy, lit ? PAL.kerb : dy === 19 || x % 64 === 5 ? PAL.steelDark : PAL.kerbShade);
+        cv.set(
+          x - ox,
+          yc + dy - oy,
+          lit ? PAL.kerb : dy === 19 || x % 64 === 5 ? PAL.steelDark : PAL.kerbShade,
+        );
       }
     }
     // Catenary masts on the center walkway.
@@ -789,7 +1029,12 @@ function drawTram(cv: Canvas, x: number, yc: number): void {
   });
 }
 
-function paintViaductGround(ctx: BakeContext, layout: CityLayout, sites: LandmarkSites, out: LandmarkOutput): void {
+function paintViaductGround(
+  ctx: BakeContext,
+  layout: CityLayout,
+  sites: LandmarkSites,
+  out: LandmarkOutput,
+): void {
   const cv = ctx.world;
   const yc = sites.viaduct.y;
   const west = sites.viaduct.roadX0 - 440;
@@ -825,7 +1070,11 @@ function paintViaductGround(ctx: BakeContext, layout: CityLayout, sites: Landmar
     for (let yy = 1; yy < 35; yy++) {
       for (let xx = 1; xx < lot.w - 13; xx++) {
         const rib = xx % 9 === 0 || yy === 17 || yy === 18;
-        cv.set(lot.x + 6 + xx, gy + yy, rib ? PAL.steel : (xx + yy * 2) % 11 === 0 ? PAL.glassLight : PAL.glass);
+        cv.set(
+          lot.x + 6 + xx,
+          gy + yy,
+          rib ? PAL.steel : (xx + yy * 2) % 11 === 0 ? PAL.glassLight : PAL.glass,
+        );
       }
     }
     cv.hline(lot.x + 6, gy, lot.w - 12, PAL.steelLight);
@@ -834,18 +1083,44 @@ function paintViaductGround(ctx: BakeContext, layout: CityLayout, sites: Landmar
     neonText(cv, lot.x + 27, lot.y + 11, 'TRAM', 0, 2);
     neonText(cv, lot.x + 64, lot.y + 13, 'LINE 5', 3, 1);
     emissive(cv, () => {
-      for (let k = 0; k < lot.w - 20; k += 6) cv.set(lot.x + 10 + k, lot.y + lot.h - 12, PAL.windowWarm);
+      for (let k = 0; k < lot.w - 20; k += 6)
+        cv.set(lot.x + 10 + k, lot.y + lot.h - 12, PAL.windowWarm);
     });
     cv.clipMap = null;
-    out.pools.push({ x: lot.x + 56, y: lot.y + 16, radii: [36, 46], tint: TINT_CYAN, level: lot.id, squashY: 1.6 });
-    out.pools.push({ x: lot.x + 56, y: lot.y + lot.h - 12, radii: [40, 54], tint: TINT_WARM, level: lot.id, squashY: 2.2 });
-    out.lights.push({ x: lot.x + 56, y: lot.y + 16, radius: 46, color: TINT_HEX[TINT_CYAN]!, intensity: 0.5 });
+    out.pools.push({
+      x: lot.x + 56,
+      y: lot.y + 16,
+      radii: [36, 46],
+      tint: TINT_CYAN,
+      level: lot.id,
+      squashY: 1.6,
+    });
+    out.pools.push({
+      x: lot.x + 56,
+      y: lot.y + lot.h - 12,
+      radii: [40, 54],
+      tint: TINT_WARM,
+      level: lot.id,
+      squashY: 2.2,
+    });
+    out.lights.push({
+      x: lot.x + 56,
+      y: lot.y + 16,
+      radius: 46,
+      color: TINT_HEX[TINT_CYAN]!,
+      intensity: 0.5,
+    });
   }
 }
 
 // --- Start line ----------------------------------------------------------------------------
 
-function paintStart(ctx: BakeContext, layout: CityLayout, sites: LandmarkSites, out: LandmarkOutput): void {
+function paintStart(
+  ctx: BakeContext,
+  layout: CityLayout,
+  sites: LandmarkSites,
+  out: LandmarkOutput,
+): void {
   const cv = ctx.world;
   const lot = layout.lots.find((l) => l?.tag === 'grandstand');
   if (lot) {
@@ -853,7 +1128,16 @@ function paintStart(ctx: BakeContext, layout: CityLayout, sites: LandmarkSites, 
     cv.clipMap = layout.roofId;
     cv.clipId = lot.id;
     const r = ROOFS[lot.family]!;
-    const seats = [PAL.coralDim, PAL.cyanDim, PAL.goldDim, PAL.purpleDim, PAL.kerbIvoryDark, PAL.mintDim, PAL.kerbCoral, PAL.steel];
+    const seats = [
+      PAL.coralDim,
+      PAL.cyanDim,
+      PAL.goldDim,
+      PAL.purpleDim,
+      PAL.kerbIvoryDark,
+      PAL.mintDim,
+      PAL.kerbCoral,
+      PAL.steel,
+    ];
     // Canopy over the back rows, open tiers of seats toward the track.
     const tiers = 9;
     for (let t = 0; t < tiers; t++) {
@@ -876,19 +1160,53 @@ function paintStart(ctx: BakeContext, layout: CityLayout, sites: LandmarkSites, 
     }
     box(cv, lot.x + 3, lot.y + 3, lot.w - 6, 17, r.par, r.hi, r.deep, 3);
     for (let x = lot.x + 12; x < lot.x + lot.w - 8; x += 14) cv.vline(x, lot.y + 5, 13, r.base);
-    neonText(cv, lot.x + ((lot.w - textWidth('BOLT RIVALS GRAND PRIX', 'micro', 1)) >> 1), lot.y + 9, 'BOLT RIVALS GRAND PRIX', 3, 1);
+    neonText(
+      cv,
+      lot.x + ((lot.w - textWidth('BOLT RIVALS GRAND PRIX', 'micro', 1)) >> 1),
+      lot.y + 9,
+      'BOLT RIVALS GRAND PRIX',
+      3,
+      1,
+    );
     emissive(cv, () => {
-      for (let x = lot.x + 8; x < lot.x + lot.w - 6; x += 18) cv.rect(x, lot.y + 19, 2, 1, PAL.lamp);
+      for (let x = lot.x + 8; x < lot.x + lot.w - 6; x += 18)
+        cv.rect(x, lot.y + 19, 2, 1, PAL.lamp);
     });
     cv.clipMap = null;
-    out.pools.push({ x: lot.x + lot.w / 2, y: lot.y + 44, radii: [110, 130], tint: TINT_WARM, level: lot.id, squashY: 3 });
+    out.pools.push({
+      x: lot.x + lot.w / 2,
+      y: lot.y + 44,
+      radii: [110, 130],
+      tint: TINT_WARM,
+      level: lot.id,
+      squashY: 3,
+    });
   }
   // Flood pools on the grid: the best lit place on the circuit.
-  out.pools.push({ x: sites.start.x + 14, y: sites.start.y, radii: [84, 128, 168], tint: TINT_COOL, level: 0, squashY: 1.55 });
-  for (const dy of [-44, 44]) out.lights.push({ x: sites.start.x + 10, y: sites.start.y + dy, radius: 110, color: TINT_HEX[TINT_COOL]!, intensity: 1 });
+  out.pools.push({
+    x: sites.start.x + 14,
+    y: sites.start.y,
+    radii: [84, 128, 168],
+    tint: TINT_COOL,
+    level: 0,
+    squashY: 1.55,
+  });
+  for (const dy of [-44, 44])
+    out.lights.push({
+      x: sites.start.x + 10,
+      y: sites.start.y + dy,
+      radius: 110,
+      color: TINT_HEX[TINT_COOL]!,
+      intensity: 1,
+    });
 }
 
-function paintPlazaDressing(ctx: BakeContext, layout: CityLayout, sites: LandmarkSites, out: LandmarkOutput): void {
+function paintPlazaDressing(
+  ctx: BakeContext,
+  layout: CityLayout,
+  sites: LandmarkSites,
+  out: LandmarkOutput,
+): void {
   const cv = ctx.world;
   const { field } = ctx;
   const ok = (x: number, y: number, m: number): boolean => {
@@ -900,7 +1218,8 @@ function paintPlazaDressing(ctx: BakeContext, layout: CityLayout, sites: Landmar
     ] as const) {
       if (px < 0 || py < 0 || px >= field.w || py >= field.h) return false;
       const i = py * field.w + px;
-      if (field.edge[i]! < 9 || layout.roofId[i] !== 0 || layout.ground[i] !== G_PLAZA) return false;
+      if (field.edge[i]! < 9 || layout.roofId[i] !== 0 || layout.ground[i] !== G_PLAZA)
+        return false;
     }
     return true;
   };
@@ -929,7 +1248,8 @@ function paintPlazaDressing(ctx: BakeContext, layout: CityLayout, sites: Landmar
     [20, 70],
     [-30, -66],
     [-30, 66],
-  ] as const) planter(c.x + dx, c.y + dy, 7, (dx + dy) % 3 === 0);
+  ] as const)
+    planter(c.x + dx, c.y + dy, 7, (dx + dy) % 3 === 0);
   lamp(c.x + 70, c.y, TINT_GOLD);
   lamp(c.x - 6, c.y - 68, TINT_GOLD);
   lamp(c.x - 6, c.y + 68, TINT_GOLD);
@@ -950,7 +1270,12 @@ function paintPlazaDressing(ctx: BakeContext, layout: CityLayout, sites: Landmar
   planter(s.x + 120, s.y - 196, 4, true);
 }
 
-export function paintLandmarks(ctx: BakeContext, layout: CityLayout, sites: LandmarkSites, out: LandmarkOutput): void {
+export function paintLandmarks(
+  ctx: BakeContext,
+  layout: CityLayout,
+  sites: LandmarkSites,
+  out: LandmarkOutput,
+): void {
   const cv = ctx.world;
   cv.curFlags = 0;
   cv.curHeight = -1;
@@ -959,7 +1284,10 @@ export function paintLandmarks(ctx: BakeContext, layout: CityLayout, sites: Land
   paintTowerPlaza(ctx, layout, sites, out);
   for (const lot of layout.lots) {
     if (!lot || !lot.tag) continue;
-    if (lot.visible < lot.w * lot.h * (lot.round ? 0.7 : 1)) console.warn(`landmark ${lot.tag} is clipped by the corridor (${lot.visible} of ${lot.w * lot.h} px)`);
+    if (lot.visible < lot.w * lot.h * (lot.round ? 0.7 : 1))
+      console.warn(
+        `landmark ${lot.tag} is clipped by the corridor (${lot.visible} of ${lot.w * lot.h} px)`,
+      );
     if (lot.tag === 'warehouse' || lot.tag === 'station' || lot.tag === 'grandstand') continue;
     out.claimed.add(lot.id);
     cv.clipMap = layout.roofId;

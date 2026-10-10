@@ -21,7 +21,11 @@ function BendWarning() {
   if (direction === 0 || severity === 0) return null;
   const label = direction > 0 ? 'Right bend ahead' : 'Left bend ahead';
   return (
-    <div className={`bend bend-${direction > 0 ? 'right' : 'left'} bend-${severity}`} role="img" aria-label={label}>
+    <div
+      className={`bend bend-${direction > 0 ? 'right' : 'left'} bend-${severity}`}
+      role="img"
+      aria-label={label}
+    >
       {Array.from({ length: severity }, (_, i) => (
         <span key={i} className="bend-chevron" />
       ))}
@@ -72,7 +76,8 @@ function DebugReadout() {
   const renderer = useHud((s) => s.renderer);
   return (
     <div className="debug" data-testid="debug">
-      {fps} fps · {renderer} · {mode} · {Math.round(latency)} ms · pending {pending} · corrections {corrections} · max {maxCorrection.toFixed(2)} px
+      {fps} fps · {renderer} · {mode} · {Math.round(latency)} ms · pending {pending} · corrections{' '}
+      {corrections} · max {maxCorrection.toFixed(2)} px
     </div>
   );
 }
@@ -115,7 +120,11 @@ export function Hud({ manifests, onPause }: Props) {
       <div className="hud-top">
         <div className="panel hud-lap">
           <div className="hud-lap-row">
-            <PixelText text={finalLap ? STRINGS.race.finalLap : STRINGS.race.lap} scale={2} color={finalLap ? '#F6C35B' : '#46D5E6'} />
+            <PixelText
+              text={finalLap ? STRINGS.race.finalLap : STRINGS.race.lap}
+              scale={2}
+              color={finalLap ? '#F6C35B' : '#46D5E6'}
+            />
             <PixelText text={`${lap}/${laps}`} scale={3} />
           </div>
           <dl className="hud-times">
@@ -158,7 +167,12 @@ export function Hud({ manifests, onPause }: Props) {
       {DEBUG && <DebugReadout />}
 
       <div className="hud-speed panel">
-        <PixelText text={String(speed).padStart(3, ' ')} scale={5} color="#F6C35B" shadow="#151C2C" />
+        <PixelText
+          text={String(speed).padStart(3, ' ')}
+          scale={5}
+          color="#F6C35B"
+          shadow="#151C2C"
+        />
         <span className="hud-unit">{unit === 'mph' ? 'MPH' : 'KM/H'}</span>
       </div>
     </div>

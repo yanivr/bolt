@@ -17,11 +17,27 @@ import type { TerrainLight } from '@bolt/shared';
  * looks right.
  */
 
-export type FeatureSign = { id: string; kind: string; lot: Lot; x: number; y: number; spec: NeonSignSpec; masks: number[]; fps: number };
+export type FeatureSign = {
+  id: string;
+  kind: string;
+  lot: Lot;
+  x: number;
+  y: number;
+  spec: NeonSignSpec;
+  masks: number[];
+  fps: number;
+};
 
 const ALL = 0xffffffff;
 
-function pickLot(layout: CityLayout, tx: number, ty: number, minW: number, minH: number, used: ReadonlySet<number>): Lot | null {
+function pickLot(
+  layout: CityLayout,
+  tx: number,
+  ty: number,
+  minW: number,
+  minH: number,
+  used: ReadonlySet<number>,
+): Lot | null {
   let best: Lot | null = null;
   let bestD = Infinity;
   for (const lot of layout.lots) {
@@ -46,7 +62,15 @@ export function placeFeatureSigns(
 ): FeatureSign[] {
   const out: FeatureSign[] = [];
   const used = new Set<number>();
-  const want: Array<{ id: string; kind: string; tx: number; ty: number; spec: NeonSignSpec; masks: number[]; fps: number }> = [
+  const want: Array<{
+    id: string;
+    kind: string;
+    tx: number;
+    ty: number;
+    spec: NeonSignSpec;
+    masks: number[];
+    fps: number;
+  }> = [
     {
       id: 'neon_flicker',
       kind: 'neon_sign_flicker',
@@ -64,7 +88,16 @@ export function placeFeatureSigns(
       ty: 800,
       spec: { text: 'NOODLE', color: 3, accent: 2, scale: 2, glyph: 4 },
       // Letters light one by one, then the bowl joins in.
-      masks: [ALL, 0x40000000, 0x40000001, 0x40000003, 0x40000007, 0x4000000f, 0x4000001f, 0x4000003f],
+      masks: [
+        ALL,
+        0x40000000,
+        0x40000001,
+        0x40000003,
+        0x40000007,
+        0x4000000f,
+        0x4000001f,
+        0x4000003f,
+      ],
       fps: 6,
     },
   ];
@@ -81,10 +114,32 @@ export function placeFeatureSigns(
     ctx.world.clipMap = null;
     taken.set(lot.id, { x, y, w: size.w, h: size.h });
     const nc = NEON[wsh.spec.color]!;
-    pools.push({ x: x + size.w / 2, y: y + size.h / 2, radii: [size.w * 0.5 + 4, size.w * 0.5 + 12], tint: nc.tint, level: lot.id, squashY: 1.5 });
+    pools.push({
+      x: x + size.w / 2,
+      y: y + size.h / 2,
+      radii: [size.w * 0.5 + 4, size.w * 0.5 + 12],
+      tint: nc.tint,
+      level: lot.id,
+      squashY: 1.5,
+    });
     pools.push({ x: x + size.w / 2, y: y + size.h / 2, radii: [44, 64], tint: nc.tint, level: 0 });
-    lights.push({ x: Math.round(x + size.w / 2), y: Math.round(y + size.h / 2), radius: 64, color: nc.hex, intensity: 0.7 });
-    out.push({ id: wsh.id, kind: wsh.kind, lot, x, y, spec: wsh.spec, masks: wsh.masks, fps: wsh.fps });
+    lights.push({
+      x: Math.round(x + size.w / 2),
+      y: Math.round(y + size.h / 2),
+      radius: 64,
+      color: nc.hex,
+      intensity: 0.7,
+    });
+    out.push({
+      id: wsh.id,
+      kind: wsh.kind,
+      lot,
+      x,
+      y,
+      spec: wsh.spec,
+      masks: wsh.masks,
+      fps: wsh.fps,
+    });
   }
   return out;
 }
@@ -121,12 +176,17 @@ export function drawSignal(cv: Canvas, x: number, y: number, lit: number): void 
 /** Stamps the baked signal state after lighting, with a contact shadow for the pole. */
 export function stampSignals(ctx: BakeContext, sites: readonly SignalSite[]): void {
   for (const s of sites) {
-    for (let k = 1; k <= 3; k++) for (let j = 0; j < 16; j++) ctx.world.map(s.x + 6 + k, s.y + j + k, contactShade);
+    for (let k = 1; k <= 3; k++)
+      for (let j = 0; j < 16; j++) ctx.world.map(s.x + 6 + k, s.y + j + k, contactShade);
     drawSignal(ctx.world, s.x, s.y, 4);
   }
 }
 
-export function buildAnimated(sites: LandmarkSites, signs: readonly FeatureSign[], signals: readonly SignalSite[]): AnimatedArt[] {
+export function buildAnimated(
+  sites: LandmarkSites,
+  signs: readonly FeatureSign[],
+  signals: readonly SignalSite[],
+): AnimatedArt[] {
   const out: AnimatedArt[] = [];
   for (const sign of signs) {
     const size = neonSignSize(sign.spec);
@@ -135,7 +195,16 @@ export function buildAnimated(sites: LandmarkSites, signs: readonly FeatureSign[
       drawNeonSign(cv, 0, 0, sign.spec, mask, false);
       return cv;
     });
-    out.push({ id: sign.id, kind: sign.kind, frames, x: sign.x, y: sign.y, fps: sign.fps, above: false, blend: 'normal' });
+    out.push({
+      id: sign.id,
+      kind: sign.kind,
+      frames,
+      x: sign.x,
+      y: sign.y,
+      fps: sign.fps,
+      above: false,
+      blend: 'normal',
+    });
   }
   // Aircraft beacon on the tower hub.
   const beacon = [2, 1, 0, 0, 1, 2].map((level) => {
@@ -143,7 +212,16 @@ export function buildAnimated(sites: LandmarkSites, signs: readonly FeatureSign[
     drawTowerHub(cv, 7, 7, level);
     return cv;
   });
-  out.push({ id: 'tower_beacon', kind: 'aircraft_beacon', frames: beacon, x: sites.tower.x - 7, y: sites.tower.y - 7, fps: 4, above: false, blend: 'normal' });
+  out.push({
+    id: 'tower_beacon',
+    kind: 'aircraft_beacon',
+    frames: beacon,
+    x: sites.tower.x - 7,
+    y: sites.tower.y - 7,
+    fps: 4,
+    above: false,
+    blend: 'normal',
+  });
   // Tower rings pulsing outward.
   const ringStates: Array<[number, number, number]> = [
     [1, 1, 1],
@@ -158,14 +236,32 @@ export function buildAnimated(sites: LandmarkSites, signs: readonly FeatureSign[
     drawTowerRings(cv, 32, 32, state);
     return cv;
   });
-  out.push({ id: 'tower_rings', kind: 'neon_rings', frames: rings, x: sites.tower.x - 32, y: sites.tower.y - 32, fps: 6, above: false, blend: 'normal' });
+  out.push({
+    id: 'tower_rings',
+    kind: 'neon_rings',
+    frames: rings,
+    x: sites.tower.x - 32,
+    y: sites.tower.y - 32,
+    fps: 6,
+    above: false,
+    blend: 'normal',
+  });
   // Arcade marquee chase.
   const marquee = [0, 1, 2, 3].map((k) => {
     const cv = new Canvas(88, 14);
     drawMarquee(cv, 0, 0, k);
     return cv;
   });
-  out.push({ id: 'arcade_marquee', kind: 'marquee_bulbs', frames: marquee, x: sites.marquee.x, y: sites.marquee.y, fps: 8, above: false, blend: 'normal' });
+  out.push({
+    id: 'arcade_marquee',
+    kind: 'marquee_bulbs',
+    frames: marquee,
+    x: sites.marquee.x,
+    y: sites.marquee.y,
+    fps: 8,
+    above: false,
+    blend: 'normal',
+  });
   // Traffic signals: green, green, green, amber, red, red, red, red and amber.
   const cycle = [4, 4, 4, 2, 1, 1, 1, 3];
   signals.forEach((site, k) => {
@@ -174,7 +270,16 @@ export function buildAnimated(sites: LandmarkSites, signs: readonly FeatureSign[
       drawSignal(cv, 0, 0, lit);
       return cv;
     });
-    out.push({ id: `traffic_light_${k === 0 ? 'north' : 'south'}`, kind: 'traffic_light', frames, x: site.x, y: site.y, fps: 1, above: true, blend: 'normal' });
+    out.push({
+      id: `traffic_light_${k === 0 ? 'north' : 'south'}`,
+      kind: 'traffic_light',
+      frames,
+      x: site.x,
+      y: site.y,
+      fps: 1,
+      above: true,
+      blend: 'normal',
+    });
   });
   return out;
 }

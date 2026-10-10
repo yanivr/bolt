@@ -33,5 +33,13 @@ export function Minimap({ manifests }: { manifests: GameManifests }) {
     return useHud.subscribe((state) => draw(state.mapX, state.mapY));
   }, [manifests, minimap]);
 
-  return <canvas ref={ref} className="minimap" width={minimap.width} height={minimap.height} aria-hidden="true" />;
+  return (
+    <canvas
+      ref={ref}
+      className="minimap"
+      width={minimap.width}
+      height={minimap.height}
+      aria-hidden="true"
+    />
+  );
 }

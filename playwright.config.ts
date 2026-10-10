@@ -24,7 +24,12 @@ export default defineConfig({
     trace: 'retain-on-failure',
     launchOptions: {
       // Software GL keeps WebGL available on CI machines without a GPU.
-      args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+      args: [
+        '--use-gl=angle',
+        '--use-angle=swiftshader',
+        '--enable-unsafe-swiftshader',
+        '--ignore-gpu-blocklist',
+      ],
     },
   },
   webServer: {

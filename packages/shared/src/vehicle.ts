@@ -15,7 +15,12 @@ import {
   TRACTION_ACCEL,
   YAW_RESPONSE_TIME,
 } from './balance.js';
-import type { ChassisDefinition, EngineDefinition, TireDefinition, VehicleParams } from './types.js';
+import type {
+  ChassisDefinition,
+  EngineDefinition,
+  TireDefinition,
+  VehicleParams,
+} from './types.js';
 
 /** A wheel kit is priced and weighed for four wheels and scaled to the chassis (Section 6.3). */
 export function wheelKitPrice(tires: TireDefinition, wheelCount: number): number {
@@ -35,7 +40,8 @@ export function deriveVehicleParams(
   tires: TireDefinition,
   extraMassKg = 0,
 ): VehicleParams {
-  const massKg = chassis.massKg + engine.massKg + wheelKitMass(tires, chassis.wheelCount) + extraMassKg;
+  const massKg =
+    chassis.massKg + engine.massKg + wheelKitMass(tires, chassis.wheelCount) + extraMassKg;
   const reach = chassis.bodyHalfLength - chassis.bodyHalfWidth;
   return {
     massKg,

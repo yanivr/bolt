@@ -89,7 +89,11 @@ export function hashString(text: string): number {
 
 /** Integer lattice hash to [0, 1). Deterministic across engines. */
 export function hash2(x: number, y: number, seed = 0): number {
-  let h = (Math.imul(x | 0, 0x27d4eb2d) ^ Math.imul(y | 0, 0x165667b1) ^ Math.imul(seed | 0, 0x9e3779b1)) >>> 0;
+  let h =
+    (Math.imul(x | 0, 0x27d4eb2d) ^
+      Math.imul(y | 0, 0x165667b1) ^
+      Math.imul(seed | 0, 0x9e3779b1)) >>>
+    0;
   h = Math.imul(h ^ (h >>> 15), 0x85ebca6b) >>> 0;
   h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
@@ -101,7 +105,10 @@ export function catmullRom(p0: number, p1: number, p2: number, p3: number, t: nu
   const t3 = t2 * t;
   return (
     0.5 *
-    (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3)
+    (2 * p1 +
+      (-p0 + p2) * t +
+      (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
+      (-p0 + 3 * p1 - 3 * p2 + p3) * t3)
   );
 }
 

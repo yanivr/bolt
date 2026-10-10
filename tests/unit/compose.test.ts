@@ -1,14 +1,32 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { CarAtlasManifest, CarPose } from '@bolt/shared';
-import { CAR_HEADINGS, MAX_WHEEL_YAW_RAD, TAU, WHEEL_HEADINGS, anchorToWorld, headingFrame, layoutCar } from '@bolt/shared';
+import {
+  CAR_HEADINGS,
+  MAX_WHEEL_YAW_RAD,
+  TAU,
+  WHEEL_HEADINGS,
+  anchorToWorld,
+  headingFrame,
+  layoutCar,
+} from '@bolt/shared';
 import { describe, expect, it } from 'vitest';
 
-const manifest = JSON.parse(readFileSync(resolve('apps/web/public/assets/atlases/cars/manifest.json'), 'utf8')) as CarAtlasManifest;
+const manifest = JSON.parse(
+  readFileSync(resolve('apps/web/public/assets/atlases/cars/manifest.json'), 'utf8'),
+) as CarAtlasManifest;
 const chassis = manifest.chassis.chassis_beetle!;
 const wheels = manifest.wheels.tires_street!;
 const engine = manifest.engines.engine_four_cylinder!;
-const base: CarPose = { headingRad: 0, steer: 0, roll: 0, braking: false, headlights: false, bodyShiftX: 0, bodyShiftY: 0 };
+const base: CarPose = {
+  headingRad: 0,
+  steer: 0,
+  roll: 0,
+  braking: false,
+  headlights: false,
+  bodyShiftX: 0,
+  bodyShiftY: 0,
+};
 
 describe('vehicle compositor (Section 14.1)', () => {
   it('snaps headings to sixteen frames and wraps correctly', () => {
@@ -23,7 +41,11 @@ describe('vehicle compositor (Section 14.1)', () => {
   it('draws shadow, one wheel per anchor, body, then engine, in that order', () => {
     const kinds = layoutCar(chassis, wheels, engine, base).map((op) => op.kind);
     expect(kinds).toEqual(['shadow', ...chassis.wheelAnchors.map(() => 'wheel'), 'body', 'engine']);
-    const lit = layoutCar(chassis, wheels, engine, { ...base, braking: true, headlights: true }).map((op) => op.kind);
+    const lit = layoutCar(chassis, wheels, engine, {
+      ...base,
+      braking: true,
+      headlights: true,
+    }).map((op) => op.kind);
     expect(lit.slice(-2)).toEqual(['headlight', 'brake']);
   });
 
@@ -31,8 +53,20 @@ describe('vehicle compositor (Section 14.1)', () => {
     for (let h = 0; h < 64; h++) {
       for (const steer of [-1, -0.4, 0, 0.7, 1]) {
         for (const roll of [-7.3, 0, 2.9, 1000.5]) {
-          for (const op of layoutCar(chassis, wheels, engine, { ...base, headingRad: (h / 64) * TAU - Math.PI, steer, roll, braking: true, headlights: true })) {
-            const sheet = op.kind === 'wheel' ? wheels.sheet : op.kind === 'engine' ? engine.sheet : chassis.body;
+          for (const op of layoutCar(chassis, wheels, engine, {
+            ...base,
+            headingRad: (h / 64) * TAU - Math.PI,
+            steer,
+            roll,
+            braking: true,
+            headlights: true,
+          })) {
+            const sheet =
+              op.kind === 'wheel'
+                ? wheels.sheet
+                : op.kind === 'engine'
+                  ? engine.sheet
+                  : chassis.body;
             expect(op.column).toBeGreaterThanOrEqual(0);
             expect(op.column).toBeLessThan(sheet.columns);
             expect(op.row).toBeGreaterThanOrEqual(0);
@@ -46,7 +80,9 @@ describe('vehicle compositor (Section 14.1)', () => {
 
   it('yaws only the steering wheels, in the steering direction', () => {
     const straight = layoutCar(chassis, wheels, engine, base).filter((op) => op.kind === 'wheel');
-    const right = layoutCar(chassis, wheels, engine, { ...base, steer: 1 }).filter((op) => op.kind === 'wheel');
+    const right = layoutCar(chassis, wheels, engine, { ...base, steer: 1 }).filter(
+      (op) => op.kind === 'wheel',
+    );
     chassis.wheelAnchors.forEach((anchor, i) => {
       if (anchor.steers) {
         expect(right[i]!.column).toBe(headingFrame(MAX_WHEEL_YAW_RAD, WHEEL_HEADINGS));
@@ -59,7 +95,10 @@ describe('vehicle compositor (Section 14.1)', () => {
 
   it('keeps wheels attached: each wheel stays at its anchor distance at every heading', () => {
     for (let h = 0; h < CAR_HEADINGS; h++) {
-      const ops = layoutCar(chassis, wheels, engine, { ...base, headingRad: (h * TAU) / CAR_HEADINGS }).filter((op) => op.kind === 'wheel');
+      const ops = layoutCar(chassis, wheels, engine, {
+        ...base,
+        headingRad: (h * TAU) / CAR_HEADINGS,
+      }).filter((op) => op.kind === 'wheel');
       chassis.wheelAnchors.forEach((anchor, i) => {
         const expected = Math.hypot(anchor.x, anchor.y);
         expect(Math.abs(Math.hypot(ops[i]!.dx, ops[i]!.dy) - expected)).toBeLessThan(1);
@@ -68,7 +107,13 @@ describe('vehicle compositor (Section 14.1)', () => {
   });
 
   it('moves the body, engine and lights together for lean and squat', () => {
-    const shifted = layoutCar(chassis, wheels, engine, { ...base, bodyShiftX: 2, bodyShiftY: 1, braking: true, headlights: true });
+    const shifted = layoutCar(chassis, wheels, engine, {
+      ...base,
+      bodyShiftX: 2,
+      bodyShiftY: 1,
+      braking: true,
+      headlights: true,
+    });
     const plain = layoutCar(chassis, wheels, engine, { ...base, braking: true, headlights: true });
     for (let i = 0; i < shifted.length; i++) {
       const moved = shifted[i]!.kind !== 'shadow' && shifted[i]!.kind !== 'wheel';

@@ -1,6 +1,12 @@
 import { COUNTDOWN_SECONDS, RACE_LIMIT_SECONDS, SIM_DT } from './balance.js';
 import type { ControlInput, StepScratch } from './physics.js';
-import { NEUTRAL_INPUT, createMotionState, createStepScratch, createTelemetry, stepVehicle } from './physics.js';
+import {
+  NEUTRAL_INPUT,
+  createMotionState,
+  createStepScratch,
+  createTelemetry,
+  stepVehicle,
+} from './physics.js';
 import type { ProgressEvent, TrackRuntime } from './track.js';
 import { createProgress, updateProgress } from './track.js';
 import type {
@@ -87,7 +93,16 @@ export function stepDriveSession(session: DriveSession, input: ControlInput): St
   if (session.phase === 'COUNTDOWN') {
     session.countdownTicks -= 1;
     // Cars are held on the grid. Steering still filters so the front wheels respond.
-    stepVehicle(session.motion, { steer: input.steer, brake: 1, coast: false }, session.params, session.env, session.track, SIM_DT, session.scratch, session.telemetry);
+    stepVehicle(
+      session.motion,
+      { steer: input.steer, brake: 1, coast: false },
+      session.params,
+      session.env,
+      session.track,
+      SIM_DT,
+      session.scratch,
+      session.telemetry,
+    );
     session.motion.velocityX = 0;
     session.motion.velocityY = 0;
     session.motion.yawRate = 0;
@@ -101,7 +116,16 @@ export function stepDriveSession(session: DriveSession, input: ControlInput): St
   const control = racing ? input : NEUTRAL_BRAKE;
   const prevX = session.motion.x;
   const prevY = session.motion.y;
-  stepVehicle(session.motion, control, session.params, session.env, session.track, SIM_DT, session.scratch, session.telemetry);
+  stepVehicle(
+    session.motion,
+    control,
+    session.params,
+    session.env,
+    session.track,
+    SIM_DT,
+    session.scratch,
+    session.telemetry,
+  );
 
   if (!racing) return result;
   session.raceTicks += 1;
@@ -125,7 +149,11 @@ export function stepDriveSession(session: DriveSession, input: ControlInput): St
     if (session.bestLapMs === 0 || lapMs < session.bestLapMs) session.bestLapMs = lapMs;
     session.lapStartTick = session.raceTicks;
     result.lapTimeMs = lapMs;
-  } else if (event === 'checkpoint' && session.progress.lap === 1 && session.progress.checkpointIndex === 1) {
+  } else if (
+    event === 'checkpoint' &&
+    session.progress.lap === 1 &&
+    session.progress.checkpointIndex === 1
+  ) {
     // First crossing of the start line: the opening lap is timed from here.
     session.lapStartTick = session.raceTicks;
   }

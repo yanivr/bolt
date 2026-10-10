@@ -29,7 +29,12 @@ const PAINTERS: Record<string, BiomePainter> = {
   city: paintCity,
 };
 
-export type BakeOptions = { def: TrackDefinition; presetId: string; outDir: string; previewDir?: string };
+export type BakeOptions = {
+  def: TrackDefinition;
+  presetId: string;
+  outDir: string;
+  previewDir?: string;
+};
 
 export type BakeReport = {
   manifest: TerrainManifest;
@@ -54,7 +59,14 @@ export function bakeTerrainWithReport(opts: BakeOptions): BakeReport {
   const track = buildTrack(def);
   const field = buildCorridorField(track);
   const world = Canvas.world(def.worldWidth, def.worldHeight);
-  const out = painter({ def, track, field, presetId, world, seed: hashString(`${def.id}:${presetId}`) });
+  const out = painter({
+    def,
+    track,
+    field,
+    presetId,
+    world,
+    seed: hashString(`${def.id}:${presetId}`),
+  });
 
   cleanDir(outDir);
   const ground = writeChunks(world, CHUNK_SIZE, outDir);
@@ -72,7 +84,16 @@ export function bakeTerrainWithReport(opts: BakeOptions): BakeReport {
     const file = `over_${art.id}.png`;
     overlayBytes += writePng(join(outDir, file), cropped.buf);
     overlaySprites.push(cropped.buf);
-    overlays.push({ id: art.id, kind: art.kind, file, x: art.x + b.x, y: art.y + b.y, w: b.w, h: b.h, fadeNearPlayer: art.fadeNearPlayer });
+    overlays.push({
+      id: art.id,
+      kind: art.kind,
+      file,
+      x: art.x + b.x,
+      y: art.y + b.y,
+      w: b.w,
+      h: b.h,
+      fadeNearPlayer: art.fadeNearPlayer,
+    });
     composite?.buf.blit(cropped.buf, art.x + b.x, art.y + b.y);
   }
 
@@ -82,7 +103,9 @@ export function bakeTerrainWithReport(opts: BakeOptions): BakeReport {
     const first = art.frames[0];
     if (!first) continue;
     const strip = new Canvas(first.w * art.frames.length, first.h);
-    art.frames.forEach((frame, k) => strip.buf.copyFrom(frame.buf, 0, 0, first.w, first.h, k * first.w, 0));
+    art.frames.forEach((frame, k) =>
+      strip.buf.copyFrom(frame.buf, 0, 0, first.w, first.h, k * first.w, 0),
+    );
     reduceColors(strip.buf, 256);
     const file = `anim_${art.id}.png`;
     animatedBytes += writePng(join(outDir, file), strip.buf);
@@ -123,7 +146,12 @@ export function bakeTerrainWithReport(opts: BakeOptions): BakeReport {
     overlays,
     animated,
     lights: out.lights,
-    minimap: { file: 'minimap.png', width: mini.canvas.w, height: mini.canvas.h, worldScale: mini.worldScale },
+    minimap: {
+      file: 'minimap.png',
+      width: mini.canvas.w,
+      height: mini.canvas.h,
+      worldScale: mini.worldScale,
+    },
   };
   const json = `${JSON.stringify(manifest, null, 1)}\n`;
   writeFileSync(join(outDir, 'manifest.json'), json);
@@ -148,7 +176,13 @@ export function bakeTerrainWithReport(opts: BakeOptions): BakeReport {
 
   return {
     manifest,
-    bytes: { ground: ground.bytes, overlays: overlayBytes, animated: animatedBytes, minimap: minimapBytes, manifest: Buffer.byteLength(json) },
+    bytes: {
+      ground: ground.bytes,
+      overlays: overlayBytes,
+      animated: animatedBytes,
+      minimap: minimapBytes,
+      manifest: Buffer.byteLength(json),
+    },
     reducedChunks: ground.reduced,
     truecolorChunks: ground.truecolor,
     maxChunkColors: ground.maxColors,

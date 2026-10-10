@@ -8,7 +8,14 @@ import { PAL, contactShade, darker, lighter } from './palette.js';
  */
 
 /** Hard drop shadow for a rectangular footprint. */
-export function dropShadow(cv: Canvas, x: number, y: number, w: number, h: number, len: number): void {
+export function dropShadow(
+  cv: Canvas,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  len: number,
+): void {
   for (let k = 1; k <= len; k++) {
     for (let i = 0; i < w; i++) cv.map(x + i + k, y + h - 1 + k, contactShade);
     for (let j = 0; j < h - 1; j++) cv.map(x + w - 1 + k, y + j + k, contactShade);
@@ -20,7 +27,17 @@ export function discShadow(cv: Canvas, cx: number, cy: number, r: number, len: n
 }
 
 /** Raised box: lit top and left rims, dark bottom and right rims. */
-export function box(cv: Canvas, x: number, y: number, w: number, h: number, top: Color, hi: Color, dk: Color, shadow: number): void {
+export function box(
+  cv: Canvas,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  top: Color,
+  hi: Color,
+  dk: Color,
+  shadow: number,
+): void {
   if (shadow > 0) dropShadow(cv, x, y, w, h, shadow);
   cv.rect(x, y, w, h, top);
   cv.hline(x, y, w, hi);
@@ -37,7 +54,14 @@ export function emissive(cv: Canvas, fn: () => void): void {
 }
 
 /** Round tree canopy with clustered leaves. `r` from 3 (sidewalk sapling) up to 11. */
-export function tree(cv: Canvas, cx: number, cy: number, r: number, seed: number, warm = false): void {
+export function tree(
+  cv: Canvas,
+  cx: number,
+  cy: number,
+  r: number,
+  seed: number,
+  warm = false,
+): void {
   const shadowLen = Math.max(2, Math.round(r * 0.6));
   cv.mapDisc(cx + shadowLen, cy + shadowLen, r, contactShade);
   const deep = PAL.leafDeep;
@@ -62,14 +86,24 @@ export function tree(cv: Canvas, cx: number, cy: number, r: number, seed: number
     const lit = px + py < cx + cy;
     cv.disc(Math.round(px), Math.round(py), r > 6 ? 1.2 : 0.6, lit ? light : dark);
   }
-  if (r >= 4) cv.set(Math.round(cx - r * 0.4), Math.round(cy - r * 0.45), warm ? PAL.leafHi : light);
+  if (r >= 4)
+    cv.set(Math.round(cx - r * 0.4), Math.round(cy - r * 0.45), warm ? PAL.leafHi : light);
 }
 
 /**
  * A parked car seen from above. `len` runs along the car; `horizontal` lays it east-west and
  * `flip` reverses which end is the front.
  */
-export function parkedCar(cv: Canvas, x: number, y: number, horizontal: boolean, flip: boolean, paint: Color, wid = 18, len = 32): void {
+export function parkedCar(
+  cv: Canvas,
+  x: number,
+  y: number,
+  horizontal: boolean,
+  flip: boolean,
+  paint: Color,
+  wid = 18,
+  len = 32,
+): void {
   const hi = lighter(paint, 0.3);
   const dk = darker(paint, 0.38);
   const put = (u: number, v: number, c: Color): void => {
@@ -101,7 +135,8 @@ export function parkedCar(cv: Canvas, x: number, y: number, horizontal: boolean,
       const r1 = Math.round(len * 0.66);
       const b1 = Math.round(len * 0.76);
       if (!rim && dv >= 3) {
-        if (u >= w0 && u < w1) c = dv === 3 || u === w0 ? PAL.steelDark : (u + v) % 5 === 0 ? PAL.glassLight : PAL.glass;
+        if (u >= w0 && u < w1)
+          c = dv === 3 || u === w0 ? PAL.steelDark : (u + v) % 5 === 0 ? PAL.glassLight : PAL.glass;
         else if (u >= w1 && u < r1) c = dv === 3 ? dk : u === w1 ? hi : paint;
         else if (u >= r1 && u < b1) c = dv === 3 ? PAL.steelDark : PAL.glass;
       }

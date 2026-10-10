@@ -130,7 +130,14 @@ export const PAL = {
 /** Rooftop color families: highlight, parapet, base, texture alternate, dark, deep. */
 export type RoofRamp = { hi: Color; par: Color; base: Color; alt: Color; dark: Color; deep: Color };
 
-const ramp = (hi: string, par: string, base: string, alt: string, dark: string, deep: string): RoofRamp => ({
+const ramp = (
+  hi: string,
+  par: string,
+  base: string,
+  alt: string,
+  dark: string,
+  deep: string,
+): RoofRamp => ({
   hi: col(hi),
   par: col(par),
   base: col(base),
@@ -156,7 +163,9 @@ export const ROOFS: readonly RoofRamp[] = [
 ];
 
 /** Slate and concrete dominate; the saturated families are accents. */
-export const ROOF_WEIGHTS: readonly number[] = [0, 0, 0, 0, 0, 0, 5, 5, 5, 5, 5, 1, 1, 2, 2, 3, 3, 4, 4, 4];
+export const ROOF_WEIGHTS: readonly number[] = [
+  0, 0, 0, 0, 0, 0, 5, 5, 5, 5, 5, 1, 1, 2, 2, 3, 3, 4, 4, 4,
+];
 
 /** Container liveries for the harbor and parked car paint. */
 export const LIVERIES: readonly Color[] = [
@@ -188,7 +197,9 @@ export function contactShade(c: Color): Color {
   const r = (c >> 16) & 255;
   const g = (c >> 8) & 255;
   const b = c & 255;
-  return (Math.round(r * 0.55 + 2) << 16) | (Math.round(g * 0.55 + 3) << 8) | Math.round(b * 0.62 + 9);
+  return (
+    (Math.round(r * 0.55 + 2) << 16) | (Math.round(g * 0.55 + 3) << 8) | Math.round(b * 0.62 + 9)
+  );
 }
 
 export const TINT_WARM = 0;
@@ -198,7 +209,14 @@ export const TINT_PURPLE = 3;
 export const TINT_GOLD = 4;
 export const TINT_COOL = 5;
 
-export const TINT_HEX: readonly string[] = ['#FFC47A', '#46D5E6', '#F46B58', '#9A7FE0', '#F6C35B', '#CFE4F5'];
+export const TINT_HEX: readonly string[] = [
+  '#FFC47A',
+  '#46D5E6',
+  '#F46B58',
+  '#9A7FE0',
+  '#F6C35B',
+  '#CFE4F5',
+];
 
 const TINTS: ReadonlyArray<readonly [number, number, number]> = [
   [1.0, 0.72, 0.3],

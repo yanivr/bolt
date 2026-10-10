@@ -29,7 +29,9 @@ export class EngineAudio {
       return;
     }
     try {
-      const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      const Ctor =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!Ctor) return;
       const ctx = new Ctor();
       this.ctx = ctx;
@@ -106,11 +108,18 @@ export class EngineAudio {
     this.engineVolume = engine;
     this.effectsVolume = effects;
     this.muted = muted;
-    if (this.master && this.ctx) this.master.gain.setTargetAtTime(muted ? 0 : 1, this.ctx.currentTime, 0.03);
+    if (this.master && this.ctx)
+      this.master.gain.setTargetAtTime(muted ? 0 : 1, this.ctx.currentTime, 0.03);
   }
 
   /** Per-frame update from the predicted car. Speeds are world pixels per second. */
-  update(forwardSpeed: number, throttle: number, slipRatio: number, topSpeed: number, active: boolean): void {
+  update(
+    forwardSpeed: number,
+    throttle: number,
+    slipRatio: number,
+    topSpeed: number,
+    active: boolean,
+  ): void {
     const ctx = this.ctx;
     if (!ctx || !this.oscA || !this.oscB || !this.sub || !this.filter || !this.engineGain) return;
     const t = ctx.currentTime;

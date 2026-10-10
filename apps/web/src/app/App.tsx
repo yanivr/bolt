@@ -50,7 +50,9 @@ export function App() {
   }, [setBoot, setScreen]);
 
   return (
-    <div className={`app hand-${settings.drivingHand}${settings.reduceFlashes ? ' reduce-flashes' : ''}`}>
+    <div
+      className={`app hand-${settings.drivingHand}${settings.reduceFlashes ? ' reduce-flashes' : ''}`}
+    >
       {screen === 'boot' && <BootScreen />}
       {screen === 'home' && <HomeScreen />}
       {screen === 'race' && <RaceScreen />}

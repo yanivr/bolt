@@ -17,7 +17,12 @@ const BOARD = col('#1B2540');
 const BOARD_EDGE = col('#28344A');
 
 /** Marks the shadow an overlay throws onto the corridor, offset down and to the right. */
-function castOverlayShadow(ctx: BakeContext, forced: Uint8Array, art: OverlayArt, shift: number): void {
+function castOverlayShadow(
+  ctx: BakeContext,
+  forced: Uint8Array,
+  art: OverlayArt,
+  shift: number,
+): void {
   const { field } = ctx;
   for (let y = 0; y < art.canvas.h; y++) {
     for (let x = 0; x < art.canvas.w; x++) {
@@ -95,7 +100,9 @@ function startGantry(ctx: BakeContext, sites: LandmarkSites): OverlayArt {
   // Checkered ends.
   for (let k = 0; k < 2; k++) {
     const cy = k === 0 ? by + 2 : by + bh - 10;
-    for (let yy = 0; yy < 8; yy++) for (let xx = 0; xx < 16; xx++) cv.set(bx + 2 + xx, cy + yy, ((xx >> 2) + (yy >> 2)) & 1 ? PAL.ivory : PAL.ink);
+    for (let yy = 0; yy < 8; yy++)
+      for (let xx = 0; xx < 16; xx++)
+        cv.set(bx + 2 + xx, cy + yy, ((xx >> 2) + (yy >> 2)) & 1 ? PAL.ivory : PAL.ink);
   }
   const text = 'BOLT RIVALS';
   const tw = textWidth(text, 'chunky', 2);
@@ -111,7 +118,14 @@ function startGantry(ctx: BakeContext, sites: LandmarkSites): OverlayArt {
   const my = (H >> 1) - 12;
   cv.rect(38, my, 7, 24, PAL.ink);
   for (let k = 0; k < 5; k++) cv.rect(40, my + 2 + k * 4, 3, 3, PAL.mint);
-  return { id: 'start_gantry', kind: 'start_gantry', canvas: cv, x: Math.round(sites.start.x) - 62, y: Math.round(p.y) - (H >> 1), fadeNearPlayer: true };
+  return {
+    id: 'start_gantry',
+    kind: 'start_gantry',
+    canvas: cv,
+    x: Math.round(sites.start.x) - 62,
+    y: Math.round(p.y) - (H >> 1),
+    fadeNearPlayer: true,
+  };
 }
 
 function tramViaduct(sites: LandmarkSites): OverlayArt {
@@ -122,7 +136,14 @@ function tramViaduct(sites: LandmarkSites): OverlayArt {
   drawViaduct(cv, v.roadX0, v.y - (h >> 1), v.y, v.roadX0, v.roadX1, false);
   // Underslung lamps so the deck edge reads against the dark road.
   for (let x = 30; x < w - 20; x += 48) glowDot(cv, x, h - 5, PAL.ivory, PAL.lamp);
-  return { id: 'tram_viaduct', kind: 'tram_viaduct', canvas: cv, x: v.roadX0, y: v.y - (h >> 1), fadeNearPlayer: true };
+  return {
+    id: 'tram_viaduct',
+    kind: 'tram_viaduct',
+    canvas: cv,
+    x: v.roadX0,
+    y: v.y - (h >> 1),
+    fadeNearPlayer: true,
+  };
 }
 
 const LANTERN = stencil(['.kkk.', 'rRHRr', 'RHHRR', 'RRRRr', 'rRRrr', '.ktk.']);
@@ -161,7 +182,11 @@ function lanternStrings(ctx: BakeContext): OverlayArt[] {
       for (const t of [0.16, 0.33, 0.5, 0.67, 0.84]) {
         // A shallow bow so the string does not read as a ruled line.
         const bow = Math.sin(t * Math.PI) * 3;
-        hangs.push({ x: Math.round(ax + (bx - ax) * t), y: Math.round(ay + (by - ay) * t + bow), warm: n++ % 2 === 0 });
+        hangs.push({
+          x: Math.round(ax + (bx - ax) * t),
+          y: Math.round(ay + (by - ay) * t + bow),
+          warm: n++ % 2 === 0,
+        });
       }
       side = -side;
     }
@@ -178,7 +203,12 @@ function lanternStrings(ctx: BakeContext): OverlayArt[] {
     for (const [ax, ay, bx, by] of cords) {
       for (let t = 0; t <= 1; t += 0.01) {
         const bow = Math.sin(t * Math.PI) * 3;
-        cv.setA(Math.round(ax + (bx - ax) * t), Math.round(ay + (by - ay) * t + bow - 3), PAL.ink, 255);
+        cv.setA(
+          Math.round(ax + (bx - ax) * t),
+          Math.round(ay + (by - ay) * t + bow - 3),
+          PAL.ink,
+          255,
+        );
       }
       cv.rect(Math.round(ax) - 1, Math.round(ay) - 4, 3, 3, PAL.steel);
       cv.rect(Math.round(bx) - 1, Math.round(by) - 4, 3, 3, PAL.steel);
@@ -189,17 +219,74 @@ function lanternStrings(ctx: BakeContext): OverlayArt[] {
         : { k: PAL.woodDark, R: PAL.coral, H: PAL.coralHi, r: PAL.coralDim, t: PAL.gold };
       cv.stamp(hg.x - 2, hg.y - 3, LANTERN, pal);
     }
-    out.push({ id: `lantern_strings_${branch.id}`, kind: 'lantern_strings', canvas: cv, x: ox, y: oy, fadeNearPlayer: true });
+    out.push({
+      id: `lantern_strings_${branch.id}`,
+      kind: 'lantern_strings',
+      canvas: cv,
+      x: ox,
+      y: oy,
+      fadeNearPlayer: true,
+    });
   }
   return out;
 }
 
 const ARROWS: Record<string, Stencil> = {
-  up: stencil(['....a....', '...aaa...', '..aaaaa..', '.aaaaaaa.', '...aaa...', '...aaa...', '...aaa...', '...aaa...', '...aaa...']),
-  left: stencil(['...a.....', '..aa.....', '.aaaaaaa.', 'aaaaaaaaa', '.aaaaaaa.', '..aa..aaa', '...a..aaa', '......aaa', '......aaa']),
-  right: stencil(['.....a...', '.....aa..', '.aaaaaaa.', 'aaaaaaaaa', '.aaaaaaa.', 'aaa..aa..', 'aaa..a...', 'aaa......', 'aaa......']),
-  uturnRight: stencil(['.aaaaaa..', 'aaaaaaaa.', 'aaa...aaa', 'aaa...aaa', 'aaa.aaaaaaa', 'aaa..aaaaa', 'aaa...aaa', 'aaa....a.', 'aaa......']),
-  uturnLeft: stencil(['...aaaaaa.', '..aaaaaaaa', '..aaa...aaa', '..aaa...aaa', 'aaaaaaa.aaa', '.aaaaa..aaa', '..aaa...aaa', '...a....aaa', '........aaa']),
+  up: stencil([
+    '....a....',
+    '...aaa...',
+    '..aaaaa..',
+    '.aaaaaaa.',
+    '...aaa...',
+    '...aaa...',
+    '...aaa...',
+    '...aaa...',
+    '...aaa...',
+  ]),
+  left: stencil([
+    '...a.....',
+    '..aa.....',
+    '.aaaaaaa.',
+    'aaaaaaaaa',
+    '.aaaaaaa.',
+    '..aa..aaa',
+    '...a..aaa',
+    '......aaa',
+    '......aaa',
+  ]),
+  right: stencil([
+    '.....a...',
+    '.....aa..',
+    '.aaaaaaa.',
+    'aaaaaaaaa',
+    '.aaaaaaa.',
+    'aaa..aa..',
+    'aaa..a...',
+    'aaa......',
+    'aaa......',
+  ]),
+  uturnRight: stencil([
+    '.aaaaaa..',
+    'aaaaaaaa.',
+    'aaa...aaa',
+    'aaa...aaa',
+    'aaa.aaaaaaa',
+    'aaa..aaaaa',
+    'aaa...aaa',
+    'aaa....a.',
+    'aaa......',
+  ]),
+  uturnLeft: stencil([
+    '...aaaaaa.',
+    '..aaaaaaaa',
+    '..aaa...aaa',
+    '..aaa...aaa',
+    'aaaaaaa.aaa',
+    '.aaaaa..aaa',
+    '..aaa...aaa',
+    '...a....aaa',
+    '........aaa',
+  ]),
 };
 
 type Panel = { lines: string[]; arrow: keyof typeof ARROWS; accent: Color };
@@ -238,20 +325,38 @@ function rotate(src: Canvas, quarter: number): Canvas {
   return out;
 }
 
-function spanFrame(ctx: BakeContext, s: number, extra: number): { cx: number; cy: number; half: number; hw: number; horizontalRoad: boolean; quarter: number } {
+function spanFrame(
+  ctx: BakeContext,
+  s: number,
+  extra: number,
+): { cx: number; cy: number; half: number; hw: number; horizontalRoad: boolean; quarter: number } {
   const p = sampleBranch(ctx.track.main, s);
   const horizontalRoad = Math.abs(p.tx) > Math.abs(p.ty);
   // Quarter turns that point letter tops along the direction of travel.
   const quarter = horizontalRoad ? (p.tx > 0 ? 1 : 3) : p.ty < 0 ? 0 : 2;
-  return { cx: Math.round(p.x), cy: Math.round(p.y), half: Math.round(p.halfWidth + p.shoulder + extra), hw: p.halfWidth, horizontalRoad, quarter };
+  return {
+    cx: Math.round(p.x),
+    cy: Math.round(p.y),
+    half: Math.round(p.halfWidth + p.shoulder + extra),
+    hw: p.halfWidth,
+    horizontalRoad,
+    quarter,
+  };
 }
 
-function signGantry(ctx: BakeContext, id: string, s: number, panels: Array<Panel | null>): OverlayArt {
+function signGantry(
+  ctx: BakeContext,
+  id: string,
+  s: number,
+  panels: Array<Panel | null>,
+): OverlayArt {
   const f = spanFrame(ctx, s, 7);
   const depth = 8;
   const pad = 34;
   const len = f.half * 2;
-  const cv = f.horizontalRoad ? new Canvas(pad * 2 + depth, len + 12) : new Canvas(len + 12, pad * 2 + depth);
+  const cv = f.horizontalRoad
+    ? new Canvas(pad * 2 + depth, len + 12)
+    : new Canvas(len + 12, pad * 2 + depth);
   const put = (u: number, v: number, c: Color): void => {
     if (f.horizontalRoad) cv.set(pad + v, 6 + u, c);
     else cv.set(6 + u, pad + v, c);
@@ -276,8 +381,12 @@ function signGantry(ctx: BakeContext, id: string, s: number, panels: Array<Panel
     if (f.horizontalRoad) along = f.half + (f.quarter === 3 ? -sideSign : sideSign) * f.hw * 0.5;
     else along = f.half + (f.quarter === 0 ? sideSign : -sideSign) * f.hw * 0.5;
     void leftFirst;
-    const px = f.horizontalRoad ? pad + (depth >> 1) - (face.w >> 1) : 6 + Math.round(along) - (face.w >> 1);
-    const py = f.horizontalRoad ? 6 + Math.round(along) - (face.h >> 1) : pad + (depth >> 1) - (face.h >> 1);
+    const px = f.horizontalRoad
+      ? pad + (depth >> 1) - (face.w >> 1)
+      : 6 + Math.round(along) - (face.w >> 1);
+    const py = f.horizontalRoad
+      ? 6 + Math.round(along) - (face.h >> 1)
+      : pad + (depth >> 1) - (face.h >> 1);
     cv.blit(face, px, py);
     // A small lamp washing each face.
     if (f.horizontalRoad) glowDot(cv, px + face.w + 2, py + (face.h >> 1), PAL.ivory, PAL.lamp);
@@ -307,26 +416,42 @@ function skyBridge(ctx: BakeContext, id: string, s: number): OverlayArt {
       else if (v === 1) c = PAL.steelLight;
       else if (v === depth - 1) c = PAL.ink;
       else if (v === depth - 2) c = PAL.steelDark;
-      else if (v === 2 || v === depth - 3) c = rib ? PAL.steelDark : u % 12 < 7 && Math.floor(u / 12) % 3 !== 1 ? PAL.windowMid : PAL.windowDim;
+      else if (v === 2 || v === depth - 3)
+        c = rib
+          ? PAL.steelDark
+          : u % 12 < 7 && Math.floor(u / 12) % 3 !== 1
+            ? PAL.windowMid
+            : PAL.windowDim;
       else if (v === 3) c = roofAlt;
       else if (v >= 8 && v <= 11) {
         // Ridge skylight glowing from the corridor below.
         const pane = u % 12;
-        c = v === 8 || v === 11 || pane === 0 || pane === 6 ? PAL.steelDark : (u + v) % 5 === 0 ? PAL.windowWarm : PAL.windowMid;
+        c =
+          v === 8 || v === 11 || pane === 0 || pane === 6
+            ? PAL.steelDark
+            : (u + v) % 5 === 0
+              ? PAL.windowWarm
+              : PAL.windowMid;
       } else c = rib ? roofAlt : (u * 3 + v) % 17 === 0 ? roofAlt : roof;
       put(u, v, c);
     }
   }
   // End collars where the bridge meets each building.
   for (let v = 0; v < depth; v++) {
-    for (const u of [0, 1, len - 2, len - 1]) put(u, v, u === 0 || u === len - 2 ? PAL.kerb : PAL.kerbShade);
+    for (const u of [0, 1, len - 2, len - 1])
+      put(u, v, u === 0 || u === len - 2 ? PAL.kerb : PAL.kerbShade);
   }
   const x = f.horizontalRoad ? f.cx - (depth >> 1) : f.cx - f.half;
   const y = f.horizontalRoad ? f.cy - f.half : f.cy - (depth >> 1);
   return { id, kind: 'sign_bridge', canvas: cv, x, y, fadeNearPlayer: true };
 }
 
-export function buildOverlays(ctx: BakeContext, sites: LandmarkSites, hairpins: ReadonlyArray<{ s: number; dir: number }>, forced: Uint8Array): OverlayArt[] {
+export function buildOverlays(
+  ctx: BakeContext,
+  sites: LandmarkSites,
+  hairpins: ReadonlyArray<{ s: number; dir: number }>,
+  forced: Uint8Array,
+): OverlayArt[] {
   const out: OverlayArt[] = [];
   const add = (art: OverlayArt, shift: number): void => {
     out.push(art);
@@ -342,7 +467,11 @@ export function buildOverlays(ctx: BakeContext, sites: LandmarkSites, hairpins: 
     add(
       signGantry(ctx, 'sign_bridge_downtown', h1.s - 420, [
         { lines: ['DOWNTOWN'], arrow: 'up', accent: PAL.ivory },
-        { lines: ['HAIRPIN', 'SLOW'], arrow: h1.dir > 0 ? 'uturnRight' : 'uturnLeft', accent: PAL.gold },
+        {
+          lines: ['HAIRPIN', 'SLOW'],
+          arrow: h1.dir > 0 ? 'uturnRight' : 'uturnLeft',
+          accent: PAL.gold,
+        },
       ]),
       7,
     );
@@ -356,9 +485,27 @@ export function buildOverlays(ctx: BakeContext, sites: LandmarkSites, hairpins: 
       7,
     );
   }
-  add(signGantry(ctx, 'sign_bridge_harbor', 1150, [{ lines: ['HARBOR', 'DOCKS'], arrow: 'left', accent: PAL.cyan }, { lines: ['WEST AVE'], arrow: 'up', accent: PAL.ivory }]), 7);
-  add(signGantry(ctx, 'sign_bridge_billboard_row', 4520, [{ lines: ['BILLBOARD', 'ROW'], arrow: 'up', accent: PAL.ivory }, null]), 7);
-  add(signGantry(ctx, 'sign_bridge_market', 7560, [null, { lines: ['OVERPASS', 'HARBOR'], arrow: 'up', accent: PAL.cyan }]), 7);
+  add(
+    signGantry(ctx, 'sign_bridge_harbor', 1150, [
+      { lines: ['HARBOR', 'DOCKS'], arrow: 'left', accent: PAL.cyan },
+      { lines: ['WEST AVE'], arrow: 'up', accent: PAL.ivory },
+    ]),
+    7,
+  );
+  add(
+    signGantry(ctx, 'sign_bridge_billboard_row', 4520, [
+      { lines: ['BILLBOARD', 'ROW'], arrow: 'up', accent: PAL.ivory },
+      null,
+    ]),
+    7,
+  );
+  add(
+    signGantry(ctx, 'sign_bridge_market', 7560, [
+      null,
+      { lines: ['OVERPASS', 'HARBOR'], arrow: 'up', accent: PAL.cyan },
+    ]),
+    7,
+  );
   add(skyBridge(ctx, 'sign_bridge_skywalk_west', 2330), 8);
   add(skyBridge(ctx, 'sign_bridge_skywalk_east', 8790), 8);
   return out;

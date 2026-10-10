@@ -1,4 +1,10 @@
-import type { CarSnapshot, ControlInput, DriveSession, InputSample, StepResult } from '@bolt/shared';
+import type {
+  CarSnapshot,
+  ControlInput,
+  DriveSession,
+  InputSample,
+  StepResult,
+} from '@bolt/shared';
 import { SIM_DT, angleDelta, copyMotionState, stepDriveSession } from '@bolt/shared';
 
 /**
@@ -63,7 +69,8 @@ export class Predictor {
     s.lastLapMs = snapshot.lastLapMs;
 
     let keep = 0;
-    while (keep < this.pending.length && this.pending[keep]!.sequence <= snapshot.ackSequence) keep++;
+    while (keep < this.pending.length && this.pending[keep]!.sequence <= snapshot.ackSequence)
+      keep++;
     if (keep > 0) this.pending.splice(0, keep);
     for (const sample of this.pending) stepDriveSession(s, sample);
 

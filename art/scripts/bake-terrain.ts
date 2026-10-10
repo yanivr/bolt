@@ -14,7 +14,12 @@ const previewDir = join(root, 'art', 'preview', 'terrain');
 const noPreview = process.argv.includes('--no-preview');
 
 const t0 = performance.now();
-const report = bakeTerrainWithReport({ def: CITY_01, presetId, outDir, previewDir: noPreview ? undefined : previewDir });
+const report = bakeTerrainWithReport({
+  def: CITY_01,
+  presetId,
+  outDir,
+  previewDir: noPreview ? undefined : previewDir,
+});
 const seconds = (performance.now() - t0) / 1000;
 
 const digest = createHash('sha256');
@@ -33,6 +38,9 @@ console.log(`  animated ${report.manifest.animated.length}, ${kb(report.bytes.an
 console.log(`  minimap  ${kb(report.bytes.minimap)}, manifest ${kb(report.bytes.manifest)}`);
 console.log(`  lights   ${report.manifest.lights.length}`);
 console.log(`  total    ${kb(total)}`);
-console.log(`  chunks color-reduced ${report.reducedChunks} (max ${report.maxChunkColors} colors), truecolor ${report.truecolorChunks}`);
+console.log(
+  `  chunks color-reduced ${report.reducedChunks} (max ${report.maxChunkColors} colors), truecolor ${report.truecolorChunks}`,
+);
 console.log(`  sha256   ${digest.digest('hex')}`);
-if (report.previews.length > 0) console.log(`  previews ${report.previews.length} files in ${previewDir}`);
+if (report.previews.length > 0)
+  console.log(`  previews ${report.previews.length} files in ${previewDir}`);

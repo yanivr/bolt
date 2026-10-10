@@ -32,7 +32,11 @@ export function RaceScreen() {
   const canvasHost = useRef<HTMLDivElement>(null);
   const surface = useRef<HTMLDivElement>(null);
   const game = useRef<RaceGameHandle | null>(null);
-  const [load, setLoad] = useState<LoadState>({ kind: 'loading', stage: 'connecting', progress: 0 });
+  const [load, setLoad] = useState<LoadState>({
+    kind: 'loading',
+    stage: 'connecting',
+    progress: 0,
+  });
   const [manifests, setManifests] = useState<GameManifests | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [portraitOk, setPortraitOk] = useState(false);
@@ -62,7 +66,10 @@ export function RaceScreen() {
 
     void (async () => {
       try {
-        const [m, setup] = await Promise.all([bootAssets(), startDrive(TRACK_ID, WEATHER_PRESET_ID, useApp.getState().loadout)]);
+        const [m, setup] = await Promise.all([
+          bootAssets(),
+          startDrive(TRACK_ID, WEATHER_PRESET_ID, useApp.getState().loadout),
+        ]);
         if ('error' in setup) {
           if (!cancelled) setLoad({ kind: 'error', reason: setup.error });
           return;
@@ -83,7 +90,8 @@ export function RaceScreen() {
           input,
           audio,
           autopilot: new URLSearchParams(window.location.search).get('autopilot') === '1',
-          onLoadProgress: (progress) => !cancelled && setLoad({ kind: 'loading', stage: 'track', progress }),
+          onLoadProgress: (progress) =>
+            !cancelled && setLoad({ kind: 'loading', stage: 'track', progress }),
           onLoadError: () => !cancelled && setLoad({ kind: 'error', reason: 'assets' }),
           onReady: () => !cancelled && setLoad({ kind: 'ready' }),
         });
@@ -128,7 +136,9 @@ export function RaceScreen() {
     <main className="screen race">
       <div className="race-canvas" ref={canvasHost} />
       <div className="race-surface" ref={surface} />
-      {load.kind === 'ready' && manifests && <Hud manifests={manifests} onPause={() => setPaused(true)} />}
+      {load.kind === 'ready' && manifests && (
+        <Hud manifests={manifests} onPause={() => setPaused(true)} />
+      )}
 
       {load.kind === 'loading' && (
         <div className="overlay overlay-solid" role="status">
@@ -137,7 +147,9 @@ export function RaceScreen() {
               <div className="boot-fill" style={{ width: `${Math.round(load.progress * 100)}%` }} />
             </div>
             <div className="boot-label">
-              <span>{load.stage === 'connecting' ? STRINGS.loading.connecting : STRINGS.loading.track}</span>
+              <span>
+                {load.stage === 'connecting' ? STRINGS.loading.connecting : STRINGS.loading.track}
+              </span>
               <span>{Math.round(load.progress * 100)}%</span>
             </div>
           </div>
@@ -149,7 +161,12 @@ export function RaceScreen() {
           <div className="panel dialog">
             <p>{errorCopy}</p>
             <div className="dialog-actions">
-              <button className="btn btn-primary" onClick={() => (load.reason === 'version' ? window.location.reload() : setAttempt((n) => n + 1))}>
+              <button
+                className="btn btn-primary"
+                onClick={() =>
+                  load.reason === 'version' ? window.location.reload() : setAttempt((n) => n + 1)
+                }
+              >
                 {load.reason === 'version' ? STRINGS.connection.reload : STRINGS.loading.retry}
               </button>
               <button className="btn" onClick={goHome}>
@@ -163,7 +180,11 @@ export function RaceScreen() {
       {load.kind === 'ready' && linkStatus !== 'connected' && (
         <div className="overlay" role="alert">
           <div className="panel dialog">
-            <p>{linkStatus === 'reconnecting' ? STRINGS.connection.lost : STRINGS.connection.serverUnavailable}</p>
+            <p>
+              {linkStatus === 'reconnecting'
+                ? STRINGS.connection.lost
+                : STRINGS.connection.serverUnavailable}
+            </p>
             {linkStatus === 'lost' && (
               <div className="dialog-actions">
                 <button className="btn btn-primary" onClick={() => setAttempt((n) => n + 1)}>
@@ -208,7 +229,9 @@ export function RaceScreen() {
         <SettingsPanel
           onClose={() => setPaused(false)}
           closeLabel={STRINGS.race.resume}
-          notice={linkMode === 'online' ? <p className="notice">{STRINGS.race.pauseNote}</p> : undefined}
+          notice={
+            linkMode === 'online' ? <p className="notice">{STRINGS.race.pauseNote}</p> : undefined
+          }
           actions={
             <>
               <button className="btn" onClick={raceAgain}>

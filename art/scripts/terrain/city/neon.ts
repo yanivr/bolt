@@ -16,31 +16,140 @@ export const NEON: readonly NeonColor[] = [
 ];
 
 export const SHOP_NAMES: readonly string[] = [
-  'NOVA', 'KIBO', 'LUMA', 'ORBIT', 'VOLT', 'ECHO', 'PIXL', 'KOI', 'ZAP', 'DINER', 'SODA', 'BYTE', 'MOKA', 'RIFF',
-  'TOFU', 'HALO', 'JUNO', 'NOODLE', 'OPAL', 'FIZZ', 'DOJO', 'TAXI', 'LOFT', 'YUZU', '24H', 'BAR', 'MIDORI', 'COMET',
+  'NOVA',
+  'KIBO',
+  'LUMA',
+  'ORBIT',
+  'VOLT',
+  'ECHO',
+  'PIXL',
+  'KOI',
+  'ZAP',
+  'DINER',
+  'SODA',
+  'BYTE',
+  'MOKA',
+  'RIFF',
+  'TOFU',
+  'HALO',
+  'JUNO',
+  'NOODLE',
+  'OPAL',
+  'FIZZ',
+  'DOJO',
+  'TAXI',
+  'LOFT',
+  'YUZU',
+  '24H',
+  'BAR',
+  'MIDORI',
+  'COMET',
 ];
 
 export const GLYPHS: readonly Stencil[] = [
   // Lightning bolt.
-  stencil(['......aaa', '.....aaa.', '....aaa..', '...aaaaaa', '.....aaa.', '....aaa..', '...aaa...', '..aa.....', '.aa......']),
+  stencil([
+    '......aaa',
+    '.....aaa.',
+    '....aaa..',
+    '...aaaaaa',
+    '.....aaa.',
+    '....aaa..',
+    '...aaa...',
+    '..aa.....',
+    '.aa......',
+  ]),
   // Star.
-  stencil(['.....a.....', '.....a.....', '....aaa....', 'aaaaabaaaaa', '.aaabbbaaa.', '..aabbbaa..', '..aaa.aaa..', '.aaa...aaa.', '.aa.....aa.']),
+  stencil([
+    '.....a.....',
+    '.....a.....',
+    '....aaa....',
+    'aaaaabaaaaa',
+    '.aaabbbaaa.',
+    '..aabbbaa..',
+    '..aaa.aaa..',
+    '.aaa...aaa.',
+    '.aa.....aa.',
+  ]),
   // Heart.
-  stencil(['.aaa..aaa.', 'aabaaaabaa', 'abbbaabbba', 'abbbbbbbba', '.abbbbbba.', '..abbbba..', '...abba...', '....aa....']),
+  stencil([
+    '.aaa..aaa.',
+    'aabaaaabaa',
+    'abbbaabbba',
+    'abbbbbbbba',
+    '.abbbbbba.',
+    '..abbbba..',
+    '...abba...',
+    '....aa....',
+  ]),
   // Cocktail glass.
-  stencil(['aaaaaaaaa', '.abbbbba.', '..abbba..', '...aba...', '....a....', '....a....', '....a....', '..aaaaa..']),
+  stencil([
+    'aaaaaaaaa',
+    '.abbbbba.',
+    '..abbba..',
+    '...aba...',
+    '....a....',
+    '....a....',
+    '....a....',
+    '..aaaaa..',
+  ]),
   // Noodle bowl with steam.
-  stencil(['..b..b..b..', '.b..b..b...', '..b..b..b..', '...........', 'aaaaaaaaaaa', 'a.........a', '.a.......a.', '..aaaaaaa..', '...aaaaa...']),
+  stencil([
+    '..b..b..b..',
+    '.b..b..b...',
+    '..b..b..b..',
+    '...........',
+    'aaaaaaaaaaa',
+    'a.........a',
+    '.a.......a.',
+    '..aaaaaaa..',
+    '...aaaaa...',
+  ]),
   // Music note.
-  stencil(['...aaaaaa', '...aaaaaa', '...a....a', '...a....a', '...a....a', '.bba..bba', 'bbba.bbba', '.bb...bb.']),
+  stencil([
+    '...aaaaaa',
+    '...aaaaaa',
+    '...a....a',
+    '...a....a',
+    '...a....a',
+    '.bba..bba',
+    'bbba.bbba',
+    '.bb...bb.',
+  ]),
   // Diamond.
-  stencil(['....a....', '...aba...', '..abbba..', '.abbabba.', 'abbaaabba', '.abbabba.', '..abbba..', '...aba...', '....a....']),
+  stencil([
+    '....a....',
+    '...aba...',
+    '..abbba..',
+    '.abbabba.',
+    'abbaaabba',
+    '.abbabba.',
+    '..abbba..',
+    '...aba...',
+    '....a....',
+  ]),
   // Arrow.
-  stencil(['.....aa...', '......aa..', 'bbbbbbbaa.', 'bbbbbbbbaa', 'bbbbbbbaa.', '......aa..', '.....aa...']),
+  stencil([
+    '.....aa...',
+    '......aa..',
+    'bbbbbbbaa.',
+    'bbbbbbbbaa',
+    'bbbbbbbaa.',
+    '......aa..',
+    '.....aa...',
+  ]),
 ];
 
 /** Tube lettering with a hot core at scale 2 and above. */
-export function neonText(cv: Canvas, x: number, y: number, text: string, color: number, scale: number, on = true): void {
+export function neonText(
+  cv: Canvas,
+  x: number,
+  y: number,
+  text: string,
+  color: number,
+  scale: number,
+  on = true,
+): void {
   const main = NEON[color]!;
   const prev = cv.curFlags;
   cv.curFlags = F_EMISSIVE;
@@ -49,7 +158,8 @@ export function neonText(cv: Canvas, x: number, y: number, text: string, color: 
     const tw = textWidth(text, 'micro', scale);
     for (let yy = 0; yy < 5 * scale; yy += scale) {
       for (let xx = 0; xx < tw; xx += scale) {
-        if (cv.get(x + xx, y + yy) === main.c && cv.alpha(x + xx, y + yy) === 255) cv.set(x + xx, y + yy, main.hi);
+        if (cv.get(x + xx, y + yy) === main.c && cv.alpha(x + xx, y + yy) === 255)
+          cv.set(x + xx, y + yy, main.hi);
       }
     }
   }
@@ -76,7 +186,14 @@ export function neonSignSize(spec: NeonSignSpec): { w: number; h: number } {
  * Draws a sign board with glowing tubes. `litMask` selects which characters are powered (bit
  * per character, bit 31 for the glyph); unpowered tubes show their dim glass color.
  */
-export function drawNeonSign(cv: Canvas, x: number, y: number, spec: NeonSignSpec, litMask = 0xffffffff, shadow = true): void {
+export function drawNeonSign(
+  cv: Canvas,
+  x: number,
+  y: number,
+  spec: NeonSignSpec,
+  litMask = 0xffffffff,
+  shadow = true,
+): void {
   const { w, h } = neonSignSize(spec);
   const main = NEON[spec.color]!;
   const acc = NEON[spec.accent]!;

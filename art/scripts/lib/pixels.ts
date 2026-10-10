@@ -13,7 +13,12 @@ export type RGBA = readonly [number, number, number, number];
 export function hex(color: string, alpha = 255): RGBA {
   const c = color.startsWith('#') ? color.slice(1) : color;
   if (c.length !== 6) throw new Error(`Bad color ${color}`);
-  return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16), alpha];
+  return [
+    parseInt(c.slice(0, 2), 16),
+    parseInt(c.slice(2, 4), 16),
+    parseInt(c.slice(4, 6), 16),
+    alpha,
+  ];
 }
 
 export function mix(a: RGBA, b: RGBA, t: number): RGBA {
@@ -102,14 +107,23 @@ export class PixelBuffer {
         const i = (y * src.width + x) * 4;
         const a = src.data[i + 3]!;
         if (a === 0) continue;
-        if (a === 255) this.set(dx + x, dy + y, [src.data[i]!, src.data[i + 1]!, src.data[i + 2]!, 255]);
+        if (a === 255)
+          this.set(dx + x, dy + y, [src.data[i]!, src.data[i + 1]!, src.data[i + 2]!, 255]);
         else this.blend(dx + x, dy + y, [src.data[i]!, src.data[i + 1]!, src.data[i + 2]!, a]);
       }
     }
   }
 
   /** Copies a sub-rectangle of `src` without blending. */
-  copyFrom(src: PixelBuffer, sx: number, sy: number, w: number, h: number, dx: number, dy: number): void {
+  copyFrom(
+    src: PixelBuffer,
+    sx: number,
+    sy: number,
+    w: number,
+    h: number,
+    dx: number,
+    dy: number,
+  ): void {
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         if (!src.inBounds(sx + x, sy + y) || !this.inBounds(dx + x, dy + y)) continue;
@@ -202,7 +216,8 @@ export function encodePng(buf: PixelBuffer): Buffer {
   for (let i = 0; i < data.length; i += 4) {
     const a = data[i + 3]!;
     // Fully transparent pixels collapse to one entry so stray RGB never bloats the palette.
-    const key = a === 0 ? 0 : ((data[i]! << 24) | (data[i + 1]! << 16) | (data[i + 2]! << 8) | a) >>> 0;
+    const key =
+      a === 0 ? 0 : ((data[i]! << 24) | (data[i + 1]! << 16) | (data[i + 2]! << 8) | a) >>> 0;
     if (!palette.has(key)) {
       if (palette.size >= 256) {
         indexed = false;
@@ -230,7 +245,8 @@ export function encodePng(buf: PixelBuffer): Buffer {
       for (let x = 0; x < width; x++) {
         const i = (y * width + x) * 4;
         const a = data[i + 3]!;
-        const key = a === 0 ? 0 : ((data[i]! << 24) | (data[i + 1]! << 16) | (data[i + 2]! << 8) | a) >>> 0;
+        const key =
+          a === 0 ? 0 : ((data[i]! << 24) | (data[i + 1]! << 16) | (data[i + 2]! << 8) | a) >>> 0;
         raw[row + 1 + x] = palette.get(key)!;
       }
     }

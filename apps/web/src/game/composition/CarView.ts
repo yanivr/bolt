@@ -1,4 +1,9 @@
-import type { CarPose, ChassisSpriteManifest, EngineSpriteManifest, WheelSpriteManifest } from '@bolt/shared';
+import type {
+  CarPose,
+  ChassisSpriteManifest,
+  EngineSpriteManifest,
+  WheelSpriteManifest,
+} from '@bolt/shared';
 import { layoutCar } from '@bolt/shared';
 import type Phaser from 'phaser';
 
@@ -34,12 +39,20 @@ export class CarView {
     private readonly keys: CarTextureKeys,
   ) {
     this.shadow = scene.add.image(0, 0, keys.shadow, 0);
-    for (let i = 0; i < chassis.wheelAnchors.length; i++) this.wheels.push(scene.add.image(0, 0, keys.wheels, 0));
+    for (let i = 0; i < chassis.wheelAnchors.length; i++)
+      this.wheels.push(scene.add.image(0, 0, keys.wheels, 0));
     this.body = scene.add.image(0, 0, keys.body, 0);
     this.engine = scene.add.image(0, 0, keys.engine, 0);
     this.head = scene.add.image(0, 0, keys.head, 0);
     this.brake = scene.add.image(0, 0, keys.brake, 0);
-    this.container = scene.add.container(0, 0, [this.shadow, ...this.wheels, this.body, this.engine, this.head, this.brake]);
+    this.container = scene.add.container(0, 0, [
+      this.shadow,
+      ...this.wheels,
+      this.body,
+      this.engine,
+      this.head,
+      this.brake,
+    ]);
   }
 
   /** Applies a pose. `jitterY` is a whole-pixel body offset for idle vibration. */

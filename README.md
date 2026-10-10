@@ -50,10 +50,10 @@ pnpm dev          # server on :2567, Vite on :5173 (proxied, also reachable from
 
 Useful URL flags, development aids only:
 
-| Flag | Effect |
-|:--|:--|
-| `?debug=1` | Shows frame rate, renderer, link mode, latency and prediction corrections |
-| `?autopilot=1` | A centerline driver holds the controls until you touch the screen |
+| Flag           | Effect                                                                    |
+| :------------- | :------------------------------------------------------------------------ |
+| `?debug=1`     | Shows frame rate, renderer, link mode, latency and prediction corrections |
+| `?autopilot=1` | A centerline driver holds the controls until you touch the screen         |
 
 If the game server cannot be reached, the client falls back to an **offline test drive** that
 runs the same shared simulation in the page and says so in the HUD. It exists so the driving

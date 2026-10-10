@@ -1,5 +1,16 @@
 import type { Decal, Solid } from '../lib/model.js';
-import { capsule, circle, ellipse, grow, intersect, mirrorX, roundRect, strip, subtract, union } from '../lib/model.js';
+import {
+  capsule,
+  circle,
+  ellipse,
+  grow,
+  intersect,
+  mirrorX,
+  roundRect,
+  strip,
+  subtract,
+  union,
+} from '../lib/model.js';
 import { CAR_MATERIALS } from './materials.js';
 import type { ChassisArt } from './types.js';
 
@@ -19,18 +30,64 @@ const rearFenders = mirrorX(ellipse(10.4, 17.4, 4.7, 9.8));
 
 const solids: Solid[] = [
   { shape: roundRect(0, 0, 13, 27, 9), material: 'chassis', z0: 2, z1: 2, tag: 'floor' },
-  { shape: roundRect(0, -27.4, 8.6, 1.5, 1.5), material: 'steel', z0: 3, z1: 4.6, bevel: 1.4, tag: 'bumper' },
-  { shape: roundRect(0, 27.6, 9.4, 1.5, 1.5), material: 'steel', z0: 3, z1: 4.6, bevel: 1.4, tag: 'bumper' },
+  {
+    shape: roundRect(0, -27.4, 8.6, 1.5, 1.5),
+    material: 'steel',
+    z0: 3,
+    z1: 4.6,
+    bevel: 1.4,
+    tag: 'bumper',
+  },
+  {
+    shape: roundRect(0, 27.6, 9.4, 1.5, 1.5),
+    material: 'steel',
+    z0: 3,
+    z1: 4.6,
+    bevel: 1.4,
+    tag: 'bumper',
+  },
   { shape: frontFenders, material: 'paint', z0: 4, z1: 8.2, bevel: 4.4, tag: 'fender' },
   { shape: rearFenders, material: 'paint', z0: 4, z1: 8.6, bevel: 4.6, tag: 'fender' },
   { shape: shell, material: 'paint', z0: 5, z1: 10, bevel: 6, tag: 'shell' },
   { shape: hood, material: 'paint', z0: 9.7, z1: 11.3, bevel: 4.2, tag: 'hood' },
   { shape: deck, material: 'paint', z0: 9.7, z1: 10.9, bevel: 3.4, tag: 'deck' },
-  { shape: greenhouse, material: 'glass', z0: 10.4, z1: 14.4, bevel: 4.2, profile: 'linear', tag: 'glass' },
+  {
+    shape: greenhouse,
+    material: 'glass',
+    z0: 10.4,
+    z1: 14.4,
+    bevel: 4.2,
+    profile: 'linear',
+    tag: 'glass',
+  },
   { shape: roof, material: 'paint', z0: 14.4, z1: 16, bevel: 3, tag: 'roof' },
-  { shape: mirrorX(circle(10, -23.4, 2.3)), material: 'lampOff', z0: 7.6, z1: 9, bevel: 1.6, tag: 'headlight', noShadow: true },
-  { shape: mirrorX(roundRect(9.9, 25, 2.1, 1.5, 1)), material: 'tailOff', z0: 8, z1: 8.8, bevel: 1, tag: 'taillight', noShadow: true },
-  { shape: mirrorX(roundRect(12.3, -6.4, 1.7, 1.1, 0.8)), material: 'paint', z0: 11.5, z1: 12, bevel: 0.6, tag: 'mirror', noShadow: true },
+  {
+    shape: mirrorX(circle(10, -23.4, 2.3)),
+    material: 'lampOff',
+    z0: 7.6,
+    z1: 9,
+    bevel: 1.6,
+    tag: 'headlight',
+    noShadow: true,
+  },
+  {
+    shape: mirrorX(roundRect(9.9, 25, 2.1, 1.5, 1)),
+    material: 'tailOff',
+    z0: 8,
+    z1: 8.8,
+    bevel: 1,
+    tag: 'taillight',
+    noShadow: true,
+  },
+  {
+    shape: mirrorX(roundRect(12.3, -6.4, 1.7, 1.1, 0.8)),
+    material: 'paint',
+    z0: 11.5,
+    z1: 12,
+    bevel: 0.6,
+    tag: 'mirror',
+    noShadow: true,
+  },
 ];
 
 const stripe = strip(-1.6, 1.6);
@@ -52,7 +109,11 @@ const decals: Decal[] = [
   { shape: intersect(capsule(-7.2, -5.2, -2.6, -7.4, 0.6), greenhouse), on: ['glass'], shade: 2 },
   { shape: capsule(3.2, 12.4, 6.2, 11.2, 0.5), on: ['glass'], shade: 1 },
   // Headlight lens ring.
-  { shape: mirrorX(subtract(circle(10, -23.4, 2.3), circle(10, -23.4, 1.45))), on: ['headlight'], shade: -2 },
+  {
+    shape: mirrorX(subtract(circle(10, -23.4, 2.3), circle(10, -23.4, 1.45))),
+    on: ['headlight'],
+    shade: -2,
+  },
 ];
 
 export const BEETLE_ART: ChassisArt = {

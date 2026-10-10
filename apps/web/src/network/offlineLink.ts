@@ -25,11 +25,27 @@ export class OfflineLink implements DriveLink {
       const result = stepDriveSession(this.session, sample);
       const tick = this.session.tick;
       if (result.event === 'checkpoint') {
-        this.onEvent?.({ id: ++this.eventId, type: 'checkpoint', tick, index: this.session.progress.checkpointIndex });
+        this.onEvent?.({
+          id: ++this.eventId,
+          type: 'checkpoint',
+          tick,
+          index: this.session.progress.checkpointIndex,
+        });
       } else if (result.event === 'lap') {
-        this.onEvent?.({ id: ++this.eventId, type: 'lap', tick, lap: this.session.progress.lap, lapTimeMs: result.lapTimeMs });
+        this.onEvent?.({
+          id: ++this.eventId,
+          type: 'lap',
+          tick,
+          lap: this.session.progress.lap,
+          lapTimeMs: result.lapTimeMs,
+        });
       } else if (result.event === 'finish') {
-        this.onEvent?.({ id: ++this.eventId, type: 'finish', tick, raceTimeMs: raceTimeMs(this.session) });
+        this.onEvent?.({
+          id: ++this.eventId,
+          type: 'finish',
+          tick,
+          raceTimeMs: raceTimeMs(this.session),
+        });
       }
     }
     this.onSnapshot?.(this.snapshot());

@@ -9,14 +9,23 @@ import type { Canvas } from './canvas.js';
  * stored indexed; the fold is deterministic and touches only a handful of stray pixels.
  */
 
-export type ChunkStats = { chunks: TerrainChunk[]; bytes: number; reduced: number; truecolor: number; maxColors: number };
+export type ChunkStats = {
+  chunks: TerrainChunk[];
+  bytes: number;
+  reduced: number;
+  truecolor: number;
+  maxColors: number;
+};
 
 /** Reduces a buffer to at most `limit` colors in place. Returns the original color count. */
 export function reduceColors(buf: PixelBuffer, limit: number): number {
   const data = buf.data;
   const counts = new Map<number, number>();
   for (let i = 0; i < data.length; i += 4) {
-    const key = data[i + 3] === 0 ? -1 : ((data[i]! << 24) | (data[i + 1]! << 16) | (data[i + 2]! << 8) | data[i + 3]!) >>> 0;
+    const key =
+      data[i + 3] === 0
+        ? -1
+        : ((data[i]! << 24) | (data[i + 1]! << 16) | (data[i + 2]! << 8) | data[i + 3]!) >>> 0;
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   const total = counts.size;
@@ -47,7 +56,8 @@ export function reduceColors(buf: PixelBuffer, limit: number): number {
   }
   for (let i = 0; i < data.length; i += 4) {
     if (data[i + 3] === 0) continue;
-    const key = ((data[i]! << 24) | (data[i + 1]! << 16) | (data[i + 2]! << 8) | data[i + 3]!) >>> 0;
+    const key =
+      ((data[i]! << 24) | (data[i + 1]! << 16) | (data[i + 2]! << 8) | data[i + 3]!) >>> 0;
     const to = remap.get(key);
     if (to === undefined) continue;
     data[i] = (to >>> 24) & 255;

@@ -67,7 +67,10 @@ type Baked = {
   files: Map<string, PixelBuffer>;
   manifest: CarAtlasManifest;
   frames: {
-    chassis: Record<string, { body: PixelBuffer[]; shadow: PixelBuffer[]; brake: PixelBuffer[]; head: PixelBuffer[] }>;
+    chassis: Record<
+      string,
+      { body: PixelBuffer[]; shadow: PixelBuffer[]; brake: PixelBuffer[]; head: PixelBuffer[] }
+    >;
     wheels: Record<string, PixelBuffer[][]>;
     engines: Record<string, PixelBuffer[]>;
   };
@@ -97,14 +100,30 @@ function bakeChassis(art: ChassisArt, wheelArt: WheelArt, baked: Baked): void {
       const wx = Math.round(anchor.x * c - anchor.y * s);
       const wy = Math.round(anchor.x * s + anchor.y * c);
       const wheel = wheelFrames[0]![(h * WHEEL_HEADINGS) / CAR_HEADINGS]!;
-      assembled.blit(wheel, art.cell / 2 + wx - wheel.width / 2, art.cell / 2 + wy - wheel.height / 2);
+      assembled.blit(
+        wheel,
+        art.cell / 2 + wx - wheel.width / 2,
+        art.cell / 2 + wy - wheel.height / 2,
+      );
     }
     assembled.blit(base.image, 0, 0);
     shadow.push(silhouette(assembled, SHADOW, SHADOW_RIM));
 
-    const b = renderModel(brakeModel, { heading, width: art.cell, height: art.cell, outline: false, onlyTags: ['taillight'] });
+    const b = renderModel(brakeModel, {
+      heading,
+      width: art.cell,
+      height: art.cell,
+      outline: false,
+      onlyTags: ['taillight'],
+    });
     brake.push(addGlow(b.image, [244, 107, 88, 120]));
-    const hl = renderModel(headModel, { heading, width: art.cell, height: art.cell, outline: false, onlyTags: ['headlight'] });
+    const hl = renderModel(headModel, {
+      heading,
+      width: art.cell,
+      height: art.cell,
+      outline: false,
+      onlyTags: ['headlight'],
+    });
     head.push(addGlow(hl.image, [246, 195, 91, 110]));
   }
 
@@ -144,7 +163,11 @@ function bakeWheels(art: WheelArt, baked: Baked): void {
     const model = art.model(r);
     const row: PixelBuffer[] = [];
     for (let h = 0; h < WHEEL_HEADINGS; h++) {
-      const frame = renderModel(model, { heading: (h * TAU) / WHEEL_HEADINGS, width: art.cell, height: art.cell }).image;
+      const frame = renderModel(model, {
+        heading: (h * TAU) / WHEEL_HEADINGS,
+        width: art.cell,
+        height: art.cell,
+      }).image;
       row.push(frame);
       flat.push(frame);
     }
@@ -154,7 +177,13 @@ function bakeWheels(art: WheelArt, baked: Baked): void {
   baked.files.set(`${art.id}.png`, sheet(flat, WHEEL_HEADINGS));
   const entry: WheelSpriteManifest = {
     id: art.id,
-    sheet: { file: `${art.id}.png`, frameWidth: art.cell, frameHeight: art.cell, columns: WHEEL_HEADINGS, rows: art.rollFrames },
+    sheet: {
+      file: `${art.id}.png`,
+      frameWidth: art.cell,
+      frameHeight: art.cell,
+      columns: WHEEL_HEADINGS,
+      rows: art.rollFrames,
+    },
     rollFrames: art.rollFrames,
   };
   baked.manifest.wheels[art.id] = entry;
@@ -163,13 +192,25 @@ function bakeWheels(art: WheelArt, baked: Baked): void {
 function bakeEngine(art: EngineArt, baked: Baked): void {
   const frames: PixelBuffer[] = [];
   for (let h = 0; h < CAR_HEADINGS; h++) {
-    frames.push(renderModel(art.model, { heading: (h * TAU) / CAR_HEADINGS, width: art.cell, height: art.cell }).image);
+    frames.push(
+      renderModel(art.model, {
+        heading: (h * TAU) / CAR_HEADINGS,
+        width: art.cell,
+        height: art.cell,
+      }).image,
+    );
   }
   baked.frames.engines[art.id] = frames;
   baked.files.set(`${art.id}.png`, sheet(frames, CAR_HEADINGS));
   const entry: EngineSpriteManifest = {
     id: art.id,
-    sheet: { file: `${art.id}.png`, frameWidth: art.cell, frameHeight: art.cell, columns: CAR_HEADINGS, rows: 1 },
+    sheet: {
+      file: `${art.id}.png`,
+      frameWidth: art.cell,
+      frameHeight: art.cell,
+      columns: CAR_HEADINGS,
+      rows: 1,
+    },
     exhaustStyle: art.exhaustStyle,
   };
   baked.manifest.engines[art.id] = entry;
@@ -187,12 +228,33 @@ function writeLineup(baked: Baked): void {
   dark.fill(hex('#3a4257'));
   ids.forEach((id, row) => {
     headings.forEach((h, col) => {
-      const pose: CarPose = { headingRad: (h * TAU) / CAR_HEADINGS, steer: col === 1 ? 1 : col === 4 ? -1 : 0, roll: col, braking: col === 5, headlights: col >= 3, bodyShiftX: 0, bodyShiftY: 0 };
-      sheet.blit(composeCar(baked, id, 'tires_street', 'engine_four_cylinder', pose, paints[row % paints.length]!), col * cell, row * cell);
+      const pose: CarPose = {
+        headingRad: (h * TAU) / CAR_HEADINGS,
+        steer: col === 1 ? 1 : col === 4 ? -1 : 0,
+        roll: col,
+        braking: col === 5,
+        headlights: col >= 3,
+        bodyShiftX: 0,
+        bodyShiftY: 0,
+      };
+      sheet.blit(
+        composeCar(
+          baked,
+          id,
+          'tires_street',
+          'engine_four_cylinder',
+          pose,
+          paints[row % paints.length]!,
+        ),
+        col * cell,
+        row * cell,
+      );
     });
     // Pure silhouettes: can each chassis be told apart without color or detail?
     const shadow = baked.frames.chassis[id]!.shadow[0]!;
-    for (let y = 0; y < cell; y++) for (let x = 0; x < cell; x++) if (shadow.alphaAt(x, y) > 100) dark.set(row * cell + x, y, hex('#0e1320'));
+    for (let y = 0; y < cell; y++)
+      for (let x = 0; x < cell; x++)
+        if (shadow.alphaAt(x, y) > 100) dark.set(row * cell + x, y, hex('#0e1320'));
   });
   writePng(join(PREVIEW_DIR, 'lineup_1x.png'), sheet);
   writePng(join(PREVIEW_DIR, 'lineup_3x.png'), sheet.scaled(3));
@@ -200,22 +262,45 @@ function writeLineup(baked: Baked): void {
 }
 
 /** Node-side renderer for review sheets. Uses the same layout function as the game client. */
-function composeCar(baked: Baked, chassisId: string, wheelId: string, engineId: string, pose: CarPose, paintId: string): PixelBuffer {
+function composeCar(
+  baked: Baked,
+  chassisId: string,
+  wheelId: string,
+  engineId: string,
+  pose: CarPose,
+  paintId: string,
+): PixelBuffer {
   const chassis = baked.manifest.chassis[chassisId]!;
   const out = new PixelBuffer(chassis.body.frameWidth, chassis.body.frameHeight);
   const cx = out.width / 2;
   const cy = out.height / 2;
-  const ops = layoutCar(chassis, baked.manifest.wheels[wheelId]!, baked.manifest.engines[engineId]!, pose);
+  const ops = layoutCar(
+    chassis,
+    baked.manifest.wheels[wheelId]!,
+    baked.manifest.engines[engineId]!,
+    pose,
+  );
   for (const op of ops) {
     let frame: PixelBuffer;
     if (op.kind === 'wheel') frame = baked.frames.wheels[op.sheetId]![op.row]![op.column]!;
     else if (op.kind === 'engine') frame = baked.frames.engines[op.sheetId]![op.column]!;
     else {
       const set = baked.frames.chassis[op.sheetId]!;
-      frame = op.kind === 'body' ? set.body[op.column]! : op.kind === 'shadow' ? set.shadow[op.column]! : op.kind === 'brake' ? set.brake[op.column]! : set.head[op.column]!;
+      frame =
+        op.kind === 'body'
+          ? set.body[op.column]!
+          : op.kind === 'shadow'
+            ? set.shadow[op.column]!
+            : op.kind === 'brake'
+              ? set.brake[op.column]!
+              : set.head[op.column]!;
     }
     if (op.kind === 'body') frame = repaint(frame, paintId);
-    out.blit(frame, Math.round(cx + op.dx - frame.width / 2), Math.round(cy + op.dy - frame.height / 2));
+    out.blit(
+      frame,
+      Math.round(cx + op.dx - frame.width / 2),
+      Math.round(cy + op.dy - frame.height / 2),
+    );
   }
   return out;
 }
@@ -248,13 +333,28 @@ function writePreviews(baked: Baked): void {
   writeLineup(baked);
   const cell = 96;
   const bg = hex('#3a4257');
-  const basePose: CarPose = { headingRad: 0, steer: 0, roll: 0, braking: false, headlights: false, bodyShiftX: 0, bodyShiftY: 0 };
+  const basePose: CarPose = {
+    headingRad: 0,
+    steer: 0,
+    roll: 0,
+    braking: false,
+    headlights: false,
+    bodyShiftX: 0,
+    bodyShiftY: 0,
+  };
 
   // Sheet 1: all sixteen headings, at game size and at 4x.
   const row = new PixelBuffer(cell * CAR_HEADINGS, cell);
   row.fill(bg);
   for (let h = 0; h < CAR_HEADINGS; h++) {
-    const car = composeCar(baked, 'chassis_beetle', 'tires_street', 'engine_four_cylinder', { ...basePose, headingRad: (h * TAU) / CAR_HEADINGS }, 'paint_signal');
+    const car = composeCar(
+      baked,
+      'chassis_beetle',
+      'tires_street',
+      'engine_four_cylinder',
+      { ...basePose, headingRad: (h * TAU) / CAR_HEADINGS },
+      'paint_signal',
+    );
     row.blit(car, h * cell, 0);
   }
   writePng(join(PREVIEW_DIR, 'beetle_headings_1x.png'), row);
@@ -277,8 +377,30 @@ function writePreviews(baked: Baked): void {
   const states = new PixelBuffer(cell * poses.length, cell * 2);
   states.fill(bg);
   poses.forEach(([, pose, paint], i) => {
-    states.blit(composeCar(baked, 'chassis_beetle', 'tires_street', 'engine_four_cylinder', { ...basePose, ...pose }, paint), i * cell, 0);
-    states.blit(composeCar(baked, 'chassis_beetle', 'tires_street', 'engine_four_cylinder', { ...basePose, ...pose, headingRad: (3 * TAU) / CAR_HEADINGS }, paint), i * cell, cell);
+    states.blit(
+      composeCar(
+        baked,
+        'chassis_beetle',
+        'tires_street',
+        'engine_four_cylinder',
+        { ...basePose, ...pose },
+        paint,
+      ),
+      i * cell,
+      0,
+    );
+    states.blit(
+      composeCar(
+        baked,
+        'chassis_beetle',
+        'tires_street',
+        'engine_four_cylinder',
+        { ...basePose, ...pose, headingRad: (3 * TAU) / CAR_HEADINGS },
+        paint,
+      ),
+      i * cell,
+      cell,
+    );
   });
   writePng(join(PREVIEW_DIR, 'beetle_states_4x.png'), states.scaled(4));
 
@@ -291,7 +413,13 @@ function writePreviews(baked: Baked): void {
   layers.blit(set.brake[0]!, cell * 2, 0);
   layers.blit(set.head[0]!, cell * 3, 0);
   layers.blit(baked.frames.engines['engine_four_cylinder']![0]!, cell * 4 + 28, 28);
-  for (let r = 0; r < 3; r++) for (let d = 0; d < 4; d++) layers.blit(baked.frames.wheels['tires_street']![r]![d * 2]!, cell * 5 + 4 + d * 22, 6 + r * 28);
+  for (let r = 0; r < 3; r++)
+    for (let d = 0; d < 4; d++)
+      layers.blit(
+        baked.frames.wheels['tires_street']![r]![d * 2]!,
+        cell * 5 + 4 + d * 22,
+        6 + r * 28,
+      );
   writePng(join(PREVIEW_DIR, 'beetle_layers_4x.png'), layers.scaled(4));
 
   // Sheet 4: on the baked track, at game size and 3x, in four headings.
@@ -302,7 +430,20 @@ function writePreviews(baked: Baked): void {
     scene.copyFrom(ground, 120, 150, 320, 180, 0, 0);
     const paints = ['paint_signal', 'paint_cobalt', 'paint_mint', 'paint_sunflare'];
     [12, 14, 0, 3].forEach((h, i) => {
-      const car = composeCar(baked, 'chassis_beetle', 'tires_street', 'engine_four_cylinder', { ...basePose, headingRad: (h * TAU) / CAR_HEADINGS, headlights: true, braking: i === 1, steer: i === 3 ? 0.8 : 0 }, paints[i]!);
+      const car = composeCar(
+        baked,
+        'chassis_beetle',
+        'tires_street',
+        'engine_four_cylinder',
+        {
+          ...basePose,
+          headingRad: (h * TAU) / CAR_HEADINGS,
+          headlights: true,
+          braking: i === 1,
+          steer: i === 3 ? 0.8 : 0,
+        },
+        paints[i]!,
+      );
       scene.blit(car, 20 + i * 74, 30 + (i % 2) * 40);
     });
     writePng(join(PREVIEW_DIR, 'beetle_on_track_1x.png'), scene);
@@ -319,11 +460,16 @@ function bakeCars(): Baked {
     frames: { chassis: {}, wheels: {}, engines: {} },
   };
   for (const [id, paint] of Object.entries(PAINTS)) {
-    baked.manifest.paints[id] = { id, displayName: paint.displayName, ramp: [paint.outline, ...paint.ramp] };
+    baked.manifest.paints[id] = {
+      id,
+      displayName: paint.displayName,
+      ramp: [paint.outline, ...paint.ramp],
+    };
   }
   bakeWheels(STREET_WHEEL_ART, baked);
   bakeEngine(FOUR_CYLINDER_ART, baked);
-  for (const art of [BEETLE_ART, ARROW_ART, TURTLE_ART, SPIDER_ART]) bakeChassis(art, STREET_WHEEL_ART, baked);
+  for (const art of [BEETLE_ART, ARROW_ART, TURTLE_ART, SPIDER_ART])
+    bakeChassis(art, STREET_WHEEL_ART, baked);
   // No non-paint material may collide with the paint key, or the runtime swap would recolor it.
   const key = new Set([PAINT_OUTLINE_KEY, ...PAINT_KEY].map((c) => c.toLowerCase()));
   for (const [name, mat] of Object.entries(CAR_MATERIALS)) {
@@ -353,7 +499,11 @@ function main(): void {
     let mismatched = 0;
     for (const [name, buf] of baked.files) {
       const existing = readPng(join(ATLAS_DIR, name));
-      if (existing.width !== buf.width || existing.height !== buf.height || !Buffer.from(existing.data.buffer).equals(Buffer.from(buf.data.buffer))) {
+      if (
+        existing.width !== buf.width ||
+        existing.height !== buf.height ||
+        !Buffer.from(existing.data.buffer).equals(Buffer.from(buf.data.buffer))
+      ) {
         console.error(`atlas out of date: ${name}`);
         mismatched++;
       }
@@ -382,15 +532,24 @@ function main(): void {
     src.copyFrom(set.body[0]!, 16, 0, 64, 96, 0, 0);
     writePng(join(SOURCE_DIR, `${id}_body.png`), src);
   }
-  for (const [id, frames] of Object.entries(baked.frames.engines)) writePng(join(SOURCE_DIR, `${id}.png`), frames[0]!);
-  for (const [id, rows] of Object.entries(baked.frames.wheels)) writePng(join(SOURCE_DIR, `${id}.png`), rows[0]![0]!);
+  for (const [id, frames] of Object.entries(baked.frames.engines))
+    writePng(join(SOURCE_DIR, `${id}.png`), frames[0]!);
+  for (const [id, rows] of Object.entries(baked.frames.wheels))
+    writePng(join(SOURCE_DIR, `${id}.png`), rows[0]![0]!);
 
   const vfx: VfxManifest = { version: 1, strips: {} };
   mkdirSync(VFX_DIR, { recursive: true });
   const vfxSheet: PixelBuffer[] = [];
   for (const strip of buildCoreVfx()) {
     writePng(join(VFX_DIR, `${strip.id}.png`), strip.image);
-    vfx.strips[strip.id] = { id: strip.id, file: `${strip.id}.png`, frameWidth: strip.frameWidth, frameHeight: strip.frameHeight, frames: strip.frames, fps: strip.fps };
+    vfx.strips[strip.id] = {
+      id: strip.id,
+      file: `${strip.id}.png`,
+      frameWidth: strip.frameWidth,
+      frameHeight: strip.frameHeight,
+      frames: strip.frames,
+      fps: strip.fps,
+    };
     vfxSheet.push(strip.image);
   }
   writeFileSync(join(VFX_DIR, 'manifest.json'), `${JSON.stringify(vfx, null, 2)}\n`);
@@ -409,13 +568,20 @@ function main(): void {
     writePng(join(PREVIEW_DIR, '../vfx_core_4x.png'), review.scaled(4));
   }
 
-  console.log(`cars: ${baked.files.size} sheets, ${(bytes / 1024).toFixed(1)} KB, sha256 ${digestDir(ATLAS_DIR).slice(0, 16)}`);
+  console.log(
+    `cars: ${baked.files.size} sheets, ${(bytes / 1024).toFixed(1)} KB, sha256 ${digestDir(ATLAS_DIR).slice(0, 16)}`,
+  );
 
   if (!carsOnly) {
     const outDir = join(MAPS_DIR, 'city_01/city_clear_night');
     const manifest = bakeTerrain({ def: CITY_01, presetId: 'city_clear_night', outDir });
-    writeFileSync(join(MANIFEST_DIR, 'city_01_city_clear_night.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-    console.log(`terrain: ${manifest.ground.length} chunks, ${manifest.overlays.length} overlays, ${manifest.animated.length} animated`);
+    writeFileSync(
+      join(MANIFEST_DIR, 'city_01_city_clear_night.json'),
+      `${JSON.stringify(manifest, null, 2)}\n`,
+    );
+    console.log(
+      `terrain: ${manifest.ground.length} chunks, ${manifest.overlays.length} overlays, ${manifest.animated.length} animated`,
+    );
   }
 
   writePreviews(baked);

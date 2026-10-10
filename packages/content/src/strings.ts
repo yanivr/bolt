@@ -24,7 +24,8 @@ export const STRINGS = {
     connecting: 'Connecting',
     retry: 'Try Again',
     assetFailure: "Some game files didn't arrive. Check your connection and try again.",
-    rendererUnsupported: "This browser can't draw the game. Try a current version of Chrome, Safari, Firefox or Edge.",
+    rendererUnsupported:
+      "This browser can't draw the game. Try a current version of Chrome, Safari, Firefox or Edge.",
   },
   race: {
     go: 'GO!',

@@ -1,6 +1,14 @@
 import { CITY_01, DEFAULT_LOADOUT, environmentFor, resolveLoadout } from '@bolt/content';
 import type { CarSnapshot, ControlInput, DriveSession, InputSample } from '@bolt/shared';
-import { buildTrack, countdownSeconds, createDriveSession, createDriverScratch, driveCenterline, raceTimeMs, stepDriveSession } from '@bolt/shared';
+import {
+  buildTrack,
+  countdownSeconds,
+  createDriveSession,
+  createDriverScratch,
+  driveCenterline,
+  raceTimeMs,
+  stepDriveSession,
+} from '@bolt/shared';
 import { describe, expect, it } from 'vitest';
 import { OfflineLink } from '../../apps/web/src/network/offlineLink.js';
 import { Predictor } from '../../apps/web/src/network/prediction.js';
@@ -74,7 +82,10 @@ describe('client prediction and reconciliation (Section 15.4)', () => {
   });
 
   it('recovers from lost packets without a teleport and converges again', () => {
-    const { server, predictor, run } = harness(3, (tick) => tick > 200 && tick < 900 && tick % 20 === 0);
+    const { server, predictor, run } = harness(
+      3,
+      (tick) => tick > 200 && tick < 900 && tick % 20 === 0,
+    );
     run(30 * 30);
     expect(predictor.corrections).toBeGreaterThan(0);
     expect(predictor.maxCorrection).toBeLessThan(40);

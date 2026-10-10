@@ -17,22 +17,22 @@ gives them.
 
 Handling constants tuned against the Section 6.5 targets, measured by `tests/unit/physics.test.ts`:
 
-| Target | Specification | Measured |
-|:--|:--|:--|
-| 0 to 60 MPH | about 4 s | 3.97 s |
-| Top speed, dry asphalt | 70 to 95 MPH | 84.5 MPH |
-| Steering settle | 0.18 s | above 80% of lock at 0.18 s |
-| Wall strike speed loss | 8 to 20% | enforced by constants and test |
+| Target                 | Specification | Measured                       |
+| :--------------------- | :------------ | :----------------------------- |
+| 0 to 60 MPH            | about 4 s     | 3.97 s                         |
+| Top speed, dry asphalt | 70 to 95 MPH  | 84.5 MPH                       |
+| Steering settle        | 0.18 s        | above 80% of lock at 0.18 s    |
+| Wall strike speed loss | 8 to 20%      | enforced by constants and test |
 
 Neon Cut, measured with the centerline driver in `tests/unit/track.test.ts`:
 
-| Measure | Value |
-|:--|:--|
-| Lap length | 9,756 world pixels |
-| Race time, default Beetle, clear night | 123.7 s (target window 105 to 140 s) |
-| Laps | 42.2 s, 40.1 s, 40.1 s |
-| Wall strikes by the reference driver | 0 |
-| Rainy night | slower by more than 3 s, still under the 180 s limit |
+| Measure                                | Value                                                |
+| :------------------------------------- | :--------------------------------------------------- |
+| Lap length                             | 9,756 world pixels                                   |
+| Race time, default Beetle, clear night | 123.7 s (target window 105 to 140 s)                 |
+| Laps                                   | 42.2 s, 40.1 s, 40.1 s                               |
+| Wall strikes by the reference driver   | 0                                                    |
+| Rainy night                            | slower by more than 3 s, still under the 180 s limit |
 
 Not yet measured: the time Lantern Alley saves or costs. That needs a driver that takes the
 shortcut and is scheduled with the bot harness in Milestone D.

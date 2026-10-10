@@ -1,5 +1,12 @@
 import { WRONG_WAY_SECONDS } from './balance.js';
-import { clamp, headingForwardX, headingForwardY, headingFromVector, lerp, segmentIntersection } from './math.js';
+import {
+  clamp,
+  headingForwardX,
+  headingForwardY,
+  headingFromVector,
+  lerp,
+  segmentIntersection,
+} from './math.js';
 import type {
   SurfaceId,
   TrackBranchDefinition,
@@ -106,7 +113,16 @@ export type TrackLocation = {
 
 type DensePoint = { x: number; y: number; w: number; sh: number; surface: SurfaceId };
 
-function centripetal(p0: number, p1: number, p2: number, p3: number, k01: number, k12: number, k23: number, t: number): number {
+function centripetal(
+  p0: number,
+  p1: number,
+  p2: number,
+  p3: number,
+  k01: number,
+  k12: number,
+  k23: number,
+  t: number,
+): number {
   const t0 = 0;
   const t1 = t0 + k01;
   const t2 = t1 + k12;
@@ -223,7 +239,8 @@ function buildBranch(
   const tx = new Float64Array(count);
   const ty = new Float64Array(count);
   const curvature = new Float64Array(count);
-  const wrap = (i: number): number => (def.closed ? ((i % count) + count) % count : clamp(i, 0, count - 1));
+  const wrap = (i: number): number =>
+    def.closed ? ((i % count) + count) % count : clamp(i, 0, count - 1);
   for (let i = 0; i < count; i++) {
     const a = wrap(i - 1);
     const b = wrap(i + 1);
@@ -351,7 +368,8 @@ function nearestArcLength(branch: TrackBranch, px: number, py: number): number {
 }
 
 export function buildTrack(def: TrackDefinition): TrackRuntime {
-  if (def.main.points.length < 4) throw new Error(`Track ${def.id}: main line needs at least four control points`);
+  if (def.main.points.length < 4)
+    throw new Error(`Track ${def.id}: main line needs at least four control points`);
   const main = buildBranch(def.main, 0, null, null);
   const branches: TrackBranch[] = [main];
   const lapLength = main.length;
@@ -364,13 +382,26 @@ export function buildTrack(def: TrackDefinition): TrackRuntime {
     const rejoin = sampleBranch(main, rejoinS);
     const first = shortcut.points[0];
     const last = shortcut.points[shortcut.points.length - 1];
-    if (!first || !last) throw new Error(`Track ${def.id}: shortcut ${shortcut.id} has no control points`);
+    if (!first || !last)
+      throw new Error(`Track ${def.id}: shortcut ${shortcut.id} has no control points`);
     const snapped: TrackBranchDefinition = {
       ...shortcut,
       points: [
-        { x: leave.x, y: leave.y, width: first.width, surface: first.surface, shoulder: first.shoulder },
+        {
+          x: leave.x,
+          y: leave.y,
+          width: first.width,
+          surface: first.surface,
+          shoulder: first.shoulder,
+        },
         ...shortcut.points,
-        { x: rejoin.x, y: rejoin.y, width: last.width, surface: last.surface, shoulder: last.shoulder },
+        {
+          x: rejoin.x,
+          y: rejoin.y,
+          width: last.width,
+          surface: last.surface,
+          shoulder: last.shoulder,
+        },
       ],
     };
     const branch = buildBranch(
@@ -422,7 +453,11 @@ export function buildTrack(def: TrackDefinition): TrackRuntime {
     const links = branch.closed ? branch.count : branch.count - 1;
     for (let i = 0; i < links; i++) {
       const j = (i + 1) % branch.count;
-      const reach = Math.max(branch.halfWidth[i]! + branch.shoulder[i]!, branch.halfWidth[j]! + branch.shoulder[j]!) + 48;
+      const reach =
+        Math.max(
+          branch.halfWidth[i]! + branch.shoulder[i]!,
+          branch.halfWidth[j]! + branch.shoulder[j]!,
+        ) + 48;
       const minX = Math.min(branch.x[i]!, branch.x[j]!) - reach;
       const maxX = Math.max(branch.x[i]!, branch.x[j]!) + reach;
       const minY = Math.min(branch.y[i]!, branch.y[j]!) - reach;
@@ -510,7 +545,20 @@ function evaluateSegment(
 }
 
 export function createLocation(): TrackLocation {
-  return { branch: 0, index: 0, t: 0, s: 0, cx: 0, cy: 0, lateral: 0, edge: 0, halfWidth: 0, shoulder: 0, tx: 0, ty: -1 };
+  return {
+    branch: 0,
+    index: 0,
+    t: 0,
+    s: 0,
+    cx: 0,
+    cy: 0,
+    lateral: 0,
+    edge: 0,
+    halfWidth: 0,
+    shoulder: 0,
+    tx: 0,
+    ty: -1,
+  };
 }
 
 /**
@@ -537,9 +585,13 @@ export function locate(track: TrackRuntime, px: number, py: number, out: TrackLo
   return false;
 }
 
-export function surfaceAt(track: TrackRuntime, loc: TrackLocation): { surface: SurfaceId; onShoulder: boolean } {
+export function surfaceAt(
+  track: TrackRuntime,
+  loc: TrackLocation,
+): { surface: SurfaceId; onShoulder: boolean } {
   const branch = track.branches[loc.branch]!;
-  if (Math.abs(loc.lateral) > loc.halfWidth) return { surface: branch.shoulderSurface, onShoulder: true };
+  if (Math.abs(loc.lateral) > loc.halfWidth)
+    return { surface: branch.shoulderSurface, onShoulder: true };
   return { surface: branch.surface[loc.index]!, onShoulder: false };
 }
 
@@ -644,7 +696,12 @@ export function isWrongWay(progress: VehicleProgressState): boolean {
  * Largest absolute curvature on the main line within `distance` ahead of `lapS`, signed by
  * the direction of that bend. Feeds the next-bend warning and the AI speed planner.
  */
-export function bendAhead(track: TrackRuntime, lapS: number, from: number, to: number): { curvature: number; distance: number } {
+export function bendAhead(
+  track: TrackRuntime,
+  lapS: number,
+  from: number,
+  to: number,
+): { curvature: number; distance: number } {
   let strongest = 0;
   let at = from;
   for (let d = from; d <= to; d += TRACK_SAMPLE_SPACING * 2) {

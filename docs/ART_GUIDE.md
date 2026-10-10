@@ -22,14 +22,14 @@ to 14 of the specification are the requirements; this file is the working practi
 no clock, no `Math.random`. A second bake produces byte-identical files, and `pnpm art:check`
 fails if committed car atlases differ from the pipeline's output.
 
-| Stage | Code | Output |
-|:--|:--|:--|
-| Pixel toolkit and PNG codec | `art/scripts/lib/pixels.ts` | indexed PNG when 256 colors or fewer |
-| Sprite modeller | `art/scripts/lib/model.ts` | any model at any heading |
-| Cars, wheels, engines | `art/scripts/cars/*` | `apps/web/public/assets/atlases/cars` |
-| Core effects | `art/scripts/vfx/core.ts` | `apps/web/public/assets/atlases/vfx_core` |
-| Terrain | `art/scripts/terrain/*` | `apps/web/public/assets/maps/<track>/<preset>` |
-| Review sheets | written by the build | `art/preview/` (not committed) |
+| Stage                       | Code                        | Output                                         |
+| :-------------------------- | :-------------------------- | :--------------------------------------------- |
+| Pixel toolkit and PNG codec | `art/scripts/lib/pixels.ts` | indexed PNG when 256 colors or fewer           |
+| Sprite modeller             | `art/scripts/lib/model.ts`  | any model at any heading                       |
+| Cars, wheels, engines       | `art/scripts/cars/*`        | `apps/web/public/assets/atlases/cars`          |
+| Core effects                | `art/scripts/vfx/core.ts`   | `apps/web/public/assets/atlases/vfx_core`      |
+| Terrain                     | `art/scripts/terrain/*`     | `apps/web/public/assets/maps/<track>/<preset>` |
+| Review sheets               | written by the build        | `art/preview/` (not committed)                 |
 
 Manifests are written next to the assets and copied to `art/manifests/` for diffing. Their
 types live in `packages/shared/src/assets.ts`, so the baker and the renderer cannot drift.
@@ -84,14 +84,14 @@ ambient strips are separate files with world positions in the manifest.
 Reviewed at game size and enlarged by the developer only. Section 21 is explicit that code
 cannot vouch for its own taste, so these are open until a person signs them off:
 
-| Asset | State | Notes |
-|:--|:--|:--|
-| Beetle, Arrow, Turtle, Spider bodies | Awaiting product-owner review | Bare chassis only; "heavily modified" benchmark needs Milestone B and C parts |
-| Street wheel kit | Awaiting review | Tread reads at 4x; subtle at game size |
-| Four-Cylinder engine layer | Awaiting review | Same sprite on all four frames for now |
-| Neon Cut clear night | Awaiting review | See known weak spots below |
-| Core effects (smoke, sparks, skids, headlight pool) | Awaiting review on hardware | Only stills reviewed; motion needs a real device |
-| Damage states, 20 weapon effects, rain variant, other biomes | Not started | Milestones C and D |
+| Asset                                                        | State                         | Notes                                                                         |
+| :----------------------------------------------------------- | :---------------------------- | :---------------------------------------------------------------------------- |
+| Beetle, Arrow, Turtle, Spider bodies                         | Awaiting product-owner review | Bare chassis only; "heavily modified" benchmark needs Milestone B and C parts |
+| Street wheel kit                                             | Awaiting review               | Tread reads at 4x; subtle at game size                                        |
+| Four-Cylinder engine layer                                   | Awaiting review               | Same sprite on all four frames for now                                        |
+| Neon Cut clear night                                         | Awaiting review               | See known weak spots below                                                    |
+| Core effects (smoke, sparks, skids, headlight pool)          | Awaiting review on hardware   | Only stills reviewed; motion needs a real device                              |
+| Damage states, 20 weapon effects, rain variant, other biomes | Not started                   | Milestones C and D                                                            |
 
 Known weak spots in Neon Cut, from the terrain bake's own review:
 

@@ -1,11 +1,6 @@
 import { ServerError } from '@colyseus/core';
 import { environmentFor, getTrack, resolveLoadout } from '@bolt/content';
-import type {
-  RaceEnvironment,
-  TrackDefinition,
-  VehicleLoadout,
-  VehicleParams,
-} from '@bolt/shared';
+import type { RaceEnvironment, TrackDefinition, VehicleLoadout, VehicleParams } from '@bolt/shared';
 import { JOIN_ERROR_CODES, PROTOCOL_VERSION, driveJoinOptionsSchema } from '@bolt/shared';
 import type { DriveJoinOptions, JoinErrorCode } from '@bolt/shared';
 

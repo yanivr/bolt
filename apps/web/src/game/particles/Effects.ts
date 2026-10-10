@@ -38,7 +38,19 @@ export class Effects {
   ) {
     for (let i = 0; i < particleCount; i++) {
       const sprite = scene.add.image(0, 0, 'vfx:smoke_a', 0).setVisible(false).setDepth(30);
-      this.pool.push({ sprite, active: false, age: 0, life: 0, vx: 0, vy: 0, drag: 0, frames: 1, fps: 1, fade: false, startAlpha: 1 });
+      this.pool.push({
+        sprite,
+        active: false,
+        age: 0,
+        life: 0,
+        vx: 0,
+        vy: 0,
+        drag: 0,
+        frames: 1,
+        fps: 1,
+        fade: false,
+        startAlpha: 1,
+      });
     }
     for (let i = 0; i < skidCount; i++) {
       this.skids.push(scene.add.image(0, 0, 'vfx:skid_light', 0).setVisible(false).setDepth(12));
@@ -50,7 +62,21 @@ export class Effects {
     return [...this.pool.map((p) => p.sprite), ...this.skids];
   }
 
-  private spawn(strip: string, x: number, y: number, vx: number, vy: number, opts: { tint?: number; alpha?: number; drag?: number; rotation?: number; hold?: number; depth?: number }): void {
+  private spawn(
+    strip: string,
+    x: number,
+    y: number,
+    vx: number,
+    vy: number,
+    opts: {
+      tint?: number;
+      alpha?: number;
+      drag?: number;
+      rotation?: number;
+      hold?: number;
+      depth?: number;
+    },
+  ): void {
     const def = this.vfx.strips[strip];
     if (!def) return;
     const p = this.pool[this.cursor]!;
@@ -75,10 +101,23 @@ export class Effects {
     p.sprite.setVisible(true);
   }
 
-  smoke(x: number, y: number, vx: number, vy: number, tint: number, alpha: number, small: boolean): void {
+  smoke(
+    x: number,
+    y: number,
+    vx: number,
+    vy: number,
+    tint: number,
+    alpha: number,
+    small: boolean,
+  ): void {
     const strip = small ? 'smoke_small' : this.cursor % 2 === 0 ? 'smoke_a' : 'smoke_b';
     // Quarter-turn steps keep clusters pixel-true while breaking up repetition.
-    this.spawn(strip, x, y, vx, vy, { tint, alpha, drag: 3.2, rotation: (this.cursor % 4) * (Math.PI / 2) });
+    this.spawn(strip, x, y, vx, vy, {
+      tint,
+      alpha,
+      drag: 3.2,
+      rotation: (this.cursor % 4) * (Math.PI / 2),
+    });
   }
 
   exhaust(x: number, y: number, vx: number, vy: number): void {
@@ -86,7 +125,11 @@ export class Effects {
   }
 
   spark(x: number, y: number, vx: number, vy: number): void {
-    this.spawn('spark', x, y, vx, vy, { drag: 4.5, rotation: Math.atan2(vy, vx) + Math.PI / 4, depth: 34 });
+    this.spawn('spark', x, y, vx, vy, {
+      drag: 4.5,
+      rotation: Math.atan2(vy, vx) + Math.PI / 4,
+      depth: 34,
+    });
   }
 
   impact(x: number, y: number): void {

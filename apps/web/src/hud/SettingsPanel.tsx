@@ -12,25 +12,65 @@ type Props = {
   closeLabel?: string;
 };
 
-function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+function Toggle({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
     <label className="setting-row">
       <span>{label}</span>
-      <input type="checkbox" role="switch" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <input
+        type="checkbox"
+        role="switch"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
     </label>
   );
 }
 
-function Slider({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+function Slider({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+}) {
   return (
     <label className="setting-row">
       <span>{label}</span>
-      <input type="range" min={0} max={100} step={5} value={Math.round(value * 100)} onChange={(e) => onChange(Number(e.target.value) / 100)} />
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={5}
+        value={Math.round(value * 100)}
+        onChange={(e) => onChange(Number(e.target.value) / 100)}
+      />
     </label>
   );
 }
 
-function Choice<T extends string>({ label, name, value, options, onChange }: { label: string; name: string; value: T; options: Array<[T, string]>; onChange: (v: T) => void }) {
+function Choice<T extends string>({
+  label,
+  name,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  name: string;
+  value: T;
+  options: Array<[T, string]>;
+  onChange: (v: T) => void;
+}) {
   const id = `setting-${name}`;
   return (
     <div className="setting-row setting-choice" role="radiogroup" aria-labelledby={id}>
@@ -38,7 +78,12 @@ function Choice<T extends string>({ label, name, value, options, onChange }: { l
       <div className="setting-options">
         {options.map(([key, text]) => (
           <label key={key} className={value === key ? 'is-selected' : undefined}>
-            <input type="radio" name={name} checked={value === key} onChange={() => onChange(key)} />
+            <input
+              type="radio"
+              name={name}
+              checked={value === key}
+              onChange={() => onChange(key)}
+            />
             <span>{text}</span>
           </label>
         ))}
@@ -68,7 +113,11 @@ export function SettingsPanel({ onClose, notice, actions, closeLabel }: Props) {
       <div className="panel settings">
         <header className="settings-head">
           <h2>{STRINGS.settings.title}</h2>
-          <button className="btn btn-small" onClick={onClose} aria-label={closeLabel ?? STRINGS.settings.done}>
+          <button
+            className="btn btn-small"
+            onClick={onClose}
+            aria-label={closeLabel ?? STRINGS.settings.done}
+          >
             {closeLabel ?? STRINGS.settings.done}
           </button>
         </header>
@@ -84,12 +133,36 @@ export function SettingsPanel({ onClose, notice, actions, closeLabel }: Props) {
             ]}
             onChange={(v) => update({ drivingHand: v })}
           />
-          <Toggle label={STRINGS.settings.reducedCamera} checked={settings.reducedCamera} onChange={(v) => update({ reducedCamera: v })} />
-          <Toggle label={STRINGS.settings.reduceFlashes} checked={settings.reduceFlashes} onChange={(v) => update({ reduceFlashes: v })} />
-          <Slider label={STRINGS.settings.cameraShake} value={settings.cameraShake} onChange={(v) => update({ cameraShake: v })} />
-          <Slider label={STRINGS.settings.engine} value={settings.engineVolume} onChange={(v) => update({ engineVolume: v })} />
-          <Slider label={STRINGS.settings.effects} value={settings.effectsVolume} onChange={(v) => update({ effectsVolume: v })} />
-          <Toggle label={STRINGS.settings.mute} checked={settings.muted} onChange={(v) => update({ muted: v })} />
+          <Toggle
+            label={STRINGS.settings.reducedCamera}
+            checked={settings.reducedCamera}
+            onChange={(v) => update({ reducedCamera: v })}
+          />
+          <Toggle
+            label={STRINGS.settings.reduceFlashes}
+            checked={settings.reduceFlashes}
+            onChange={(v) => update({ reduceFlashes: v })}
+          />
+          <Slider
+            label={STRINGS.settings.cameraShake}
+            value={settings.cameraShake}
+            onChange={(v) => update({ cameraShake: v })}
+          />
+          <Slider
+            label={STRINGS.settings.engine}
+            value={settings.engineVolume}
+            onChange={(v) => update({ engineVolume: v })}
+          />
+          <Slider
+            label={STRINGS.settings.effects}
+            value={settings.effectsVolume}
+            onChange={(v) => update({ effectsVolume: v })}
+          />
+          <Toggle
+            label={STRINGS.settings.mute}
+            checked={settings.muted}
+            onChange={(v) => update({ muted: v })}
+          />
           <Choice
             label={STRINGS.settings.speedUnit}
             name="unit"

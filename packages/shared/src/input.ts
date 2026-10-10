@@ -21,20 +21,33 @@ export function shapeAxis(raw: number): number {
  * into a control sample. Positive dx steers right; positive dy (pulling down the screen) lifts
  * the throttle and brakes.
  */
-export function joystickToControl(dxPx: number, dyPx: number, radiusPx = JOYSTICK_RADIUS_PX): ControlInput {
+export function joystickToControl(
+  dxPx: number,
+  dyPx: number,
+  radiusPx = JOYSTICK_RADIUS_PX,
+): ControlInput {
   const steer = shapeAxis(dxPx / radiusPx);
   const down = clamp(dyPx / radiusPx, 0, 1);
   return { steer, brake: down, coast: false };
 }
 
 /** Keyboard state to the same normalized schema, so desktop and touch converge. */
-export function keysToControl(left: boolean, right: boolean, brake: boolean, anyHeld: boolean): ControlInput {
+export function keysToControl(
+  left: boolean,
+  right: boolean,
+  brake: boolean,
+  anyHeld: boolean,
+): ControlInput {
   const steer = (right ? 1 : 0) - (left ? 1 : 0);
   return { steer, brake: brake ? 1 : 0, coast: !anyHeld };
 }
 
 /** Clamped visual offset of the thumb nub so it never leaves the disc. */
-export function clampToDisc(dxPx: number, dyPx: number, radiusPx = JOYSTICK_RADIUS_PX): { x: number; y: number } {
+export function clampToDisc(
+  dxPx: number,
+  dyPx: number,
+  radiusPx = JOYSTICK_RADIUS_PX,
+): { x: number; y: number } {
   const len = Math.hypot(dxPx, dyPx);
   if (len <= radiusPx || len === 0) return { x: dxPx, y: dyPx };
   return { x: (dxPx / len) * radiusPx, y: (dyPx / len) * radiusPx };

@@ -9,7 +9,12 @@ import type { TrackControlPoint, TrackDefinition } from '@bolt/shared';
  */
 
 const A = (x: number, y: number, width: number): TrackControlPoint => ({ x, y, width });
-const C = (x: number, y: number, width: number): TrackControlPoint => ({ x, y, width, surface: 'cobble' });
+const C = (x: number, y: number, width: number): TrackControlPoint => ({
+  x,
+  y,
+  width,
+  surface: 'cobble',
+});
 
 /**
  * Neon Cut. A fast outer ring that folds into two tight downtown switchbacks paved in old

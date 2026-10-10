@@ -4,7 +4,9 @@ import type { TrackDefinition } from '@bolt/shared';
  * A huge clockwise stadium oval used to measure straight-line and steady-state behaviour
  * without corners or walls getting in the way.
  */
-export function makeProvingGround(surface: TrackDefinition['main']['surface'] = 'asphalt'): TrackDefinition {
+export function makeProvingGround(
+  surface: TrackDefinition['main']['surface'] = 'asphalt',
+): TrackDefinition {
   const w = 600;
   return {
     id: 'proving_ground',

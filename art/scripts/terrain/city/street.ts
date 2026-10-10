@@ -58,7 +58,12 @@ const BIN = stencil(['smms', 'mlmd', 'mmdd', 'sdds']);
 export const LAMP_SPACING = 172;
 export const LAMP_RADII: readonly number[] = [27, 52, 78];
 
-export function paintStreet(ctx: BakeContext, layout: CityLayout, plan: RoadPlan, out: StreetOutput): void {
+export function paintStreet(
+  ctx: BakeContext,
+  layout: CityLayout,
+  plan: RoadPlan,
+  out: StreetOutput,
+): void {
   const { world, field, track } = ctx;
   const main = track.main;
   const L = main.length;
@@ -66,9 +71,29 @@ export function paintStreet(ctx: BakeContext, layout: CityLayout, plan: RoadPlan
   world.curFlags = 0;
   world.curHeight = -1;
 
-  const frame = (s: number): { x: number; y: number; tx: number; ty: number; nx: number; ny: number; hw: number; sh: number } => {
+  const frame = (
+    s: number,
+  ): {
+    x: number;
+    y: number;
+    tx: number;
+    ty: number;
+    nx: number;
+    ny: number;
+    hw: number;
+    sh: number;
+  } => {
     const p = sampleBranch(main, s);
-    return { x: p.x, y: p.y, tx: p.tx, ty: p.ty, nx: -p.ty, ny: p.tx, hw: p.halfWidth, sh: p.shoulder };
+    return {
+      x: p.x,
+      y: p.y,
+      tx: p.tx,
+      ty: p.ty,
+      nx: -p.ty,
+      ny: p.tx,
+      hw: p.halfWidth,
+      sh: p.shoulder,
+    };
   };
   const zoneAt = (x: number, y: number): number => {
     const xi = Math.round(x);
@@ -125,8 +150,20 @@ export function paintStreet(ctx: BakeContext, layout: CityLayout, plan: RoadPlan
     const cx = f.x + f.nx * side * (f.hw - 24);
     const cy = f.y + f.ny * side * (f.hw - 24);
     const scale = Math.min(1, f.hw / 80);
-    out.pools.push({ x: cx, y: cy, radii: LAMP_RADII.map((r) => Math.round(r * scale)), tint: TINT_WARM, level: 0 });
-    out.lights.push({ x: hx, y: hy, radius: LAMP_RADII[2]!, color: TINT_HEX[TINT_WARM]!, intensity: 1 });
+    out.pools.push({
+      x: cx,
+      y: cy,
+      radii: LAMP_RADII.map((r) => Math.round(r * scale)),
+      tint: TINT_WARM,
+      level: 0,
+    });
+    out.lights.push({
+      x: hx,
+      y: hy,
+      radius: LAMP_RADII[2]!,
+      color: TINT_HEX[TINT_WARM]!,
+      intensity: 1,
+    });
   }
 
   // --- Furniture slots ---------------------------------------------------------------------
@@ -143,7 +180,12 @@ export function paintStreet(ctx: BakeContext, layout: CityLayout, plan: RoadPlan
       ];
       const [ax, ay] = at(wallLat - 5);
       if (zoneAt(ax, ay) !== ZONE_SHOULDER) continue;
-      if (lampS.some((l) => l.side === side && Math.min(Math.abs(l.s - s), L - Math.abs(l.s - s)) < 14)) continue;
+      if (
+        lampS.some(
+          (l) => l.side === side && Math.min(Math.abs(l.s - s), L - Math.abs(l.s - s)) < 14,
+        )
+      )
+        continue;
       if (nearAny(s, plan.zebras, 34)) continue;
       const roll = hash2(k, side + 3, 4401);
       const axis = Math.abs(f.tx) > 0.94 || Math.abs(f.ty) > 0.94;
@@ -159,7 +201,12 @@ export function paintStreet(ctx: BakeContext, layout: CityLayout, plan: RoadPlan
         const [bx, by] = at(wallLat - 4);
         world.map(bx + 2, by + 3, contactShade);
         world.map(bx + 3, by + 2, contactShade);
-        world.stamp(bx - 2, by - 2, BIN, { s: PAL.steelDark, m: PAL.mintDim, l: PAL.mint, d: PAL.leafDeep });
+        world.stamp(bx - 2, by - 2, BIN, {
+          s: PAL.steelDark,
+          m: PAL.mintDim,
+          l: PAL.mint,
+          d: PAL.leafDeep,
+        });
       } else if (roll < 0.24) {
         const [hx, hy] = at(4.5);
         const [kx, ky] = at(f.hw + 5);
@@ -243,7 +290,18 @@ export function paintStreet(ctx: BakeContext, layout: CityLayout, plan: RoadPlan
         const [gx, gy] = at(wallLat + 1);
         const glow = tint === TINT_WARM ? PAL.windowWarm : NEON[tint - 1]!.c;
         emissive(world, () => {
-          orientedRect(world, gx - f.tx * 4, gy - f.ty * 4, f.tx, f.ty, f.nx * side, f.ny * side, 8, 1.5, () => glow);
+          orientedRect(
+            world,
+            gx - f.tx * 4,
+            gy - f.ty * 4,
+            f.tx,
+            f.ty,
+            f.nx * side,
+            f.ny * side,
+            8,
+            1.5,
+            () => glow,
+          );
         });
         out.pools.push({ x: dx, y: dy, radii: [7, 13], tint, level: 0 });
         out.lights.push({ x: dx, y: dy, radius: 13, color: TINT_HEX[tint]!, intensity: 0.4 });
@@ -257,7 +315,9 @@ export function paintStreet(ctx: BakeContext, layout: CityLayout, plan: RoadPlan
       const f = frame(z + 11);
       const ox = f.x - f.tx * 11 + f.nx * side * (f.hw + 4);
       const oy = f.y - f.ty * 11 + f.ny * side * (f.hw + 4);
-      orientedRect(world, ox, oy, f.tx, f.ty, f.nx * side, f.ny * side, 22, f.sh - 6, (u, v) => ((u + v) & 1) === 0 ? PAL.paintGoldWorn : PAL.walkShade);
+      orientedRect(world, ox, oy, f.tx, f.ty, f.nx * side, f.ny * side, 22, f.sh - 6, (u, v) =>
+        ((u + v) & 1) === 0 ? PAL.paintGoldWorn : PAL.walkShade,
+      );
     }
   }
 
@@ -267,7 +327,13 @@ export function paintStreet(ctx: BakeContext, layout: CityLayout, plan: RoadPlan
     const y = Math.round(ob.y);
     world.mapDisc(x + 2, y + 2, 4, contactShade);
     world.curHeight = 2;
-    world.stamp(x - 4, y - 4, BOLLARD, { o: PAL.ink, g: PAL.gold, h: PAL.goldHi, d: PAL.goldDim, c: PAL.coral });
+    world.stamp(x - 4, y - 4, BOLLARD, {
+      o: PAL.ink,
+      g: PAL.gold,
+      h: PAL.goldHi,
+      d: PAL.goldDim,
+      c: PAL.coral,
+    });
     world.curHeight = -1;
   }
   for (const branch of track.branches) {
@@ -277,7 +343,13 @@ export function paintStreet(ctx: BakeContext, layout: CityLayout, plan: RoadPlan
       const p = sampleBranch(branch, s);
       const tint = n++ % 2 === 0 ? TINT_GOLD : TINT_CORAL;
       out.pools.push({ x: p.x, y: p.y, radii: [13, 24, 34], tint, level: 0 });
-      out.lights.push({ x: Math.round(p.x), y: Math.round(p.y), radius: 34, color: TINT_HEX[tint]!, intensity: 0.8 });
+      out.lights.push({
+        x: Math.round(p.x),
+        y: Math.round(p.y),
+        radius: 34,
+        color: TINT_HEX[tint]!,
+        intensity: 0.8,
+      });
     }
   }
 }

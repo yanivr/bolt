@@ -72,7 +72,8 @@ export function planRoad(ctx: BakeContext): RoadPlan {
   const hairpins: Array<{ s: number; dir: number }> = [];
   for (let i = 0; i < n; i++) {
     const prev = Math.abs(sc[(i - 1 + n) % n]!);
-    if (prev <= 0.0045 && Math.abs(sc[i]!) > 0.0045) hairpins.push({ s: main.s[i]!, dir: Math.sign(sc[i]!) });
+    if (prev <= 0.0045 && Math.abs(sc[i]!) > 0.0045)
+      hairpins.push({ s: main.s[i]!, dir: Math.sign(sc[i]!) });
   }
   let cobbleFrom = -1;
   let cobbleTo = -1;
@@ -112,7 +113,14 @@ function asphaltTone(x: number, y: number): Color {
   return c;
 }
 
-const COBBLE_TONES: readonly Color[] = [PAL.cobbleDark, PAL.cobble, PAL.cobble, PAL.cobbleLight, PAL.cobbleLight, PAL.cobbleHi];
+const COBBLE_TONES: readonly Color[] = [
+  PAL.cobbleDark,
+  PAL.cobble,
+  PAL.cobble,
+  PAL.cobbleLight,
+  PAL.cobbleLight,
+  PAL.cobbleHi,
+];
 
 function cobbleTone(x: number, y: number): Color {
   // Courses of hand-set stones: every course is shifted and its joints wander, so the
@@ -136,7 +144,12 @@ function cobbleTone(x: number, y: number): Color {
   return tone;
 }
 
-type Decal = { kind: 'start' | 'grid' | 'zebra' | 'arrow' | 'chevron'; s: number; lat: number; reach: number };
+type Decal = {
+  kind: 'start' | 'grid' | 'zebra' | 'arrow' | 'chevron';
+  s: number;
+  lat: number;
+  reach: number;
+};
 
 export function paintRoad(ctx: BakeContext, layout: CityLayout, plan: RoadPlan): void {
   const { field, track, world } = ctx;
@@ -162,7 +175,8 @@ export function paintRoad(ctx: BakeContext, layout: CityLayout, plan: RoadPlan):
   addDecal({ kind: 'start', s: startS, lat: 0, reach: 12 });
   const gridS = startS - 46;
   const gridHalf = sampleBranch(main, gridS).halfWidth;
-  for (const side of [-1, 1]) addDecal({ kind: 'grid', s: gridS, lat: side * gridHalf * 0.42, reach: 44 });
+  for (const side of [-1, 1])
+    addDecal({ kind: 'grid', s: gridS, lat: side * gridHalf * 0.42, reach: 44 });
   for (const z of plan.zebras) addDecal({ kind: 'zebra', s: z, lat: 0, reach: 30 });
   for (const a of plan.arrows) {
     const hw = sampleBranch(main, a).halfWidth;
@@ -170,7 +184,8 @@ export function paintRoad(ctx: BakeContext, layout: CityLayout, plan: RoadPlan):
     addDecal({ kind: 'arrow', s: a, lat: hw * 0.5, reach: 44 });
   }
   for (const hp of plan.hairpins) {
-    for (let k = 0; k < 3; k++) addDecal({ kind: 'chevron', s: hp.s - 340 + k * 30, lat: hp.dir, reach: 56 });
+    for (let k = 0; k < 3; k++)
+      addDecal({ kind: 'chevron', s: hp.s - 340 + k * 30, lat: hp.dir, reach: 56 });
   }
 
   const put = (i: number, c: Color, fl = 0): void => {
@@ -235,7 +250,17 @@ export function paintRoad(ctx: BakeContext, layout: CityLayout, plan: RoadPlan):
         if (k < 3) {
           if (cornerHere) {
             const stripe = (Math.floor(ss / 10) & 1) === 0;
-            put(i, k >= 2 ? (stripe ? PAL.kerbCoralDark : PAL.kerbIvoryDark) : stripe ? PAL.kerbCoral : PAL.kerbIvory, F_NOSHADOW);
+            put(
+              i,
+              k >= 2
+                ? stripe
+                  ? PAL.kerbCoralDark
+                  : PAL.kerbIvoryDark
+                : stripe
+                  ? PAL.kerbCoral
+                  : PAL.kerbIvory,
+              F_NOSHADOW,
+            );
           } else {
             let c: Color = PAL.kerb;
             if (!isKerb(i - w - 1)) c = PAL.kerbHi;
@@ -276,7 +301,12 @@ export function paintRoad(ctx: BakeContext, layout: CityLayout, plan: RoadPlan):
             c = lat < 10 ? PAL.rail : lat < 11 ? PAL.railMid : PAL.railGroove;
           } else if (lat >= 23 && lat < 26) {
             c = lat < 24 ? PAL.rail : lat < 25 ? PAL.railMid : PAL.railGroove;
-          } else if ((lat >= 12 && lat < 23 && (Math.floor(ss) % 12 === 0)) && (lat < 13.2 || lat >= 21.8)) {
+          } else if (
+            lat >= 12 &&
+            lat < 23 &&
+            Math.floor(ss) % 12 === 0 &&
+            (lat < 13.2 || lat >= 21.8)
+          ) {
             // Rail clips.
             c = PAL.railMid;
           }
@@ -284,7 +314,12 @@ export function paintRoad(ctx: BakeContext, layout: CityLayout, plan: RoadPlan):
           c = PAL.mortar;
         } else if (d > hw - 7) {
           const cell = Math.floor(ss / 8);
-          c = ss - cell * 8 < 1.05 || d < hw - 6 ? PAL.mortar : hash2(cell, lat > 0 ? 3 : 2, SURF_SEED + 61) < 0.4 ? PAL.sett : PAL.cobbleLight;
+          c =
+            ss - cell * 8 < 1.05 || d < hw - 6
+              ? PAL.mortar
+              : hash2(cell, lat > 0 ? 3 : 2, SURF_SEED + 61) < 0.4
+                ? PAL.sett
+                : PAL.cobbleLight;
         }
       } else {
         c = asphaltTone(x, y);
@@ -301,7 +336,11 @@ export function paintRoad(ctx: BakeContext, layout: CityLayout, plan: RoadPlan):
             const v = lat - v0;
             if (u >= 0 && u < len && Math.abs(v) < wid) {
               const border = u < 1.1 || u > len - 1.1 || Math.abs(v) > wid - 1.1;
-              c = border ? PAL.patchEdge : hash2(x >> 1, y >> 1, SURF_SEED + 71) < 0.07 ? PAL.asphaltDark : PAL.patch;
+              c = border
+                ? PAL.patchEdge
+                : hash2(x >> 1, y >> 1, SURF_SEED + 71) < 0.07
+                  ? PAL.asphaltDark
+                  : PAL.patch;
             }
           }
           // Rubber laid down on the racing line through corners.
@@ -311,7 +350,11 @@ export function paintRoad(ctx: BakeContext, layout: CityLayout, plan: RoadPlan):
             const core = 4 + strength * 5;
             if (dl < core) {
               if (hash2(x >> 1, y, SURF_SEED + 72) < 0.55 + strength * 0.3) c = PAL.asphaltRubber;
-            } else if (dl < core + 4 && ((x + y) & 1) === 0 && hash2(x >> 2, y >> 1, SURF_SEED + 73) < 0.6) {
+            } else if (
+              dl < core + 4 &&
+              ((x + y) & 1) === 0 &&
+              hash2(x >> 2, y >> 1, SURF_SEED + 73) < 0.6
+            ) {
               c = PAL.asphaltRubber;
             }
           }
@@ -319,7 +362,12 @@ export function paintRoad(ctx: BakeContext, layout: CityLayout, plan: RoadPlan):
           const gcell = Math.floor(ss / 180);
           const gu = ss - gcell * 180 - 70;
           if (gu >= 0 && gu < 10 && k >= -6 && k < -1 && (gcell & 1) === (lat > 0 ? 1 : 0)) {
-            c = gu < 1 || gu >= 9 || k < -5 ? PAL.steelDark : (Math.floor(gu) & 1) === 0 ? PAL.ink : PAL.steel;
+            c =
+              gu < 1 || gu >= 9 || k < -5
+                ? PAL.steelDark
+                : (Math.floor(gu) & 1) === 0
+                  ? PAL.ink
+                  : PAL.steel;
           }
           // Edge lines, inset from the kerb.
           if (k >= -8 && k < -6) {
@@ -340,7 +388,14 @@ export function paintRoad(ctx: BakeContext, layout: CityLayout, plan: RoadPlan):
         const dt = Math.min(Math.abs(ss - plan.cobbleFrom), Math.abs(ss - plan.cobbleTo - 10));
         if (dt < 5) {
           const cell = Math.floor((lat + 500) / 9);
-          c = dt > 3.9 ? PAL.railMid : dt < 0.6 || lat + 500 - cell * 9 < 1.05 ? PAL.mortar : hash2(cell, 9, SURF_SEED + 62) < 0.4 ? PAL.settLight : PAL.sett;
+          c =
+            dt > 3.9
+              ? PAL.railMid
+              : dt < 0.6 || lat + 500 - cell * 9 < 1.05
+                ? PAL.mortar
+                : hash2(cell, 9, SURF_SEED + 62) < 0.4
+                  ? PAL.settLight
+                  : PAL.sett;
           fl = 0;
         }
       }
@@ -450,12 +505,23 @@ function paintScatter(ctx: BakeContext, plan: RoadPlan): void {
   const { field, track, world } = ctx;
   const main = track.main;
   const rnd = mulberry32(ctx.seed ^ 0x51ab);
-  const asphaltSet = new Set<Color>([PAL.asphalt, PAL.asphaltDark, PAL.asphaltLight, PAL.asphaltSpeck, PAL.asphaltRubber, PAL.patch]);
+  const asphaltSet = new Set<Color>([
+    PAL.asphalt,
+    PAL.asphaltDark,
+    PAL.asphaltLight,
+    PAL.asphaltSpeck,
+    PAL.asphaltRubber,
+    PAL.patch,
+  ]);
   const asphaltIdx = field.surfaces.indexOf('asphalt');
   const onAsphalt = (x: number, y: number): boolean => {
     if (x < 0 || y < 0 || x >= field.w || y >= field.h) return false;
     const i = y * field.w + x;
-    return field.zone[i] === ZONE_PAVEMENT && field.surface[i] === asphaltIdx && asphaltSet.has(world.get(x, y));
+    return (
+      field.zone[i] === ZONE_PAVEMENT &&
+      field.surface[i] === asphaltIdx &&
+      asphaltSet.has(world.get(x, y))
+    );
   };
   const clearOfDecals = (s: number): boolean => {
     const near = (t: number, r: number): boolean => {
@@ -468,7 +534,10 @@ function paintScatter(ctx: BakeContext, plan: RoadPlan): void {
     if (plan.hairpins.some((hp) => near(hp.s - 290, 80))) return false;
     return true;
   };
-  const at = (s: number, lat: number): { x: number; y: number; hw: number; tx: number; ty: number } => {
+  const at = (
+    s: number,
+    lat: number,
+  ): { x: number; y: number; hw: number; tx: number; ty: number } => {
     const p = sampleBranch(main, s);
     return { x: p.x - p.ty * lat, y: p.y + p.tx * lat, hw: p.halfWidth, tx: p.tx, ty: p.ty };
   };
@@ -486,7 +555,8 @@ function paintScatter(ctx: BakeContext, plan: RoadPlan): void {
       for (let yy = Math.floor(by - r); yy <= by + r; yy++) {
         for (let xx = Math.floor(bx - r); xx <= bx + r; xx++) {
           if ((xx - bx) * (xx - bx) + (yy - by) * (yy - by) > (r + 0.3) * (r + 0.3)) continue;
-          if (onAsphalt(xx, yy)) world.set(xx, yy, hash2(xx, yy, 91) < 0.12 ? PAL.asphaltRubber : PAL.oil);
+          if (onAsphalt(xx, yy))
+            world.set(xx, yy, hash2(xx, yy, 91) < 0.12 ? PAL.asphaltRubber : PAL.oil);
         }
       }
     }
@@ -515,7 +585,8 @@ function paintScatter(ctx: BakeContext, plan: RoadPlan): void {
         for (let j = 0; j < 5; j++) {
           bx += Math.cos(bang);
           by += Math.sin(bang);
-          if (onAsphalt(Math.round(bx), Math.round(by))) world.set(Math.round(bx), Math.round(by), PAL.crack);
+          if (onAsphalt(Math.round(bx), Math.round(by)))
+            world.set(Math.round(bx), Math.round(by), PAL.crack);
         }
       }
     }
@@ -550,7 +621,10 @@ function paintScatter(ctx: BakeContext, plan: RoadPlan): void {
           const y = Math.round(p.y + p.tx * lat);
           if (hash2(x >> 1, y >> 1, 93) < 0.8) {
             const i = y * field.w + x;
-            if (field.zone[i] === ZONE_PAVEMENT && (asphaltSet.has(world.get(x, y)) || field.surface[i] !== asphaltIdx)) {
+            if (
+              field.zone[i] === ZONE_PAVEMENT &&
+              (asphaltSet.has(world.get(x, y)) || field.surface[i] !== asphaltIdx)
+            ) {
               if (field.surface[i] === asphaltIdx) world.set(x, y, PAL.crack);
             }
           }

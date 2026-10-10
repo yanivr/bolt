@@ -108,7 +108,11 @@ export class DriveInput {
           const wanted = Math.atan2(this.dx, -this.dy);
           const turn = angleDelta(screenHeading, wanted);
           const reverseAsk = Math.abs(turn) > 2.3;
-          control = { steer: reverseAsk ? 0 : clamp(turn / 0.7, -1, 1), brake: reverseAsk ? 0.9 : 0, coast: false };
+          control = {
+            steer: reverseAsk ? 0 : clamp(turn / 0.7, -1, 1),
+            brake: reverseAsk ? 0.9 : 0,
+            coast: false,
+          };
         }
       } else {
         control = joystickToControl(this.dx, this.dy);
@@ -193,7 +197,8 @@ export class DriveInput {
 
   private onKeyDown = (event: KeyboardEvent): void => {
     if (event.repeat) return;
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) event.preventDefault();
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code))
+      event.preventDefault();
     this.keys.add(event.code);
   };
 

@@ -12,7 +12,9 @@ async function enterImmersive(): Promise<void> {
     if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
       await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
     }
-    const orientation = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
+    const orientation = screen.orientation as ScreenOrientation & {
+      lock?: (o: string) => Promise<void>;
+    };
     await orientation.lock?.('landscape');
   } catch {
     // Unsupported or refused: the rotate prompt covers it.
@@ -61,19 +63,34 @@ export function HomeScreen() {
         <div className="turntable" aria-hidden="true">
           <div className="turntable-disc" />
           {manifests && (
-            <CarTurntable manifests={manifests} chassisId={chassis.id} engineId={loadout.engineId} tireKitId={loadout.tireKitId} paintId={loadout.paintId} scale={compact ? 2 : 3} />
+            <CarTurntable
+              manifests={manifests}
+              chassisId={chassis.id}
+              engineId={loadout.engineId}
+              tireKitId={loadout.tireKitId}
+              paintId={loadout.paintId}
+              scale={compact ? 2 : 3}
+            />
           )}
         </div>
         <div className="panel car-pick">
           <div className="car-pick-row">
-            <button className="btn btn-small" onClick={() => cycle(-1)} aria-label={STRINGS.home.previousCar}>
+            <button
+              className="btn btn-small"
+              onClick={() => cycle(-1)}
+              aria-label={STRINGS.home.previousCar}
+            >
               <span className="icon-arrow icon-arrow-left" aria-hidden="true" />
             </button>
             <div className="car-pick-name" aria-live="polite">
               <strong>{chassis.displayName}</strong>
               <span>{chassis.description}</span>
             </div>
-            <button className="btn btn-small" onClick={() => cycle(1)} aria-label={STRINGS.home.nextCar}>
+            <button
+              className="btn btn-small"
+              onClick={() => cycle(1)}
+              aria-label={STRINGS.home.nextCar}
+            >
               <span className="icon-arrow" aria-hidden="true" />
             </button>
           </div>

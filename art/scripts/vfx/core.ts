@@ -9,9 +9,23 @@ import { PixelBuffer, hex } from '../lib/pixels.js';
  * Smoke is baked near-white so the client can tint it per surface.
  */
 
-export type VfxStrip = { id: string; frameWidth: number; frameHeight: number; frames: number; fps: number; image: PixelBuffer };
+export type VfxStrip = {
+  id: string;
+  frameWidth: number;
+  frameHeight: number;
+  frames: number;
+  fps: number;
+  image: PixelBuffer;
+};
 
-function strip(id: string, fw: number, fh: number, frames: number, fps: number, draw: (frame: number, put: (x: number, y: number, c: RGBA) => void) => void): VfxStrip {
+function strip(
+  id: string,
+  fw: number,
+  fh: number,
+  frames: number,
+  fps: number,
+  draw: (frame: number, put: (x: number, y: number, c: RGBA) => void) => void,
+): VfxStrip {
   const image = new PixelBuffer(fw * frames, fh);
   for (let f = 0; f < frames; f++) {
     draw(f, (x, y, c) => {
@@ -23,7 +37,15 @@ function strip(id: string, fw: number, fh: number, frames: number, fps: number, 
 }
 
 /** A billowing cluster: three lobes that swell, drift apart, then break into flecks. */
-function puff(id: string, size: number, frames: number, seed: number, light: RGBA, mid: RGBA, dark: RGBA): VfxStrip {
+function puff(
+  id: string,
+  size: number,
+  frames: number,
+  seed: number,
+  light: RGBA,
+  mid: RGBA,
+  dark: RGBA,
+): VfxStrip {
   const c = size / 2;
   return strip(id, size, size, frames, 14, (f, put) => {
     const t = f / (frames - 1);
@@ -33,7 +55,9 @@ function puff(id: string, size: number, frames: number, seed: number, light: RGB
       return {
         x: c + Math.cos(a) * spread,
         y: c + Math.sin(a) * spread - t * 1.2,
-        r: (size * 0.2 + hash2(k, seed, 13) * size * 0.1) * (0.55 + Math.sin(Math.min(1, t * 1.3) * Math.PI * 0.75) * 0.75),
+        r:
+          (size * 0.2 + hash2(k, seed, 13) * size * 0.1) *
+          (0.55 + Math.sin(Math.min(1, t * 1.3) * Math.PI * 0.75) * 0.75),
       };
     });
     // Late frames erode: a rising share of pixels drop out in stable 2 px cells.
@@ -74,9 +98,16 @@ export function buildCoreVfx(): VfxStrip[] {
   // Hot spark: a streak that shortens and cools from white to orange to ember red.
   out.push(
     strip('spark', 8, 8, 5, 24, (f, put) => {
-      const colors = [hex('#ffffff'), hex('#fff3b0'), hex('#f6c35b'), hex('#f08a3c'), hex('#d83f49')];
+      const colors = [
+        hex('#ffffff'),
+        hex('#fff3b0'),
+        hex('#f6c35b'),
+        hex('#f08a3c'),
+        hex('#d83f49'),
+      ];
       const len = [4, 4, 3, 2, 1][f]!;
-      for (let i = 0; i < len; i++) put(2 + i, 5 - i, colors[Math.min(4, f + (i === len - 1 ? 0 : 1))]!);
+      for (let i = 0; i < len; i++)
+        put(2 + i, 5 - i, colors[Math.min(4, f + (i === len - 1 ? 0 : 1))]!);
     }),
   );
   // Impact star for a wall strike: two frames of four-point flash, then a ring of flecks.
@@ -101,14 +132,21 @@ export function buildCoreVfx(): VfxStrip[] {
         const r = f === 2 ? 5 : 7;
         for (let k = 0; k < 10; k++) {
           const a = (k / 10) * Math.PI * 2 + hash2(k, f, 5);
-          put(Math.round(c + Math.cos(a) * r), Math.round(c + Math.sin(a) * r), f === 2 ? warm : gold);
+          put(
+            Math.round(c + Math.cos(a) * r),
+            Math.round(c + Math.sin(a) * r),
+            f === 2 ? warm : gold,
+          );
         }
       }
     }),
   );
 
   // Rubber laid on the road. Two severities; ends are ragged so repeats do not tile visibly.
-  for (const [id, alpha] of [['skid_light', 70], ['skid_heavy', 130]] as const) {
+  for (const [id, alpha] of [
+    ['skid_light', 70],
+    ['skid_heavy', 130],
+  ] as const) {
     out.push(
       strip(id, 5, 8, 4, 1, (f, put) => {
         for (let y = 0; y < 8; y++) {

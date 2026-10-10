@@ -51,9 +51,14 @@ export type CityLayout = {
   streets: Street[];
 };
 
-const overlaps = (a: Rect, b: Rect): boolean => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+const overlaps = (a: Rect, b: Rect): boolean =>
+  a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
-export function buildLayout(ctx: BakeContext, reserves: readonly Reserve[], fixed: readonly FixedLot[]): CityLayout {
+export function buildLayout(
+  ctx: BakeContext,
+  reserves: readonly Reserve[],
+  fixed: readonly FixedLot[],
+): CityLayout {
   const { field } = ctx;
   const { w, h } = field;
   const rnd = mulberry32(ctx.seed ^ 0xc17a);
@@ -65,10 +70,29 @@ export function buildLayout(ctx: BakeContext, reserves: readonly Reserve[], fixe
   const fillGround = (r: Rect, kind: number): void => {
     const x1 = Math.min(w, r.x + r.w);
     const y1 = Math.min(h, r.y + r.h);
-    for (let y = Math.max(0, r.y); y < y1; y++) ground.fill(kind, y * w + Math.max(0, r.x), y * w + x1);
+    for (let y = Math.max(0, r.y); y < y1; y++)
+      ground.fill(kind, y * w + Math.max(0, r.x), y * w + x1);
   };
-  const addLot = (r: Rect, family: number, height: number, cut: Rect | null, tag = '', round = false): Lot => {
-    const lot: Lot = { ...r, id: lots.length, family, height, seed: (rnd() * 0x7fffffff) | 0, cut, visible: 0, roadDist: 999, tag, round };
+  const addLot = (
+    r: Rect,
+    family: number,
+    height: number,
+    cut: Rect | null,
+    tag = '',
+    round = false,
+  ): Lot => {
+    const lot: Lot = {
+      ...r,
+      id: lots.length,
+      family,
+      height,
+      seed: (rnd() * 0x7fffffff) | 0,
+      cut,
+      visible: 0,
+      roadDist: 999,
+      tag,
+      round,
+    };
     lots.push(lot);
     return lot;
   };
@@ -102,10 +126,20 @@ export function buildLayout(ctx: BakeContext, reserves: readonly Reserve[], fixe
       const cw = even(r.w * (0.3 + rnd() * 0.22));
       const ch = even(r.h * (0.3 + rnd() * 0.22));
       const corner = (rnd() * 4) | 0;
-      cut = { x: corner & 1 ? r.x + r.w - cw : r.x, y: corner & 2 ? r.y + r.h - ch : r.y, w: cw, h: ch };
+      cut = {
+        x: corner & 1 ? r.x + r.w - cw : r.x,
+        y: corner & 2 ? r.y + r.h - ch : r.y,
+        w: cw,
+        h: ch,
+      };
       if (rnd() < 0.62) {
         // The notch holds a lower annex rather than an open yard.
-        addLot(cut, rnd() < 0.5 ? family : ROOF_WEIGHTS[(rnd() * ROOF_WEIGHTS.length) | 0]!, Math.max(3, height - 3 - ((rnd() * 3) | 0)), null);
+        addLot(
+          cut,
+          rnd() < 0.5 ? family : ROOF_WEIGHTS[(rnd() * ROOF_WEIGHTS.length) | 0]!,
+          Math.max(3, height - 3 - ((rnd() * 3) | 0)),
+          null,
+        );
       }
     }
     addLot(r, family, height, cut);
@@ -133,14 +167,21 @@ export function buildLayout(ctx: BakeContext, reserves: readonly Reserve[], fixe
       const horizontal = r.w > r.h;
       const span = horizontal ? r.w : r.h;
       const cutAt = even(span * (0.36 + rnd() * 0.28));
-      if (horizontal) streets.push({ x: r.x + cutAt - gap / 2, y: r.y, w: gap, h: r.h, horizontal: false });
+      if (horizontal)
+        streets.push({ x: r.x + cutAt - gap / 2, y: r.y, w: gap, h: r.h, horizontal: false });
       else streets.push({ x: r.x, y: r.y + cutAt - gap / 2, w: r.w, h: gap, horizontal: true });
       if (horizontal) {
         splitRegion({ x: r.x, y: r.y, w: cutAt - gap / 2, h: r.h }, depth + 1);
-        splitRegion({ x: r.x + cutAt + gap / 2, y: r.y, w: r.w - cutAt - gap / 2, h: r.h }, depth + 1);
+        splitRegion(
+          { x: r.x + cutAt + gap / 2, y: r.y, w: r.w - cutAt - gap / 2, h: r.h },
+          depth + 1,
+        );
       } else {
         splitRegion({ x: r.x, y: r.y, w: r.w, h: cutAt - gap / 2 }, depth + 1);
-        splitRegion({ x: r.x, y: r.y + cutAt + gap / 2, w: r.w, h: r.h - cutAt - gap / 2 }, depth + 1);
+        splitRegion(
+          { x: r.x, y: r.y + cutAt + gap / 2, w: r.w, h: r.h - cutAt - gap / 2 },
+          depth + 1,
+        );
       }
       return;
     }
@@ -150,7 +191,8 @@ export function buildLayout(ctx: BakeContext, reserves: readonly Reserve[], fixe
 
   for (const rv of reserves) fillGround(rv, rv.ground);
   const fixedIds = new Set<number>();
-  for (const f of fixed) fixedIds.add(addLot(f, f.family, f.height, null, f.tag, f.round ?? false).id);
+  for (const f of fixed)
+    fixedIds.add(addLot(f, f.family, f.height, null, f.tag, f.round ?? false).id);
 
   // Rasterize, clipping against the corridor wall.
   for (const lot of lots) {
@@ -167,8 +209,16 @@ export function buildLayout(ctx: BakeContext, reserves: readonly Reserve[], fixe
         const i = y * w + x;
         const e = field.edge[i]!;
         if (e <= WALL_OUT) continue;
-        if (lot.cut && x >= lot.cut.x && x < lot.cut.x + lot.cut.w && y >= lot.cut.y && y < lot.cut.y + lot.cut.h) continue;
-        if (lot.round && (x + 0.5 - cx) * (x + 0.5 - cx) + (y + 0.5 - cy) * (y + 0.5 - cy) > rr) continue;
+        if (
+          lot.cut &&
+          x >= lot.cut.x &&
+          x < lot.cut.x + lot.cut.w &&
+          y >= lot.cut.y &&
+          y < lot.cut.y + lot.cut.h
+        )
+          continue;
+        if (lot.round && (x + 0.5 - cx) * (x + 0.5 - cx) + (y + 0.5 - cy) * (y + 0.5 - cy) > rr)
+          continue;
         roofId[i] = lot.id;
         lot.visible++;
         if (e < lot.roadDist) lot.roadDist = e;

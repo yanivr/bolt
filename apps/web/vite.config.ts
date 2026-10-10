@@ -11,7 +11,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@bolt/shared': fileURLToPath(new URL('../../packages/shared/src/index.ts', import.meta.url)),
-      '@bolt/content': fileURLToPath(new URL('../../packages/content/src/index.ts', import.meta.url)),
+      '@bolt/content': fileURLToPath(
+        new URL('../../packages/content/src/index.ts', import.meta.url),
+      ),
     },
   },
   server: {

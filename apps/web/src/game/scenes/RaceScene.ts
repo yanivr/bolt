@@ -1,4 +1,12 @@
-import type { CarPose, CarSnapshot, DriveSession, InputSample, RaceEvent, TerrainOverlay, VehicleLoadout } from '@bolt/shared';
+import type {
+  CarPose,
+  CarSnapshot,
+  DriveSession,
+  InputSample,
+  RaceEvent,
+  TerrainOverlay,
+  VehicleLoadout,
+} from '@bolt/shared';
 import {
   MAX_INPUTS_PER_PACKET,
   MPH_PER_WORLD_SPEED,
@@ -100,18 +108,37 @@ export class RaceScene extends Phaser.Scene {
     this.load.on('loaderror', () => this.cfg.onLoadError());
 
     const chassis = manifests.cars.chassis[loadout.chassisId]!;
-    const sheet = (key: string, base: string, ref: { file: string; frameWidth: number; frameHeight: number }) =>
-      this.load.spritesheet(key, `${base}/${ref.file}`, { frameWidth: ref.frameWidth, frameHeight: ref.frameHeight });
+    const sheet = (
+      key: string,
+      base: string,
+      ref: { file: string; frameWidth: number; frameHeight: number },
+    ) =>
+      this.load.spritesheet(key, `${base}/${ref.file}`, {
+        frameWidth: ref.frameWidth,
+        frameHeight: ref.frameHeight,
+      });
     sheet(`car:${chassis.id}:body`, manifests.carsBase, chassis.body);
     sheet(`car:${chassis.id}:shadow`, manifests.carsBase, chassis.shadow);
     sheet(`car:${chassis.id}:brake`, manifests.carsBase, chassis.brakeLights);
     sheet(`car:${chassis.id}:head`, manifests.carsBase, chassis.headlights);
-    sheet(`wheel:${loadout.tireKitId}`, manifests.carsBase, manifests.cars.wheels[loadout.tireKitId]!.sheet);
-    sheet(`engine:${loadout.engineId}`, manifests.carsBase, manifests.cars.engines[loadout.engineId]!.sheet);
-    for (const strip of Object.values(manifests.vfx.strips)) sheet(`vfx:${strip.id}`, manifests.vfxBase, strip);
-    for (const chunk of manifests.terrain.ground) this.load.image(`ground:${chunk.col}_${chunk.row}`, `${manifests.terrainBase}/${chunk.file}`);
-    for (const overlay of manifests.terrain.overlays) this.load.image(`over:${overlay.id}`, `${manifests.terrainBase}/${overlay.file}`);
-    for (const anim of manifests.terrain.animated) sheet(`anim:${anim.id}`, manifests.terrainBase, anim);
+    sheet(
+      `wheel:${loadout.tireKitId}`,
+      manifests.carsBase,
+      manifests.cars.wheels[loadout.tireKitId]!.sheet,
+    );
+    sheet(
+      `engine:${loadout.engineId}`,
+      manifests.carsBase,
+      manifests.cars.engines[loadout.engineId]!.sheet,
+    );
+    for (const strip of Object.values(manifests.vfx.strips))
+      sheet(`vfx:${strip.id}`, manifests.vfxBase, strip);
+    for (const chunk of manifests.terrain.ground)
+      this.load.image(`ground:${chunk.col}_${chunk.row}`, `${manifests.terrainBase}/${chunk.file}`);
+    for (const overlay of manifests.terrain.overlays)
+      this.load.image(`over:${overlay.id}`, `${manifests.terrainBase}/${overlay.file}`);
+    for (const anim of manifests.terrain.animated)
+      sheet(`anim:${anim.id}`, manifests.terrainBase, anim);
   }
 
   create(): void {
@@ -125,7 +152,10 @@ export class RaceScene extends Phaser.Scene {
     const overObjects: Phaser.GameObjects.GameObject[] = [];
 
     for (const chunk of manifests.terrain.ground) {
-      const image = this.add.image(chunk.x, chunk.y, `ground:${chunk.col}_${chunk.row}`).setOrigin(0, 0).setDepth(0);
+      const image = this.add
+        .image(chunk.x, chunk.y, `ground:${chunk.col}_${chunk.row}`)
+        .setOrigin(0, 0)
+        .setDepth(0);
       // A hair of overlap hides the seams that rotation would otherwise open between chunks.
       image.setDisplaySize(chunk.w + 0.6, chunk.h + 0.6);
       groundObjects.push(image);
@@ -134,15 +164,27 @@ export class RaceScene extends Phaser.Scene {
     for (const anim of manifests.terrain.animated) {
       const key = `anim:${anim.id}`;
       if (!this.anims.exists(key)) {
-        this.anims.create({ key, frames: this.anims.generateFrameNumbers(key, { start: 0, end: anim.frameCount - 1 }), frameRate: anim.fps, repeat: -1 });
+        this.anims.create({
+          key,
+          frames: this.anims.generateFrameNumbers(key, { start: 0, end: anim.frameCount - 1 }),
+          frameRate: anim.fps,
+          repeat: -1,
+        });
       }
-      const sprite = this.add.sprite(anim.x, anim.y, key).setOrigin(0, 0).setDepth(anim.above ? 60 : 8);
+      const sprite = this.add
+        .sprite(anim.x, anim.y, key)
+        .setOrigin(0, 0)
+        .setDepth(anim.above ? 60 : 8);
       if (anim.blend === 'add') sprite.setBlendMode(Phaser.BlendModes.ADD);
       sprite.play(key);
       (anim.above ? overObjects : groundObjects).push(sprite);
     }
 
-    this.cone = this.add.image(0, 0, 'vfx:headlight_cone').setOrigin(0.5, 1).setDepth(20).setBlendMode(Phaser.BlendModes.ADD);
+    this.cone = this.add
+      .image(0, 0, 'vfx:headlight_cone')
+      .setOrigin(0.5, 1)
+      .setDepth(20)
+      .setBlendMode(Phaser.BlendModes.ADD);
     groundObjects.push(this.cone);
 
     this.effects = new Effects(this, manifests.vfx);
@@ -156,15 +198,23 @@ export class RaceScene extends Phaser.Scene {
 
     const chassis = manifests.cars.chassis[loadout.chassisId]!;
     const paint = manifests.cars.paints[loadout.paintId];
-    const bodyKey = paint ? createPaintedBody(this, `car:${chassis.id}:body`, chassis, paint) : `car:${chassis.id}:body`;
-    this.car = new CarView(this, chassis, manifests.cars.wheels[loadout.tireKitId]!, manifests.cars.engines[loadout.engineId]!, {
-      body: bodyKey,
-      shadow: `car:${chassis.id}:shadow`,
-      brake: `car:${chassis.id}:brake`,
-      head: `car:${chassis.id}:head`,
-      wheels: `wheel:${loadout.tireKitId}`,
-      engine: `engine:${loadout.engineId}`,
-    });
+    const bodyKey = paint
+      ? createPaintedBody(this, `car:${chassis.id}:body`, chassis, paint)
+      : `car:${chassis.id}:body`;
+    this.car = new CarView(
+      this,
+      chassis,
+      manifests.cars.wheels[loadout.tireKitId]!,
+      manifests.cars.engines[loadout.engineId]!,
+      {
+        body: bodyKey,
+        shadow: `car:${chassis.id}:shadow`,
+        brake: `car:${chassis.id}:brake`,
+        head: `car:${chassis.id}:head`,
+        wheels: `wheel:${loadout.tireKitId}`,
+        engine: `engine:${loadout.engineId}`,
+      },
+    );
     const carObjects = this.car.objects();
 
     // Three passes: ground and effects rotate with the world, cars are drawn upright in view
@@ -262,7 +312,13 @@ export class RaceScene extends Phaser.Scene {
         const screenHeading = angleDelta(this.chase.heading, session.motion.headingRad);
         const control =
           this.cfg.autopilot && !input.touching
-            ? driveCenterline(session.track, session.motion, session.params, session.env, this.driverScratch)
+            ? driveCenterline(
+                session.track,
+                session.motion,
+                session.params,
+                session.env,
+                this.driverScratch,
+              )
             : input.sample(screenHeading);
         this.prev.x = this.curr.x;
         this.prev.y = this.curr.y;
@@ -271,7 +327,12 @@ export class RaceScene extends Phaser.Scene {
         this.outbox.push(sample);
         // An offline link answers synchronously inside sendInputs, so flush every tick there.
         const now = performance.now();
-        if (this.cfg.link.mode === 'offline' || this.outbox.length >= 2 || now - this.lastSendMs > 60) this.flush(now);
+        if (
+          this.cfg.link.mode === 'offline' ||
+          this.outbox.length >= 2 ||
+          now - this.lastSendMs > 60
+        )
+          this.flush(now);
         const m = session.motion;
         this.curr.x = m.x;
         this.curr.y = m.y;
@@ -285,11 +346,23 @@ export class RaceScene extends Phaser.Scene {
     this.predictor.decayError(dt);
     const x = lerp(this.prev.x, this.curr.x, alpha) + this.predictor.errorX;
     const y = lerp(this.prev.y, this.curr.y, alpha) + this.predictor.errorY;
-    const heading = this.prev.heading + angleDelta(this.prev.heading, this.curr.heading) * alpha + this.predictor.errorHeading;
+    const heading =
+      this.prev.heading +
+      angleDelta(this.prev.heading, this.curr.heading) * alpha +
+      this.predictor.errorHeading;
     const m = session.motion;
     const t = session.telemetry;
 
-    this.chase.update(dt, x, y, heading, m.velocityX, m.velocityY, settings.reducedCamera, settings.cameraShake);
+    this.chase.update(
+      dt,
+      x,
+      y,
+      heading,
+      m.velocityX,
+      m.velocityY,
+      settings.reducedCamera,
+      settings.cameraShake,
+    );
     this.applyCameras();
     this.effects.update(dt);
 
@@ -299,7 +372,8 @@ export class RaceScene extends Phaser.Scene {
     this.roll += dt * clamp(Math.abs(t.forwardSpeed) / 6, 0, 18) * Math.sign(t.forwardSpeed || 1);
     let shiftX = 0;
     let shiftY = 0;
-    if (speed > 90 && Math.abs(m.steeringInput) > 0.55) shiftX = -Math.sign(m.steeringInput) * (t.slipRatio > 0.55 ? 2 : 1);
+    if (speed > 90 && Math.abs(m.steeringInput) > 0.55)
+      shiftX = -Math.sign(m.steeringInput) * (t.slipRatio > 0.55 ? 2 : 1);
     if (racing && m.throttleFraction > 0.8 && speed < 110 && speed > 3) shiftY = 1;
     else if (m.brakeInput > 0.45 && speed > 40) shiftY = -1;
     else if (speed < 8 && Math.floor(this.time.now / 90) % 3 === 0) shiftY = 1;
@@ -316,7 +390,10 @@ export class RaceScene extends Phaser.Scene {
     this.chase.toView(x, y, this.view);
     const zoom = this.viewScale * this.chase.zoom;
     // Snap to device pixels so the upright sprite never shimmers while the world slides by.
-    this.car.setPosition(Math.round(this.view.x * zoom) / zoom, Math.round(this.view.y * zoom) / zoom);
+    this.car.setPosition(
+      Math.round(this.view.x * zoom) / zoom,
+      Math.round(this.view.y * zoom) / zoom,
+    );
 
     const fx = Math.sin(heading);
     const fy = -Math.cos(heading);
@@ -325,13 +402,20 @@ export class RaceScene extends Phaser.Scene {
 
     for (const { def, image } of this.overlays) {
       if (!def.fadeNearPlayer) continue;
-      const near = x > def.x - 26 && x < def.x + def.w + 26 && y > def.y - 26 && y < def.y + def.h + 26;
+      const near =
+        x > def.x - 26 && x < def.x + def.w + 26 && y > def.y - 26 && y < def.y + def.h + 26;
       const target = near ? 0.28 : 1;
       image.setAlpha(image.alpha + (target - image.alpha) * Math.min(1, dt * 9));
     }
 
     this.cfg.audio.setVolumes(settings.engineVolume, settings.effectsVolume, settings.muted);
-    this.cfg.audio.update(t.forwardSpeed, m.throttleFraction, t.slipRatio, NOMINAL_TOP_SPEED, !frozen && session.phase !== 'FINISHED');
+    this.cfg.audio.update(
+      t.forwardSpeed,
+      m.throttleFraction,
+      t.slipRatio,
+      NOMINAL_TOP_SPEED,
+      !frozen && session.phase !== 'FINISHED',
+    );
 
     this.watchPhase();
     this.fpsSmooth = this.fpsSmooth * 0.95 + (1 / Math.max(dt, 1e-3)) * 0.05;
@@ -392,9 +476,13 @@ export class RaceScene extends Phaser.Scene {
     if (sliding || braking || launching) {
       for (let i = 0; i < rear.length; i++) {
         const p = anchorToWorld(rear[i]!, m.x, m.y, m.headingRad);
-        if (sliding || braking || t.speed < 30) this.effects.skid(p.x, p.y, travel, sliding && t.slipRatio > 0.7);
+        if (sliding || braking || t.speed < 30)
+          this.effects.skid(p.x, p.y, travel, sliding && t.slipRatio > 0.7);
         const every = sliding ? 1 : 3;
-        if ((tick + i) % (every * rear.length > 2 ? 2 : every) === 0 || (sliding && (tick + i) % 2 === 0)) {
+        if (
+          (tick + i) % (every * rear.length > 2 ? 2 : every) === 0 ||
+          (sliding && (tick + i) % 2 === 0)
+        ) {
           this.effects.smoke(
             p.x + (rng() - 0.5) * 4,
             p.y + (rng() - 0.5) * 4,
@@ -444,15 +532,22 @@ export class RaceScene extends Phaser.Scene {
         this.chase.kick(1 + severity * 1.6, 0.11);
         this.cfg.audio.thump(severity);
       } else if (t.speed > 50 && tick % 2 === 0) {
-        this.effects.spark(cx, cy, m.velocityX * 0.5 - t.wallNormalX * 60 + (rng() - 0.5) * 60, m.velocityY * 0.5 - t.wallNormalY * 60 + (rng() - 0.5) * 60);
+        this.effects.spark(
+          cx,
+          cy,
+          m.velocityX * 0.5 - t.wallNormalX * 60 + (rng() - 0.5) * 60,
+          m.velocityY * 0.5 - t.wallNormalY * 60 + (rng() - 0.5) * 60,
+        );
       }
     }
   }
 
   private watchPhase(): void {
     const session = this.predictor.session;
-    const countdown = session.phase === 'COUNTDOWN' ? Math.ceil(session.countdownTicks * SIM_DT) : 0;
-    if (session.phase === 'COUNTDOWN' && countdown !== this.lastCountdown && countdown > 0) this.cfg.audio.beep(false);
+    const countdown =
+      session.phase === 'COUNTDOWN' ? Math.ceil(session.countdownTicks * SIM_DT) : 0;
+    if (session.phase === 'COUNTDOWN' && countdown !== this.lastCountdown && countdown > 0)
+      this.cfg.audio.beep(false);
     if (session.phase === 'RACING' && this.lastPhase === 'COUNTDOWN') {
       this.cfg.audio.beep(true);
       useHud.setState({ goStamp: useHud.getState().goStamp + 1 });

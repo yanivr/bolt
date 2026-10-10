@@ -33,7 +33,8 @@ export function resolveLoadout(loadout: VehicleLoadout): LoadoutCheck {
   if (!engine) return { ok: false, reason: 'UNKNOWN_PART', detail: loadout.engineId };
   const tires = own(TIRES, loadout.tireKitId);
   if (!tires) return { ok: false, reason: 'UNKNOWN_PART', detail: loadout.tireKitId };
-  if (!own(PAINTS, loadout.paintId)) return { ok: false, reason: 'UNKNOWN_PART', detail: loadout.paintId };
+  if (!own(PAINTS, loadout.paintId))
+    return { ok: false, reason: 'UNKNOWN_PART', detail: loadout.paintId };
   return {
     ok: true,
     params: deriveVehicleParams(chassis, engine, tires),

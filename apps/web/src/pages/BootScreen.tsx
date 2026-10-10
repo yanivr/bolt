@@ -20,13 +20,24 @@ export function BootScreen() {
       <Emblem scale={5} />
       {boot.stage === 'error' ? (
         <div className="panel boot-error" role="alert">
-          <p>{boot.kind === 'assets' ? STRINGS.loading.assetFailure : STRINGS.loading.rendererUnsupported}</p>
+          <p>
+            {boot.kind === 'assets'
+              ? STRINGS.loading.assetFailure
+              : STRINGS.loading.rendererUnsupported}
+          </p>
           <button className="btn btn-primary" onClick={() => window.location.reload()}>
             {STRINGS.loading.retry}
           </button>
         </div>
       ) : (
-        <div className="boot-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)} aria-label={label}>
+        <div
+          className="boot-progress"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(progress * 100)}
+          aria-label={label}
+        >
           <div className="boot-bar">
             <div className="boot-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
           </div>

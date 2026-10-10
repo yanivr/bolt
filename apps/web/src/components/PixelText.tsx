@@ -17,7 +17,14 @@ type Props = {
  * Draws a short headline in the BOLT 5x7 face on a canvas sized in whole cells and scaled with
  * nearest-neighbor, so every pixel stays square at any device pixel ratio.
  */
-export function PixelText({ text, scale = 2, color = '#F5EED9', shadow, className, decorative }: Props) {
+export function PixelText({
+  text,
+  scale = 2,
+  color = '#F5EED9',
+  shadow,
+  className,
+  decorative,
+}: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
   const pad = shadow ? 1 : 0;
   const width = Math.max(1, measurePixelText(text) + pad);
@@ -35,7 +42,8 @@ export function PixelText({ text, scale = 2, color = '#F5EED9', shadow, classNam
         const rows = glyphRows(char);
         for (let r = 0; r < GLYPH_HEIGHT; r++) {
           const row = rows[r]!;
-          for (let c = 0; c < GLYPH_WIDTH; c++) if (row[c] === '#') ctx.fillRect(x + c, oy + r, 1, 1);
+          for (let c = 0; c < GLYPH_WIDTH; c++)
+            if (row[c] === '#') ctx.fillRect(x + c, oy + r, 1, 1);
         }
         x += GLYPH_WIDTH + 1;
       }

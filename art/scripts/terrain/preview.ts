@@ -34,7 +34,14 @@ export function downscale(src: Canvas, factor: number): PixelBuffer {
   return out;
 }
 
-export function cropView(src: Canvas, cx: number, cy: number, vw: number, vh: number, scale: number): PixelBuffer {
+export function cropView(
+  src: Canvas,
+  cx: number,
+  cy: number,
+  vw: number,
+  vh: number,
+  scale: number,
+): PixelBuffer {
   const x = Math.max(0, Math.min(src.w - vw, Math.round(cx - vw / 2)));
   const y = Math.max(0, Math.min(src.h - vh, Math.round(cy - vh / 2)));
   const view = new PixelBuffer(vw, vh);
@@ -100,7 +107,12 @@ export function writePreviews(
     const y = Math.round(carSpot.y - 180);
     const view = ground.crop(x, y, 640, 360);
     drawStandInCar(view, 320, 180, carSpot.horizontal);
-    drawStandInCar(view, 320 + (carSpot.horizontal ? 90 : 60), 180 + (carSpot.horizontal ? 60 : 90), carSpot.horizontal);
+    drawStandInCar(
+      view,
+      320 + (carSpot.horizontal ? 90 : 60),
+      180 + (carSpot.horizontal ? 60 : 90),
+      carSpot.horizontal,
+    );
     writePng(join(dir, 'scale_check_car.png'), view.buf.scaled(2));
     written.push('scale_check_car.png');
   }

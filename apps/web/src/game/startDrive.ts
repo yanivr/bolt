@@ -37,7 +37,11 @@ const ALLOW_OFFLINE = import.meta.env.VITE_ALLOW_OFFLINE !== '0';
  * reached and offline driving is allowed, the same shared simulation runs in the page and the
  * HUD says so; it is never presented as a real race.
  */
-export async function startDrive(trackId: string, weatherPresetId: string, loadout: VehicleLoadout = DEFAULT_LOADOUT): Promise<DriveSetup | { error: DriveSetupError }> {
+export async function startDrive(
+  trackId: string,
+  weatherPresetId: string,
+  loadout: VehicleLoadout = DEFAULT_LOADOUT,
+): Promise<DriveSetup | { error: DriveSetupError }> {
   const track = runtimeFor(trackId);
   const env = environmentFor(weatherPresetId);
   const resolved = resolveLoadout(loadout);
@@ -50,7 +54,13 @@ export async function startDrive(trackId: string, weatherPresetId: string, loado
       if (!probe.versionOk) return { error: 'version' };
       try {
         const guest = await ensureGuest();
-        const link = await OnlineLink.join({ protocolVersion: PROTOCOL_VERSION, guestToken: guest.token, trackId, weatherPresetId, loadout });
+        const link = await OnlineLink.join({
+          protocolVersion: PROTOCOL_VERSION,
+          guestToken: guest.token,
+          trackId,
+          weatherPresetId,
+          loadout,
+        });
         return { link, session: predicted(), track, loadout };
       } catch (error) {
         if (error instanceof JoinError && error.reason === 'version') return { error: 'version' };
