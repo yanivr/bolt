@@ -1,6 +1,6 @@
 import { Client } from 'colyseus.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DEFAULT_LOADOUT } from '@bolt/content';
+import { BASELINE_BLUEPRINT } from '@bolt/content';
 import type { ApiError, GuestSessionResponse } from '@bolt/shared';
 import { PROTOCOL_VERSION, ROOM_DRIVE } from '@bolt/shared';
 import { InMemoryGuestStore } from '../../apps/server/src/persistence/guestStore.js';
@@ -83,7 +83,7 @@ describe('internal failures', () => {
         guestToken: guest.token,
         trackId: 'city_01',
         weatherPresetId: 'city_clear_night',
-        loadout: DEFAULT_LOADOUT,
+        blueprint: BASELINE_BLUEPRINT,
       })
       .then(
         () => undefined,
@@ -112,7 +112,7 @@ describe('internal failures', () => {
       guestToken: guest.token,
       trackId: 'city_01',
       weatherPresetId: 'city_clear_night',
-      loadout: DEFAULT_LOADOUT,
+      blueprint: BASELINE_BLUEPRINT,
     });
     await room.leave();
     await fetch(`${ctx.url}/matchmake/joinOrCreate/drive?guestToken=${guest.token}`, {

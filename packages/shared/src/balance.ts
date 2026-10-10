@@ -12,6 +12,27 @@ export const INPUT_PACKET_HZ = 20;
 
 /** Race budget and limits from the product invariants. */
 export const STARTING_CREDITS = 1000;
+
+// --- Construction rules (Sections 6, 8.3, 11.5, 11.7) ------------------------------------------
+
+/** No car may carry more offensive modules than this, whatever its mounts allow. */
+export const MAX_OFFENSIVE_MODULES = 6;
+/** Fire buttons on the HUD: primary and secondary. */
+export const MAX_MANUAL_WEAPONS = 2;
+/** Spare wheels plus repair kits. */
+export const MAX_REPAIR_UNITS = 3;
+/** Parts and wheels must keep this much air between them, in world pixels. */
+export const PART_CLEARANCE_PX = 2;
+/** Keep-out box around every wheel anchor: the standard wheel well, whatever kit is fitted. */
+export const WHEEL_WELL = { w: 8, h: 14 } as const;
+/** Blueprint offsets snap to this grid, in world pixels. */
+export const OFFSET_GRID_PX = 1;
+/** Upper bounds on an untrusted blueprint payload. */
+export const MAX_BLUEPRINT_PARTS = 24;
+export const MAX_BLUEPRINT_NAME_LENGTH = 24;
+export const MAX_BLUEPRINT_BYTES = 8192;
+/** Garage undo and redo depth (Section 6.6). */
+export const MAX_GARAGE_HISTORY = 20;
 export const BUILD_SECONDS = 60;
 export const RACE_LIMIT_SECONDS = 180;
 export const FINISH_WINDOW_SECONDS = 8;
@@ -228,6 +249,98 @@ export const WALL_SCRAPE_FULL_SPEED = 190;
 export const WALL_FRICTION_DECEL = 55;
 export const WALL_GRACE_SECONDS = 0.35;
 
+// --- Heat and energy (Section 6.5) ------------------------------------------------------------
+
+/** Power units per second every chassis generates, and the energy its battery stores. */
+export const BASE_GENERATION = 10;
+export const BASE_BATTERY = 40;
+/** Cooling rate at racing speed in clear weather with the core at its reference heat. */
+export const BASE_COOLING = 8;
+export const HEAT_WARNING = 70;
+export const HEAT_PERFORMANCE = 90;
+export const HEAT_PROTECTION = 110;
+export const HEAT_RECOVERY = 75;
+/** Engine output lost at and beyond the protection threshold. Never more than this. */
+export const THERMAL_PENALTY_MAX = 0.35;
+/**
+ * Cooling grows with core heat, as it does for anything hot in moving air:
+ * `shed = capacity * weather * airflow * (HEAT_SHED_BASE + heat / HEAT_SHED_SCALE)`.
+ * With these values a car that produces exactly its capacity settles at 45, and one that
+ * produces 1.6 times its capacity settles on the performance threshold of 90.
+ */
+export const HEAT_SHED_BASE = 0.4;
+export const HEAT_SHED_SCALE = 75;
+/** Share of cooling still available at a standstill; the rest needs airflow. */
+export const AIRFLOW_STILL = 0.6;
+/** Speed, world px/s, at which airflow is complete. */
+export const AIRFLOW_FULL_SPEED = 170;
+/** Share of full-throttle heat a combustion engine makes at idle. */
+export const ENGINE_IDLE_HEAT = 0.2;
+/** Throttle below which partial-load heat factors apply (Hybrid). */
+export const PARTIAL_LOAD_THROTTLE = 0.7;
+/** After an electrical overload the drivetrain keeps at least this share of rated output. */
+export const DRIVETRAIN_MIN_SUPPLY = 0.55;
+
+// --- Load and stability (Sections 6.2 and 6.5) -------------------------------------------------
+
+/** Mass of the default car, the reference for mass-dependent handling terms. */
+export const REFERENCE_MASS_KG = 393;
+/** At the maximum safe load a car has lost this share of drive force and braking. */
+export const OVERLOAD_FORCE_LOSS = 0.18;
+export const OVERLOAD_BRAKE_LOSS = 0.25;
+/** And makes this much more engine heat. */
+export const OVERLOAD_HEAT_GAIN = 0.12;
+/** Braking fades gently with total mass: factor = (reference / mass) ^ exponent, bounded. */
+export const BRAKE_MASS_EXPONENT = 0.3;
+export const BRAKE_MASS_MIN = 0.75;
+export const BRAKE_MASS_MAX = 1.1;
+
+export const STABILITY_MIN = 10;
+export const STABILITY_MAX = 100;
+/** Wheelbase and track width, world pixels, at which the geometry penalty reaches zero. */
+export const STABILITY_REF_WHEELBASE = 50;
+export const STABILITY_REF_TRACK = 46;
+export const STABILITY_WHEELBASE_WEIGHT = 30;
+export const STABILITY_TRACK_WEIGHT = 40;
+/** Points lost per unit of lateral centre-of-mass offset, as a share of half the track. */
+export const STABILITY_LATERAL_WEIGHT = 110;
+export const STABILITY_LATERAL_MAX = 40;
+/** Fore-aft imbalance beyond this share of half the wheelbase starts to cost points. */
+export const STABILITY_LONGITUDINAL_FREE = 0.3;
+export const STABILITY_LONGITUDINAL_WEIGHT = 50;
+export const STABILITY_LONGITUDINAL_MAX = 22;
+/** Points lost per unit of mass-weighted attachment height. */
+export const STABILITY_HEIGHT_WEIGHT = 60;
+export const STABILITY_HEIGHT_MAX = 30;
+/** Points gained per unit of tire grip above the street baseline. */
+export const STABILITY_TIRE_WEIGHT = 15;
+/** Points gained per unit of yaw response given up (slow-steering frames are calmer). */
+export const STABILITY_YAW_WEIGHT = 20;
+/** Fully below its threshold a car loses these shares of grip, slide grip and self-aligning. */
+export const UNSTABLE_GRIP_LOSS = 0.3;
+export const UNSTABLE_RECOVERY_LOSS = 0.25;
+export const UNSTABLE_ALIGN_LOSS = 0.35;
+/** Speed at which downforce is quoted, world px/s. */
+export const DOWNFORCE_REF_SPEED = 250;
+/** Paved surfaces, where road speed limits and bonuses apply. */
+export const ROAD_SURFACES: readonly SurfaceId[] = ['asphalt', 'cobble', 'metal'];
+export const LOOSE_SURFACES: readonly SurfaceId[] = ['sand', 'dirt', 'mud', 'snow'];
+/** Weather in which a solar panel sees the sun: output share by weather. */
+export const SOLAR_WEATHER: Record<WeatherId, number> = {
+  clear: 1,
+  rain: 0.3,
+  heavy_rain: 0.15,
+  sandstorm: 0.25,
+  dry_heat: 1,
+  snowfall: 0.3,
+  clear_frost: 1,
+};
+export const SOLAR_TIME: Record<'day' | 'dusk' | 'night', number> = {
+  day: 1,
+  dusk: 0.45,
+  night: 0.1,
+};
+
 // --- Checkpoints and race rules ---------------------------------------------------------------
 
 export const WRONG_WAY_SECONDS = 1.2;
@@ -284,7 +397,7 @@ export const DIRECTION_REVERSE_SPEED = 30;
 
 // --- Network ----------------------------------------------------------------------------------
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 export const MAX_QUEUED_INPUTS = 8;
 export const MAX_INPUTS_PER_PACKET = 6;
 export const REMOTE_INTERP_DELAY_MS = 120;

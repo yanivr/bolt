@@ -35,8 +35,8 @@ import {
   asJoinError,
   joinError,
   parseJoinOptions,
+  resolveCar,
   resolveCourse,
-  resolveParams,
 } from './driveJoin.js';
 import { InputPacer } from './inputPacer.js';
 import { DriveState, writeDriveState } from './schema.js';
@@ -146,13 +146,15 @@ export function createDriveRoom(deps: DriveRoomDeps): new () => Room<DriveState>
         const guest = await deps.guests.authenticate(join.guestToken);
         if (!guest) throw joinError('UNAUTHORIZED');
         resolveCourse(join.trackId, join.weatherPresetId);
-        resolveParams(join.loadout);
+        // Validates the whole build against the server's catalog. The canonical blueprint
+        // it returns, not the one the client sent, is what the room goes on to use.
+        const car = resolveCar(join.blueprint, join.trackId, join.weatherPresetId);
         if (deps.roomCount() >= deps.maxRooms) throw joinError('SERVER_FULL');
         return {
           guestId: guest.guestId,
           trackId: join.trackId,
           weatherPresetId: join.weatherPresetId,
-          loadout: join.loadout,
+          blueprint: car.blueprint,
         };
       } catch (error) {
         throw asJoinError(error, (cause) => deps.logger.error('join_failed', errorFields(cause)));
@@ -221,14 +223,22 @@ export function createDriveRoom(deps: DriveRoomDeps): new () => Room<DriveState>
         throw joinError('BAD_REQUEST');
       }
       const course = resolveCourse(auth.trackId, auth.weatherPresetId);
-      const params = resolveParams(auth.loadout);
-      const session = createDriveSession(this.track, course.env, params, this.players.size);
+      // Derived again from the blueprint on arrival: totals, mass and coefficients are never
+      // carried across the seat reservation, let alone taken from the client.
+      const car = resolveCar(auth.blueprint, auth.trackId, auth.weatherPresetId);
+      const session = createDriveSession(this.track, course.env, car.params, this.players.size);
       const player = new DrivePlayer(auth.guestId, session);
       this.players.set(client.sessionId, player);
+      this.state.buildHash = car.buildHash;
       // The opening phase reaches the client with its first state snapshot. MATCH_PHASE is
       // only sent for later changes, since nothing can be listening for it this early.
       writeDriveState(this.state, session, player.inputs.ackSequence);
-      this.log.info('player_joined', { guestId: auth.guestId, sessionId: client.sessionId });
+      this.log.info('player_joined', {
+        guestId: auth.guestId,
+        sessionId: client.sessionId,
+        buildHash: car.buildHash,
+        totalCost: car.totalCost,
+      });
     }
 
     override async onLeave(client: Client<unknown, DriveAuth>, consented?: boolean): Promise<void> {

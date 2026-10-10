@@ -230,3 +230,102 @@ thresholds in `tests/feel/*.test.ts` are the working definition of "smooth" and 
 36. **Protocol version 2, catalog 0.2.0.** The wire format did not change, but the simulation
     did, and a cached old client predicting old physics against a new server would be
     corrected on every snapshot. Bumping the protocol version sends it to the reload screen.
+
+## Milestone B, data and rules (October 10, 2026)
+
+The specification fixes ids, names, prices and masses and describes behaviour in words. The
+numbers below it are ours. Every one is a seed value for balance testing (Section 11.1), lives
+in catalog data or `packages/shared/src/balance.ts`, and can change without touching code.
+`docs/GARAGE_API.md` is the reference for the functions and geometry.
+
+37. **Load is installed mass.** Engine, wheel kit and mounted parts count against
+    `recommendedLoadKg` and `maxLoadKg`; the chassis' own mass does not. Otherwise the Section
+    11.2 limits could not be met by the bare baseline on several frames. Above recommended the
+    car loses up to 18% drive force and 25% braking and gains up to 12% engine heat, in
+    proportion to how far it is toward the maximum (Section 6.5 says performance falls, not
+    by how much).
+38. **A wheel kit is priced and weighed per four wheels.** The table price is a set of four;
+    three-wheel and six-wheel frames pay and carry `wheelCount / 4` of it, rounded. The Trike
+    is therefore cheaper to shoe and the Spider and Six-Wheeler dearer.
+39. **Mount geometry.** Chassis-local pixels, front at negative Y. Each mount has a centre, a
+    maximum footprint and a region for offsets. Parts keep 2 px clear of each other and of an
+    8 x 14 wheel well at every anchor, the same for every wheel kit, so swapping tires can
+    never make a legal car illegal. Offsets are whole pixels. Rotation is quarter turns and
+    each mount lists the turns it allows (a left mount cannot fire across the cabin).
+40. **The engine sits inside the body.** It is not part of the overlap check and any engine
+    fits any chassis. Section 6.4 gives every frame an engine mount and no engine a size
+    class, so there was nothing to refuse on. Mounted parts may sit above the engine bay.
+41. **Mount lists per chassis** follow the Section 11.2 text. Where it only says "balanced" or
+    "many", we laid out mounts to fit the body bounds, mirrored left to right, clear of the
+    wheels. The Beetle, Arrow, Turtle and Spider keep their Milestone A wheel anchors, body
+    bounds and engine bay. Racks (Wagon, Pickup cargo) hold two small `shared` parts.
+    `UNIVERSAL` mounts take any accessory; the Horseshoe cavity takes any weapon.
+42. **Armor limit.** Section 5.5 names a class limit without a number. It is 45% of the
+    chassis maximum load, 15% lower on the Buggy ("armor capacity is 15% lower") and 27% on
+    the Needle with a single armor mount ("armor mounts are severely limited").
+43. **Passive effects are typed modifier primitives** (Section 11.8) on each part, summed by
+    `aggregateModifiers`. Active effects are declared as primitive data (`actions`) and flat
+    `params` now; Milestone C executes them. No part has bespoke code.
+44. **Invented part numbers.** The catalog tables give price and mass only for engines and
+    tires, and for accessories the text gives some figures and leaves others open. We chose:
+    engine force index, torque curve shape, heat and electrical draw; tire grip per surface
+    from the Section 11.4 descriptions; every accessory's energy per use, heat per use,
+    cooldown, charges, footprint and mount categories wherever the text is silent. Figures
+    the text does state (damage, percentages, durations, charges) are used as written.
+45. **Engine characters** are data on the torque curve plus four small runtime states in the
+    authoritative step: spool (turbo, jet), charge (spring, flywheel), a clock (pulse jet,
+    rocket burst) and burst. They are part of the snapshot so prediction replays them.
+46. **Heat model.** Heat rises by engine heat times throttle (20% at idle) plus parts, and is
+    shed at `cooling x weather x airflow x (0.4 + heat / 75)`, airflow rising from 0.6 at
+    rest to 1 at 170 px/s. Warning at 70, performance loss from 90 growing to 35% at 110,
+    protection at 110 until the car cools to 75 (Section 5.4 names the three stages; the
+    numbers are ours). Base cooling 8 per second.
+47. **Energy model.** Base generation 10 per second and a 40 unit battery. The electric
+    drivetrain is served first and always gets at least 55% of its demand, so a short car
+    slows down and never stops; other consumers are served by priority and the HUD reports
+    low power. Solar output scales with time of day (1, 0.45, 0.1) and weather.
+48. **Indicators.** Energy is peak sustained draw over generation; Heat is sustained
+    production over cooling at the performance threshold; both show their limit at mid-bar.
+    Stability is the Section 6.5 formula with weights in `balance.ts`, clamped 10 to 100.
+    The threshold is 55 (62 on the Trike, 50 on the Turtle, Spider, Brick and Twins).
+49. **Instability costs cornering grip**, up to 30% at the bottom of the scale, and that loss
+    applies to the steering limit as well as the tire limit. Applying it to the tires alone
+    left an unstable car asking for more turn than it could hold, which felt twitchy, not
+    loose.
+50. **Scores** are measured, not hand-set: Speed runs the real powertrain flat out over the
+    track's surface mix; Control is grip, stability, braking and yaw; Defense is effective
+    hit points; Firepower and Utility saturate (`1 - exp(-x / k)`) so a sixth weapon adds
+    less than the first. Formulas are in `docs/GARAGE_API.md`.
+51. **Adaptive Tires** read "partial bonus on every terrain" as one fifth of the best
+    specialist tire's advantage on each surface and in the wet, powered. The first reading
+    (close a share of the gap to asphalt) beat Ice Spikes on ice.
+52. **"Wet" includes snowfall** for parts whose text says wet weather; frost without snow is
+    cold, not wet.
+53. **Default engine per chassis.** `baselineBlueprint` gives five frames an engine other
+    than the Four-Cylinder where the standard one leaves the frame undriveable or off
+    character (the Trike gets the Mini Electric; the Brick, Rammer, Twins and Platform get the V6).
+54. **Fire buttons.** Manual weapons need one of two buttons; hybrids take a button or auto
+    mode; automatics take neither. A manual weapon without a button is legal but inactive,
+    with a warning. Installing takes the first free button. Manual utilities are not on
+    these buttons; they are activated by instance in Milestone C.
+55. **Edits are refused only when they make things worse.** An edit must not add an error
+    the draft did not have, nor deepen a budget or weight overrun. This keeps the 1,000
+    credit rule exact and still lets a player repair an imported illegal build step by step.
+56. **Build hash** is our own SHA-256 in TypeScript (no dependency was allowed, and Web
+    Crypto is asynchronous and absent on insecure origins). It covers mechanical fields only,
+    in canonical order. Checked against the published test vectors and Node's implementation.
+57. **Join carries a blueprint.** Protocol version 3, catalog 0.3.0. The drive room validates
+    the blueprint with the same function the garage uses and refuses with `ILLEGAL_BUILD`,
+    `UNKNOWN_PART` or `CATALOG_MISMATCH`. The snapshot gained heat, battery, engine state,
+    wheel integrity and the build hash. A saved Milestone A loadout is migrated on first load.
+58. **Sprites that do not exist yet.** The picker offers only chassis with art. An engine or
+    wheel kit without art is drawn with the Four-Cylinder or Street Tires sheet, for drawing
+    only; physics, validation and the hash use the real part. Mounted parts are not drawn.
+    `SPRITES_PENDING` in `tests/unit/assets.test.ts` lists what is owed and fails when the
+    atlas and the list disagree. The car atlas manifest gained an optional `parts` record.
+59. **Handling limits for the Trike and Drifter.** The handling bench holds eighteen frames
+    to the Milestone A limits. The Trike and Drifter are specified as loose ("less stable
+    during sharp turns", "controlled lateral motion") and use wider limits for slip and
+    overshoot. The default Beetle's numbers are unchanged from 0.2.0.
+60. **HUD.** No player-facing HUD was added for heat or power; that belongs to the HUD work.
+    The debug readout shows both so the model can be watched while driving.

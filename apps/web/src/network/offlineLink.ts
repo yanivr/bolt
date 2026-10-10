@@ -1,5 +1,5 @@
 import type { CarSnapshot, DriveSession, InputSample, RaceEvent } from '@bolt/shared';
-import { countdownSeconds, raceTimeMs, resetDriveSession, stepDriveSession } from '@bolt/shared';
+import { raceTimeMs, resetDriveSession, sessionSnapshot, stepDriveSession } from '@bolt/shared';
 import type { DriveLink, LinkStatus } from './link.js';
 
 /**
@@ -16,7 +16,10 @@ export class OfflineLink implements DriveLink {
   private ack = -1;
   private eventId = 0;
 
-  constructor(private readonly session: DriveSession) {}
+  constructor(
+    private readonly session: DriveSession,
+    private readonly buildHash = '',
+  ) {}
 
   sendInputs(samples: InputSample[]): void {
     for (const sample of samples) {
@@ -63,18 +66,6 @@ export class OfflineLink implements DriveLink {
   }
 
   private snapshot(): CarSnapshot {
-    const s = this.session;
-    return {
-      tick: s.tick,
-      ackSequence: this.ack,
-      raceTimeMs: raceTimeMs(s),
-      phase: s.phase,
-      countdown: countdownSeconds(s),
-      countdownTicks: s.phase === 'COUNTDOWN' ? Math.max(0, s.countdownTicks) : 0,
-      motion: { ...s.motion },
-      progress: { ...s.progress },
-      bestLapMs: s.bestLapMs,
-      lastLapMs: s.lastLapMs,
-    };
+    return sessionSnapshot(this.session, this.ack, this.buildHash);
   }
 }

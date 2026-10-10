@@ -121,6 +121,16 @@ export type EngineSpriteManifest = {
   exhaustStyle: 'puff' | 'flame' | 'none';
 };
 
+/**
+ * A mounted weapon, defense or utility. One frame per heading, packed row by row like a
+ * chassis, sized to hold the part's catalog footprint at every heading. Drawn at the part's
+ * position on the chassis (mount plus offset), turned by its quarter-turn rotation.
+ */
+export type PartSpriteManifest = {
+  id: string;
+  sheet: SpriteSheetRef;
+};
+
 export type PaintDefinition = { id: string; displayName: string; ramp: string[] };
 
 export type CarAtlasManifest = {
@@ -128,6 +138,8 @@ export type CarAtlasManifest = {
   chassis: Record<string, ChassisSpriteManifest>;
   wheels: Record<string, WheelSpriteManifest>;
   engines: Record<string, EngineSpriteManifest>;
+  /** Mounted parts. Absent until the first accessory sprites are baked. */
+  parts?: Record<string, PartSpriteManifest>;
   paints: Record<string, PaintDefinition>;
 };
 

@@ -11,7 +11,7 @@ import { paintLandmarks, planLandmarks } from './landmarks.js';
 import { buildLayout } from './layout.js';
 import type { Lot } from './layout.js';
 import { buildOverlays } from './overlays.js';
-import { litNight, shadeNight } from './palette.js';
+import { litNight, shadeNight, shadeRoad, shadeRoadDeep } from './palette.js';
 import { paintBarrier, paintRoad, placeChevrons, planRoad } from './road.js';
 import { paintStreet } from './street.js';
 
@@ -64,8 +64,27 @@ export function paintCity(ctx: BakeContext): BiomeOutput {
   buildOverlays(ctx, scene, landmarks.sites, plan.hairpins);
 
   // Light the ground, then stand the scene on it.
+  // Every mass is known now: cast the shadow volume and let the solids paint themselves.
+  scene.resolve();
   const shadow = castShadows(field.w, field.h, scene.shadowH, 12, scene.forced);
-  applyShadows(world, shadow, shadeNight);
+  // Buildings shade the ground too. Shadow levels: 1 behind the barriers, 2 a building's
+  // shadow across drivable ground (a gentle step), 3 the shadow of something standing over the
+  // road (deeper, but never below the darkest pavement tone).
+  const SHADOW_GROUND = 1;
+  const SHADOW_ROAD = 2;
+  const SHADOW_ROAD_DEEP = 3;
+  for (let p = 0; p < field.w * field.h; p++) {
+    if (scene.drive[p]) {
+      if (shadow[p]) shadow[p] = SHADOW_ROAD_DEEP;
+      else if (scene.shade[p]! > 0) shadow[p] = SHADOW_ROAD;
+    } else if (scene.shade[p]! > 0) shadow[p] = SHADOW_GROUND;
+  }
+  // Contact line: the ground right against the foot of a west wall is always dark.
+  for (let p = 0; p < field.w * field.h - 2; p++) {
+    if (scene.height[p]! > 0 || scene.drive[p]) continue;
+    if (scene.height[p + 1]! > 0 || scene.height[p + 2]! > 0) shadow[p] = SHADOW_GROUND;
+  }
+  applyShadows(world, shadow, [shadeNight, shadeRoad, shadeRoadDeep]);
   const planes = accumulatePools(field.w, field.h, pools);
   applyLight(world, planes, litNight);
   // Independent proof that nothing raised hides the road: remember the lit flat ground, paint

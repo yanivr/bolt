@@ -1,8 +1,18 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { CHASSIS, CITY_01, ENGINES, PAINTS, TIRES } from '@bolt/content';
+import { CATALOG, CHASSIS, CITY_01, PAINTS, TEMPLATES, baselineBlueprint } from '@bolt/content';
 import type { CarAtlasManifest, SpriteSheetRef, TerrainManifest, VfxManifest } from '@bolt/shared';
-import { CAR_HEADINGS, CAR_SHEET_COLUMNS, WHEEL_HEADINGS } from '@bolt/shared';
+import {
+  CAR_HEADINGS,
+  CAR_SHEET_COLUMNS,
+  FALLBACK_ENGINE_SPRITE,
+  FALLBACK_TIRE_SPRITE,
+  WHEEL_HEADINGS,
+  buildHash,
+  drawableChassisIds,
+  partsWithoutSprites,
+  resolveCarSprites,
+} from '@bolt/shared';
 import { describe, expect, it } from 'vitest';
 import { PixelBuffer, decodePng, encodePng, readPng } from '../../art/scripts/lib/pixels.js';
 
@@ -63,12 +73,211 @@ describe('PNG codec', () => {
   });
 });
 
+/**
+ * Catalog parts that have no sprite sheet in the car atlas yet. The rules, the server and the
+ * simulation know all 120 parts; the artists are still drawing most of them. This list is
+ * the outstanding work, id by id, and the test below fails the moment it disagrees with the
+ * atlas in either direction: a part gains art and must be removed from here, or a part is
+ * listed that already has art, or a part is missing art without being listed. It must shrink
+ * to empty before launch. Nothing here is drawn with a made-up sprite: a chassis on this list
+ * cannot be picked, and an engine or wheel kit on it is drawn with the default one.
+ */
+export const SPRITES_PENDING: readonly string[] = [
+  // Chassis: 16 of 20.
+  'chassis_needle',
+  'chassis_crab',
+  'chassis_cobra',
+  'chassis_scorpion',
+  'chassis_buggy',
+  'chassis_chameleon',
+  'chassis_brick',
+  'chassis_trike',
+  'chassis_wagon',
+  'chassis_rammer',
+  'chassis_drifter',
+  'chassis_kangaroo',
+  'chassis_horseshoe',
+  'chassis_pickup',
+  'chassis_twins',
+  'chassis_platform',
+  // Engines: 19 of 20.
+  'engine_mini_electric',
+  'engine_v6',
+  'engine_v8',
+  'engine_v12',
+  'engine_small_turbo',
+  'engine_twin_turbo',
+  'engine_supercharger',
+  'engine_diesel',
+  'engine_electric_sport',
+  'engine_electric_eco',
+  'engine_hybrid',
+  'engine_rotary',
+  'engine_turbine',
+  'engine_rocket',
+  'engine_twin',
+  'engine_spring',
+  'engine_offroad',
+  'engine_resilient',
+  'engine_experimental',
+  // Wheel kits: 19 of 20.
+  'tires_slick',
+  'tires_rain',
+  'tires_sand',
+  'tires_mud',
+  'tires_snow',
+  'tires_ice',
+  'tires_soft',
+  'tires_hard',
+  'tires_drift',
+  'tires_armored',
+  'tires_solid',
+  'tires_balloon',
+  'tires_monster',
+  'tires_micro',
+  'tires_halftrack',
+  'tires_track',
+  'tires_magnetic',
+  'tires_adaptive',
+  'tires_blades',
+  // Weapons: 20 of 20.
+  'weapon_front_mg',
+  'weapon_rear_mg',
+  'weapon_turret',
+  'weapon_shotgun',
+  'weapon_railshot',
+  'weapon_rocket',
+  'weapon_homing',
+  'weapon_mine',
+  'weapon_oil',
+  'weapon_foam',
+  'weapon_emp',
+  'weapon_tesla',
+  'weapon_flame',
+  'weapon_frost',
+  'weapon_hammer',
+  'weapon_saw',
+  'weapon_harpoon',
+  'weapon_air',
+  'weapon_boomerang',
+  'weapon_mortar',
+  // Defenses: 20 of 20.
+  'defense_light_plate',
+  'defense_heavy_plate',
+  'defense_front_bumper',
+  'defense_rear_bumper',
+  'defense_side_panels',
+  'defense_wheel_cage',
+  'defense_engine_case',
+  'defense_ceramic',
+  'defense_breakaway',
+  'defense_composite',
+  'defense_energy_shield',
+  'defense_faraday',
+  'defense_heatguard',
+  'defense_antimissile',
+  'defense_minesweeper',
+  'defense_fireproof',
+  'defense_oilproof',
+  'defense_damper',
+  'defense_steer_assist',
+  'defense_reactive',
+  // Utilities: 20 of 20.
+  'utility_spare',
+  'utility_repair',
+  'utility_fan',
+  'utility_radiator',
+  'utility_battery',
+  'utility_generator',
+  'utility_capacitor',
+  'utility_nitro',
+  'utility_overdrive',
+  'utility_traction',
+  'utility_gyro',
+  'utility_radar',
+  'utility_minesensor',
+  'utility_decoy',
+  'utility_jump',
+  'utility_winch',
+  'utility_ballast',
+  'utility_spoiler',
+  'utility_targeting',
+  'utility_solar',
+];
+
 describe('car atlases match the catalog', () => {
-  it('has sprites for every shipped chassis, engine, wheel kit and paint', () => {
-    for (const id of Object.keys(CHASSIS)) expect(cars.chassis[id], id).toBeDefined();
-    for (const id of Object.keys(ENGINES)) expect(cars.engines[id], id).toBeDefined();
-    for (const id of Object.keys(TIRES)) expect(cars.wheels[id], id).toBeDefined();
+  it('has a sprite sheet for every catalog part that is not on SPRITES_PENDING, and for none that is', () => {
+    const missing = partsWithoutSprites(cars, CATALOG);
+    // Exactly the pending list: nothing silently missing, nothing listed that has arrived.
+    expect([...missing].sort()).toEqual([...SPRITES_PENDING].sort());
+    expect(new Set(SPRITES_PENDING).size).toBe(SPRITES_PENDING.length);
+    // Every id on the list is a real catalog part.
+    const known = new Set([
+      ...Object.keys(CATALOG.chassis),
+      ...Object.keys(CATALOG.engines),
+      ...Object.keys(CATALOG.tires),
+      ...Object.keys(CATALOG.parts),
+    ]);
+    for (const id of SPRITES_PENDING) expect(known.has(id), id).toBe(true);
+    // The count of finished parts can only go up. Raise this number as art lands.
+    expect(120 - SPRITES_PENDING.length).toBeGreaterThanOrEqual(6);
+    // Paints are complete.
     for (const id of Object.keys(PAINTS)) expect(cars.paints[id], id).toBeDefined();
+    // The atlas holds nothing the catalog does not know.
+    for (const id of Object.keys(cars.chassis)) expect(CATALOG.chassis[id], id).toBeDefined();
+    for (const id of Object.keys(cars.engines)) expect(CATALOG.engines[id], id).toBeDefined();
+    for (const id of Object.keys(cars.wheels)) expect(CATALOG.tires[id], id).toBeDefined();
+    for (const id of Object.keys(cars.parts ?? {})) expect(CATALOG.parts[id], id).toBeDefined();
+  });
+
+  it('always has the default car and the stand-in sprites the fallback relies on', () => {
+    expect(cars.chassis.chassis_beetle).toBeDefined();
+    expect(cars.engines[FALLBACK_ENGINE_SPRITE]).toBeDefined();
+    expect(cars.wheels[FALLBACK_TIRE_SPRITE]).toBeDefined();
+    expect(SPRITES_PENDING).not.toContain('chassis_beetle');
+    expect(SPRITES_PENDING).not.toContain(FALLBACK_ENGINE_SPRITE);
+    expect(SPRITES_PENDING).not.toContain(FALLBACK_TIRE_SPRITE);
+  });
+
+  it('offers only chassis with art in the picker, and draws stand-ins for drawing only', () => {
+    const drawable = drawableChassisIds(cars, CATALOG);
+    expect(drawable).toEqual(Object.keys(CATALOG.chassis).filter((id) => !SPRITES_PENDING.includes(id)));
+    expect(drawable).toContain('chassis_beetle');
+    for (const id of drawable) {
+      // The picker's car for each drawable chassis resolves to sheets that exist.
+      const blueprint = baselineBlueprint({ chassisId: id });
+      const sprites = resolveCarSprites(cars, blueprint);
+      expect(sprites.loadout, id).not.toBeNull();
+      expect(cars.chassis[sprites.loadout!.chassisId]).toBeDefined();
+      expect(cars.engines[sprites.loadout!.engineId]).toBeDefined();
+      expect(cars.wheels[sprites.loadout!.tireKitId]).toBeDefined();
+      expect(cars.paints[sprites.loadout!.paintId]).toBeDefined();
+    }
+    // A part without art is replaced for drawing and reported; the blueprint is untouched.
+    const rocket = TEMPLATES.find((t) => t.id === 'example_straight_line_rocket')!.blueprint;
+    const before = buildHash(rocket);
+    const frozen = JSON.stringify(rocket);
+    const shown = resolveCarSprites(cars, rocket);
+    expect(JSON.stringify(rocket)).toBe(frozen);
+    expect(buildHash(rocket)).toBe(before);
+    if (SPRITES_PENDING.includes('chassis_arrow')) expect(shown.loadout).toBeNull();
+    else {
+      const expectId = (own: string, fallback: string) => (SPRITES_PENDING.includes(own) ? fallback : own);
+      expect(shown.loadout).toEqual({
+        chassisId: 'chassis_arrow',
+        engineId: expectId('engine_v8', FALLBACK_ENGINE_SPRITE),
+        tireKitId: expectId('tires_slick', FALLBACK_TIRE_SPRITE),
+        paintId: rocket.paintId,
+      });
+      expect(shown.substituted).toEqual(['engine_v8', 'tires_slick'].filter((id) => SPRITES_PENDING.includes(id)));
+    }
+    // A chassis without art has no stand-in: it cannot be drawn, so it cannot be picked.
+    for (const id of SPRITES_PENDING.filter((p) => p.startsWith('chassis_'))) {
+      expect(resolveCarSprites(cars, baselineBlueprint({ chassisId: id })).loadout, id).toBeNull();
+      expect(drawable).not.toContain(id);
+    }
+    // An unknown paint falls back to the default paint, never to an undefined ramp.
+    expect(resolveCarSprites(cars, { ...baselineBlueprint(), paintId: 'paint_missing' }).loadout!.paintId).toBe('paint_signal');
   });
 
   it.each(Object.values(cars.chassis))(

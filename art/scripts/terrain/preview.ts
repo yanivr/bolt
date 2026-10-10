@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { PixelBuffer, readPng, writePng } from '../lib/pixels.js';
 import type { PreviewSpot } from './biome.js';
@@ -150,8 +151,22 @@ export function writePreviews(
       }
     } else view.copyFrom(composite.buf, x0, y0, GAME_W, GAME_H, 0, 0);
     const file = `game_${spot.name}${spot.car && sheet ? '_car' : ''}.png`;
-    writePng(join(dir, file), view.scaled(2));
+    const shot = view.scaled(2);
+    writePng(join(dir, file), shot);
     written.push(file);
+    // A kept copy of the same shot from before a rework goes side by side with the new one.
+    const before = join(dir, `before_${file}`);
+    if (existsSync(before)) {
+      const old = readPng(before);
+      const gap = 8;
+      const pair = new PixelBuffer(Math.max(old.width, shot.width), old.height + gap + shot.height);
+      pair.fill([16, 19, 31, 255]);
+      pair.blit(old, 0, 0);
+      pair.blit(shot, 0, old.height + gap);
+      const name = `compare_${spot.name}.png`;
+      writePng(join(dir, name), pair);
+      written.push(name);
+    }
   }
   return written;
 }

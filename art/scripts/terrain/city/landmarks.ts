@@ -3,11 +3,11 @@ import type { BakeContext } from '../biome.js';
 import { Canvas, col, mixc } from '../canvas.js';
 import type { Color } from '../canvas.js';
 import { drawText, textWidth } from '../font.js';
-import { standBox } from '../oblique.js';
+import { leanOf } from '../oblique.js';
 import type { Scene } from '../oblique.js';
 import { paintRoofSurface } from './buildings.js';
 import type { CityLayout, FixedLot, Lot, Reserve } from './layout.js';
-import { G_PLAZA, G_QUAY, G_STREET, G_WATER, NEAR_STRIP } from './layout.js';
+import { G_PLAZA, G_QUAY, G_STREET, G_WATER } from './layout.js';
 import { neonText } from './neon.js';
 import {
   BUILDINGS,
@@ -28,7 +28,18 @@ import {
 } from './palette.js';
 import { plantTree, stand, standLantern } from './props.js';
 import type { LightOut } from './props.js';
-import { CONTAINER_RISE, bollardSprite, containerSprite, drawBox, emissive } from './sprites.js';
+import { Solid, plainWest, standFlat } from './solid.js';
+import type { Mass } from './solid.js';
+import {
+  CONTAINER_RISE,
+  bollardSprite,
+  containerFace,
+  containerSide,
+  containerSprite,
+  containerTop,
+  drawBox,
+  emissive,
+} from './sprites.js';
 
 /**
  * The five landmarks plus start line dressing, built as standing structures: a clock tower
@@ -54,7 +65,7 @@ export const VIADUCT_HALF = 17;
 export const VIADUCT_RISE = 26;
 const VIADUCT_GIRDER = 7;
 
-const ARCADE_RISE = 26;
+const ARCADE_RISE = 40;
 const MARQUEE_W = 88;
 const MARQUEE_H = 14;
 
@@ -132,7 +143,7 @@ export function planLandmarks(
     { x: roadX1, y: viaduct.y - 24, w: ctx.def.worldWidth - roadX1, h: 66, ground: G_STREET },
   ];
   const fixed: FixedLot[] = [
-    { ...clockLot, family: ROOF_CONCRETE, rise: 16, tag: 'clock' },
+    { ...clockLot, family: ROOF_CONCRETE, rise: 24, tag: 'clock' },
     { ...arcadeLot, family: ROOF_PLUM, rise: ARCADE_RISE, tag: 'arcade' },
     {
       x: HARBOR.x0 + 24,
@@ -140,7 +151,7 @@ export function planLandmarks(
       w: 250,
       h: 70,
       family: ROOF_TEAL,
-      rise: 22,
+      rise: 30,
       tag: 'warehouse',
     },
     {
@@ -149,10 +160,10 @@ export function planLandmarks(
       w: 276,
       h: 70,
       family: ROOF_SLATE,
-      rise: 22,
+      rise: 30,
       tag: 'warehouse',
     },
-    { ...standLot, family: ROOF_SLATE, rise: 44, tag: 'grandstand' },
+    { ...standLot, family: ROOF_SLATE, rise: 60, tag: 'grandstand' },
     { ...stationLot, family: ROOF_CONCRETE, rise: VIADUCT_RISE, tag: 'station' },
   ];
   // The mast stands on a drum whose south face is the wall of the lower road.
@@ -168,7 +179,7 @@ export function planLandmarks(
         y: arcadeLot.y + arcadeLot.h - ARCADE_RISE + 2,
       },
       tower: { x: tower.x, y: towerY },
-      rings: { x: tower.x - RING_BOX_W / 2, y: 0 },
+      rings: { x: tower.x - RING_BOX_CX, y: 0 },
       beacon: { x: tower.x - 7, y: 0 },
       viaduct: { y: viaduct.y, roadX0, roadX1, west },
       start,
@@ -192,32 +203,6 @@ function thickLine(
   const ny = dx / len;
   for (let k = -(wide - 1) / 2; k <= (wide - 1) / 2; k += 0.5)
     cv.line(x0 + nx * k, y0 + ny * k, x1 + nx * k, y1 + ny * k, c);
-}
-
-function triangle(
-  cv: Canvas,
-  ax: number,
-  ay: number,
-  bx: number,
-  by: number,
-  cx: number,
-  cy: number,
-  c: Color,
-): void {
-  const x0 = Math.floor(Math.min(ax, bx, cx));
-  const x1 = Math.ceil(Math.max(ax, bx, cx));
-  const y0 = Math.floor(Math.min(ay, by, cy));
-  const y1 = Math.ceil(Math.max(ay, by, cy));
-  const area = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
-  if (area === 0) return;
-  for (let y = y0; y <= y1; y++) {
-    for (let x = x0; x <= x1; x++) {
-      const w0 = ((bx - ax) * (y - ay) - (by - ay) * (x - ax)) / area;
-      const w1 = ((cx - bx) * (y - by) - (cy - by) * (x - bx)) / area;
-      const w2 = ((ax - cx) * (y - cy) - (ay - cy) * (x - cx)) / area;
-      if (w0 >= -0.01 && w1 >= -0.01 && w2 >= -0.01) cv.set(x, y, c);
-    }
-  }
 }
 
 function inStar(
@@ -246,16 +231,12 @@ function inStar(
   return (nx - tx) * qy - ny * (qx - tx) >= 0;
 }
 
-/** Warns when a fixed lot would break the near-bank rule and returns the rise it may have. */
+/** Warns when a fixed lot would lean over the road and returns the rise it may have. */
 function allowedRise(scene: Scene, lot: Lot): number {
-  let gap = 255;
-  for (let x = lot.x; x < lot.x + lot.w; x++)
-    gap = Math.min(gap, scene.clearN[lot.y * scene.w + x]!);
-  if (gap >= 200) return lot.rise;
-  const max = gap - NEAR_STRIP;
+  const max = scene.maxRise(lot.x, lot.y, lot.w, lot.h, lot.rise);
   if (max < lot.rise)
-    console.warn(`landmark ${lot.tag}: rise ${lot.rise} capped to ${max} by the road to the north`);
-  return Math.min(lot.rise, max);
+    console.warn(`landmark ${lot.tag}: rise ${lot.rise} capped to ${max} by the road beside it`);
+  return max;
 }
 
 // --- Clock tower ---------------------------------------------------------------------------
@@ -311,93 +292,128 @@ function paintClock(scene: Scene, lot: Lot, out: LightOut): void {
     hall.set(fx + 2, fy - 8, PAL.gold);
     hall.set(fx + 2, fy - 9, PAL.goldHi);
   }
-  scene.add(standBox(hall, lot.x, lot.y, d, r));
-  scene.footprint(lot.x, lot.y, w, d, 5);
+  standFlat(scene, hall, lot, r, plainWest(b.west, b.westAlt, b.westLine, b.rimLow, r));
 
   // The tower: a square shaft with the clock near the top and a copper spire.
   const sw = 38;
   const sd = 30;
-  const sr = 84;
-  const spire = 24;
+  const sr = 96;
+  const spire = 26;
   const sx = lot.x + ((w - sw) >> 1);
   const sy = lot.y + d - sd - 9;
-  const head = spire + 6;
-  const cv = Canvas.sprite(sw + 4, head + sd + sr);
-  const fx = 2;
-  const fy = head + sd;
-  // Shaft face.
-  for (let ly = 0; ly < sr; ly++) {
-    for (let lx = 0; lx < sw; lx++) {
-      const course = ly % 6 === 5;
-      const quoin = lx < 3 || lx >= sw - 3;
-      let c: Color = course ? b.wallAlt : b.wall;
-      if (quoin) c = (Math.floor(ly / 6) & 1) === 0 ? b.trim : mixc(b.wall, b.trim, 0.5);
-      if (lx === sw - 1) c = b.line;
-      cv.set(fx + lx, fy + ly, c);
+  const shaft: Mass = { x: sx, y: sy, w: sw, d: sd, r: sr, base: 0 };
+  scene.solid(sx, sy, sw, sd, sr);
+  scene.later(() => {
+    const solid = new Solid(scene, [shaft], spire + 12, 3);
+    // Spire: the slope toward the light is bright copper, the south slope a half tone, the
+    // east slope dark.
+    const copper = BUILDINGS[ROOF_TEAL]!;
+    const mx = (sw - 1) / 2;
+    const my = (sd - 1) / 2;
+    const up = (lx: number, ly: number): number =>
+      Math.max(
+        0,
+        Math.round(spire * (1 - Math.max(Math.abs(lx - mx) / mx, Math.abs(ly - my) / my))),
+      );
+    solid.roofShaped(
+      shaft,
+      up,
+      (lx, ly) => {
+        const ax = (lx - mx) / mx;
+        const ay = (ly - my) / my;
+        if (lx === 0 || ly === 0) return b.rim;
+        if (lx === sw - 1 || ly === sd - 1) return b.trim;
+        if (Math.abs(ax) >= Math.abs(ay)) return ax < 0 ? copper.rim : copper.inner;
+        return ay < 0 ? copper.roof : ly % 3 === 0 ? copper.roofLine : copper.west;
+      },
+      b.wall,
+      b.west,
+    );
+    // West wall: coursed stone with quoins and a slit window per stage.
+    solid.west(shaft, (u, v) => {
+      if (v <= 1) return b.westLine;
+      if (v >= sr - 3) return b.rimLow;
+      if (v % 30 >= 27) return b.rimLow;
+      if (u < 3 || u >= sd - 3) return (Math.floor(v / 6) & 1) === 0 ? b.edge : b.west;
+      if (u >= 12 && u < 18 && v > 30 && v < sr - 34 && v % 30 > 6 && v % 30 < 22)
+        return v % 60 < 30 ? -PAL.windowMid : PAL.windowNight;
+      return v % 6 === 5 ? b.westAlt : b.west;
+    });
+    const face = Canvas.sprite(sw, sr);
+    for (let ly = 0; ly < sr; ly++) {
+      for (let lx = 0; lx < sw; lx++) {
+        const course = ly % 6 === 5;
+        const quoin = lx < 3 || lx >= sw - 3;
+        let c: Color = course ? b.wallAlt : b.wall;
+        if (quoin) c = (Math.floor(ly / 6) & 1) === 0 ? b.pier : mixc(b.wall, b.pier, 0.5);
+        if (lx === 0) c = b.edge;
+        if (lx === sw - 1) c = b.line;
+        face.set(lx, ly, c);
+      }
     }
-  }
-  for (const band of [34, 62]) {
-    cv.hline(fx - 1, fy + band, sw + 2, b.trim);
-    cv.hline(fx - 1, fy + band + 1, sw + 2, b.line);
-  }
-  // Slit windows and the door.
-  for (const [wx, wy, lit] of [
-    [10, 42, true],
-    [26, 42, false],
-    [10, 52, false],
-    [26, 52, true],
-  ] as const) {
-    cv.rect(fx + wx, fy + wy, 3, 7, b.line);
-    if (lit) emissive(cv, () => cv.rect(fx + wx + 1, fy + wy + 1, 1, 5, PAL.windowWarm));
-  }
-  cv.rect(fx + 13, fy + sr - 15, 12, 15, b.line);
-  cv.rect(fx + 14, fy + sr - 13, 10, 13, PAL.woodDark);
-  cv.vline(fx + 19, fy + sr - 13, 13, PAL.ink);
-  emissive(cv, () => {
-    cv.hline(fx + 15, fy + sr - 14, 8, PAL.gold);
-    cv.hline(fx + 16, fy + sr - 15, 6, PAL.goldDim);
-  });
-  cv.hline(fx, fy + sr - 1, sw, PAL.ink);
-  // The clock.
-  const cx = fx + sw / 2 - 0.5;
-  const cy = fy + 17;
-  cv.disc(cx, cy, 15, PAL.ink);
-  cv.disc(cx, cy, 14, PAL.goldDim);
-  cv.ring(cx - 0.4, cy - 0.4, 14, PAL.gold);
-  emissive(cv, () => {
-    cv.disc(cx, cy, 12, col('#EBD9A4'));
-    cv.disc(cx, cy, 10, col('#FFF3C6'));
-    for (let hour = 0; hour < 12; hour++) {
-      const a = (hour / 12) * Math.PI * 2 - Math.PI / 2;
-      const px = Math.round(cx + Math.cos(a) * 10.5);
-      const py = Math.round(cy + Math.sin(a) * 10.5);
-      cv.set(px, py, PAL.ink);
-      if (hour % 3 === 0)
-        cv.set(Math.round(cx + Math.cos(a) * 9), Math.round(cy + Math.sin(a) * 9), PAL.ink);
+    // Cornice under the spire, and a band under each stage.
+    face.hline(0, 0, sw, b.rimLow);
+    face.hline(0, 1, sw, b.trim);
+    face.hline(1, 2, sw - 1, b.deep);
+    for (const band of [40, 64]) {
+      face.hline(0, band - 1, sw, b.rimLow);
+      face.hline(0, band, sw, b.trim);
+      face.hline(1, band + 1, sw - 1, b.deep);
     }
-    const ha = ((10 + 10 / 60) / 12) * Math.PI * 2 - Math.PI / 2;
-    const ma = (10 / 60) * Math.PI * 2 - Math.PI / 2;
-    thickLine(cv, cx, cy, cx + Math.cos(ha) * 5.5, cy + Math.sin(ha) * 5.5, PAL.ink, 2);
-    thickLine(cv, cx, cy, cx + Math.cos(ma) * 9, cy + Math.sin(ma) * 9, PAL.inkSoft, 1.5);
-    cv.disc(cx, cy, 1, PAL.coral);
+    // Belfry openings under the clock, lit from inside behind their louvres.
+    for (let k = 0; k < 3; k++) {
+      const bxk = 6 + k * 10;
+      face.rect(bxk, 44, 7, 17, b.deep);
+      emissive(face, () => {
+        face.rect(bxk + 1, 46, 5, 15, PAL.windowDim);
+        face.rect(bxk + 1, 46, 5, 6, PAL.windowMid);
+        face.hline(bxk + 2, 45, 3, PAL.windowWarm);
+      });
+      for (let y = 49; y < 61; y += 3) face.hline(bxk + 1, y, 5, b.deep);
+      face.hline(bxk - 1, 61, 9, b.pier);
+    }
+    face.rect(13, sr - 16, 12, 16, b.deep);
+    face.rect(14, sr - 14, 10, 14, PAL.woodDark);
+    face.vline(19, sr - 14, 14, PAL.ink);
+    emissive(face, () => {
+      face.hline(15, sr - 15, 8, PAL.gold);
+      face.hline(16, sr - 16, 6, PAL.goldDim);
+    });
+    face.hline(0, sr - 1, sw, PAL.ink);
+    solid.south(shaft, face);
+    // The clock hangs square to the screen, so its face stays round.
+    const dial = Canvas.sprite(31, 31);
+    const cx = 15;
+    const cy = 15;
+    dial.disc(cx, cy, 15, PAL.ink);
+    dial.disc(cx, cy, 14, PAL.goldDim);
+    dial.ring(cx - 0.4, cy - 0.4, 14, PAL.gold);
+    emissive(dial, () => {
+      dial.disc(cx, cy, 12, col('#EBD9A4'));
+      dial.disc(cx, cy, 10, col('#FFF3C6'));
+      for (let hour = 0; hour < 12; hour++) {
+        const a = (hour / 12) * Math.PI * 2 - Math.PI / 2;
+        dial.set(Math.round(cx + Math.cos(a) * 10.5), Math.round(cy + Math.sin(a) * 10.5), PAL.ink);
+        if (hour % 3 === 0)
+          dial.set(Math.round(cx + Math.cos(a) * 9), Math.round(cy + Math.sin(a) * 9), PAL.ink);
+      }
+      const ha = ((10 + 10 / 60) / 12) * Math.PI * 2 - Math.PI / 2;
+      const ma = (10 / 60) * Math.PI * 2 - Math.PI / 2;
+      thickLine(dial, cx, cy, cx + Math.cos(ha) * 5.5, cy + Math.sin(ha) * 5.5, PAL.ink, 2);
+      thickLine(dial, cx, cy, cx + Math.cos(ma) * 9, cy + Math.sin(ma) * 9, PAL.inkSoft, 1.5);
+      dial.disc(cx, cy, 1, PAL.coral);
+    });
+    solid.decal(shaft, (sw - 31) >> 1, 5, dial);
+    // Gilded finial on the point of the spire.
+    solid.onRoof(shaft, sd, () => {
+      const fx = solid.roofX(shaft, Math.round(mx)) + leanOf(sr + spire) - leanOf(sr);
+      const fy = solid.roofY(shaft, Math.round(my)) - spire;
+      solid.cv.vline(fx, fy - 6, 7, PAL.gold);
+      solid.cv.set(fx, fy - 7, PAL.goldHi);
+      solid.cv.hline(fx - 1, fy - 3, 3, PAL.goldDim);
+    });
+    scene.add(solid.item());
   });
-  // Cornice and the spire: west slope lit, south slope in half tone, east slope dark.
-  const ty = head;
-  cv.rect(fx - 2, ty + sd - 2, sw + 4, 3, b.trim);
-  cv.hline(fx - 2, ty + sd + 1, sw + 4, b.line);
-  const copper = BUILDINGS[ROOF_TEAL]!;
-  const ax = fx + sw / 2;
-  const ay = ty + sd / 2 - spire;
-  triangle(cv, fx - 1, ty, fx - 1, ty + sd - 2, ax, ay, copper.rim);
-  triangle(cv, fx + sw, ty, fx + sw, ty + sd - 2, ax, ay, copper.inner);
-  triangle(cv, fx - 1, ty + sd - 2, fx + sw, ty + sd - 2, ax, ay, copper.roof);
-  cv.line(fx - 1, ty + sd - 2, ax, ay, copper.rimLow);
-  cv.line(fx + sw, ty + sd - 2, ax, ay, copper.roofLine);
-  cv.vline(Math.round(ax), ay - 5, 6, PAL.gold);
-  cv.set(Math.round(ax), ay - 6, PAL.goldHi);
-  // The shaft rises through the hall, so it is painted after it.
-  scene.add({ art: cv, x: sx - fx, y: sy - sr - head, baseY: lot.y + d, faceFrom: head + sd });
-  scene.footprint(sx, sy, sw, sd, 12);
   const gx = sx + sw / 2;
   out.pools.push({ x: gx, y: lot.y + d + 16, radii: [30, 52], tint: TINT_GOLD, squashY: 1.3 });
   out.lights.push({
@@ -439,7 +455,7 @@ export function drawMarquee(cv: Canvas, x: number, y: number, frame: number): vo
   });
 }
 
-function paintArcade(scene: Scene, lot: Lot, out: LightOut): void {
+function paintArcade(scene: Scene, lot: Lot, sites: LandmarkSites, out: LightOut): void {
   const b = BUILDINGS[lot.family]!;
   const r = allowedRise(scene, lot);
   const w = lot.w;
@@ -507,19 +523,27 @@ function paintArcade(scene: Scene, lot: Lot, out: LightOut): void {
   const fy = d;
   for (let ly = 0; ly < r; ly++)
     for (let lx = 0; lx < w; lx++) cv.set(lx, fy + ly, lx % 12 === 11 ? b.wallAlt : b.wall);
-  cv.hline(0, fy, w, b.trim);
-  cv.hline(0, fy + 1, w, b.line);
+  cv.hline(0, fy, w, b.rimLow);
+  cv.hline(0, fy + 1, w, b.trim);
+  cv.hline(1, fy + 2, w - 1, b.deep);
+  cv.vline(0, fy, r, b.edge);
   cv.vline(w - 1, fy, r, b.line);
   cv.hline(0, fy + r - 1, w, PAL.ink);
-  drawMarquee(cv, 71, fy + 2, 0);
+  // Fluted piers either side of the entrance, the shadow of the marquee over the doors.
+  for (const px of [64, 164]) {
+    cv.rect(px, fy + 3, 5, r - 4, b.pier);
+    cv.vline(px, fy + 3, r - 4, b.trim);
+    cv.vline(px + 4, fy + 3, r - 4, b.deep);
+  }
+  cv.rect(72, fy + 14, 90, 5, b.deep);
   for (let k = 0; k < 3; k++) {
     const dx = 76 + k * 28;
-    cv.rect(dx, fy + 16, 22, r - 17, b.line);
+    cv.rect(dx, fy + 19, 22, r - 20, b.deep);
     emissive(cv, () => {
-      cv.rect(dx + 1, fy + 17, 20, r - 19, PAL.windowMid);
-      cv.hline(dx + 1, fy + 17, 20, PAL.windowWarm);
-      cv.vline(dx + 10, fy + 18, r - 20, PAL.windowDim);
-      cv.vline(dx + 11, fy + 18, r - 20, PAL.windowDim);
+      cv.rect(dx + 1, fy + 20, 20, r - 22, PAL.windowMid);
+      cv.hline(dx + 1, fy + 20, 20, PAL.windowWarm);
+      cv.vline(dx + 10, fy + 21, r - 23, PAL.windowDim);
+      cv.vline(dx + 11, fy + 21, r - 23, PAL.windowDim);
     });
   }
   const posters: readonly Color[] = [
@@ -539,8 +563,28 @@ function paintArcade(scene: Scene, lot: Lot, out: LightOut): void {
       cv.hline(px + 3, fy + r - 8, 8, PAL.ivory);
     });
   });
-  scene.add(standBox(cv, lot.x, lot.y, d, r));
-  scene.footprint(lot.x, lot.y, w, d, 7);
+  // The marquee stands proud of the wall and square to the screen, so the bulb chase loop can
+  // sit exactly on it.
+  standFlat(
+    scene,
+    cv,
+    lot,
+    r,
+    (u, v) => {
+      if (v <= 1) return b.westLine;
+      if (v >= r - 3) return b.rimLow;
+      if (u % 26 >= 8 && u % 26 < 20 && v > 8 && v < r - 8)
+        return -((Math.floor(u / 26) & 1) === 0 ? PAL.purpleDim : PAL.cyanDim);
+      return v % 8 === 0 ? b.westAlt : b.west;
+    },
+    0,
+    (solid, m) => {
+      const board = Canvas.sprite(MARQUEE_W, MARQUEE_H);
+      drawMarquee(board, 0, 0, 0);
+      const at = solid.decal(m, 71, 2, board);
+      sites.marquee = { x: solid.ox + at.x, y: solid.oy + at.y };
+    },
+  );
   const foot = lot.y + d + 8;
   out.pools.push({ x: lot.x + 115, y: foot, radii: [44, 70], tint: TINT_GOLD, squashY: 1.7 });
   out.pools.push({ x: lot.x + 30, y: foot, radii: [22, 36], tint: TINT_CYAN, squashY: 1.5 });
@@ -565,7 +609,9 @@ function paintArcade(scene: Scene, lot: Lot, out: LightOut): void {
 
 const DRUM_R = 24;
 const DRUM_RISE = 10;
-const RING_BOX_W = 50;
+export const RING_BOX_W = 60;
+/** Column of the mast's foot inside the ring box. */
+export const RING_BOX_CX = 25;
 const RINGS = [
   { r: 22, rise: 26, c: PAL.cyan, hi: PAL.cyanHi, dim: PAL.cyanDim },
   { r: 16, rise: 46, c: PAL.purple, hi: PAL.purpleHi, dim: PAL.purpleDim },
@@ -590,14 +636,16 @@ export function drawTowerRings(
     RINGS.forEach((ring, k) => {
       const st = state[k]!;
       const ry = cy - ring.rise;
-      cv.ring(cx - 0.5, ry - 0.5, ring.r + 1, st > 0 ? ring.dim : PAL.inkSoft, 4);
-      cv.ring(cx - 0.5, ry - 0.5, ring.r, st === 0 ? ring.dim : ring.c, 2);
-      if (st === 2) cv.ring(cx - 0.5, ry - 0.5, ring.r, ring.hi, 2);
+      // The mast leans east as it rises, and each ring rides on it.
+      const rx = cx + leanOf(ring.rise);
+      cv.ring(rx - 0.5, ry - 0.5, ring.r + 1, st > 0 ? ring.dim : PAL.inkSoft, 4);
+      cv.ring(rx - 0.5, ry - 0.5, ring.r, st === 0 ? ring.dim : ring.c, 2);
+      if (st === 2) cv.ring(rx - 0.5, ry - 0.5, ring.r, ring.hi, 2);
       else if (st === 1) {
         // Hot core on the lit quadrant only.
         for (let a = Math.PI; a < Math.PI * 1.5; a += 0.02)
           cv.set(
-            Math.round(cx - 0.5 + Math.cos(a) * (ring.r - 0.5)),
+            Math.round(rx - 0.5 + Math.cos(a) * (ring.r - 0.5)),
             Math.round(ry - 0.5 + Math.sin(a) * (ring.r - 0.5)),
             ring.hi,
           );
@@ -629,10 +677,10 @@ export function drawTowerHub(cv: Canvas, cx: number, cy: number, level: number):
 function paintTower(scene: Scene, sites: LandmarkSites, out: LightOut): void {
   const cx = sites.tower.x;
   const cy = sites.tower.y;
-  const W = 2 * DRUM_R + 6;
+  const W = 2 * DRUM_R + 6 + leanOf(MAST_RISE) + 10;
   const H = MAST_RISE + 12 + DRUM_R + 1;
   const cv = Canvas.sprite(W, H);
-  const mx = W >> 1;
+  const mx = DRUM_R + 3;
   const my = MAST_RISE + 12;
   const slate = BUILDINGS[ROOF_SLATE]!;
   // Drum: south face first, then the deck.
@@ -666,31 +714,33 @@ function paintTower(scene: Scene, sites: LandmarkSites, out: LightOut): void {
     const t = (v - DRUM_RISE) / (MAST_RISE - DRUM_RISE);
     const half = Math.round(7 - t * 5);
     const y = my - v;
+    const lx = mx + leanOf(v);
     const band = Math.floor(v / 13) % 2 === 0;
     const hi = band ? PAL.ivory : PAL.coralHi;
     const mid = band ? PAL.kerbIvoryDark : PAL.coral;
     const lo = band ? PAL.steel : PAL.coralDim;
-    cv.set(mx - half, y, hi);
-    cv.set(mx - half + 1, y, mid);
-    cv.set(mx + half, y, lo);
-    cv.set(mx + half - 1, y, lo);
+    cv.set(lx - half, y, hi);
+    cv.set(lx - half + 1, y, mid);
+    cv.set(lx + half, y, lo);
+    cv.set(lx + half - 1, y, lo);
     const span = half * 2 - 3;
     if (span > 0) {
       const m = v % (span * 2);
-      cv.set(mx - half + 2 + (m < span ? m : span * 2 - 1 - m), y, mid);
-      if (v % 13 === 0) cv.hline(mx - half, y, half * 2 + 1, hi);
+      cv.set(lx - half + 2 + (m < span ? m : span * 2 - 1 - m), y, mid);
+      if (v % 13 === 0) cv.hline(lx - half, y, half * 2 + 1, hi);
     }
   }
   for (const ring of RINGS) {
     const y = my - ring.rise;
-    cv.rect(mx - 6, y - 1, 12, 3, PAL.steelDark);
-    cv.hline(mx - 6, y - 1, 12, PAL.steelLight);
+    const lx = mx + leanOf(ring.rise);
+    cv.rect(lx - 6, y - 1, 12, 3, PAL.steelDark);
+    cv.hline(lx - 6, y - 1, 12, PAL.steelLight);
   }
   emissive(cv, () => {
     // A string of cyan marker lights up the west leg.
     for (let v = DRUM_RISE + 6; v < MAST_RISE; v += 9) {
       const t = (v - DRUM_RISE) / (MAST_RISE - DRUM_RISE);
-      cv.set(mx - Math.round(7 - t * 5) - 1, my - v, PAL.cyan);
+      cv.set(mx + leanOf(v) - Math.round(7 - t * 5) - 1, my - v, PAL.cyan);
     }
   });
   drawTowerRings(cv, mx, my, [1, 1, 1]);
@@ -698,8 +748,8 @@ function paintTower(scene: Scene, sites: LandmarkSites, out: LightOut): void {
   const item = { art: cv, x: cx - mx, y: cy - my, baseY: cy + DRUM_R };
   scene.addSplit(item, { id: 'neon_tower_top', kind: 'tower_top', fade: true });
   scene.footprint(cx - DRUM_R, cy - DRUM_R, DRUM_R * 2, DRUM_R * 2, 8);
-  sites.rings = { x: cx - RING_BOX_W / 2, y: cy - RING_BOX_H };
-  sites.beacon = { x: cx - 7, y: cy - MAST_RISE - 12 };
+  sites.rings = { x: cx - RING_BOX_CX, y: cy - RING_BOX_H };
+  sites.beacon = { x: cx - 7 + leanOf(MAST_RISE), y: cy - MAST_RISE - 12 };
   out.pools.push({ x: cx, y: cy + DRUM_R + 20, radii: [34, 58], tint: TINT_CYAN, squashY: 1.3 });
   out.pools.push({ x: cx, y: cy - 70, radii: [26, 44], tint: TINT_PURPLE });
   out.lights.push({ x: cx, y: cy - 30, radius: 70, color: TINT_HEX[TINT_CYAN]!, intensity: 0.8 });
@@ -718,123 +768,151 @@ const DECK_LINE = col('#262E44');
 
 const CRANE_RISE = 62;
 
-/** Portal crane: four legs on the quay rails, a boom far out over the water, a load on wires. */
+/**
+ * Portal crane: four legs on the quay rails, a boom far out over the water, a load on wires.
+ * Like every tall structure it leans east as it rises, so each piece is drawn at its own height.
+ */
 function crane(scene: Scene, x: number, out: LightOut, seed: number): void {
   const railA = 2566;
   const railB = 2586;
   const land = 2532;
   const tip = 2746;
   const top = land - CRANE_RISE - 10;
-  const W = 66;
+  const reach = leanOf(CRANE_RISE + 24);
+  const W = 66 + reach;
   const H = tip + 4 - top;
   const cv = Canvas.sprite(W, H);
-  const mx = W >> 1;
+  const mx = 33;
   const Y = (wy: number): number => wy - top;
-  const leg = (lx: number, gy: number): void => {
+  const up = leanOf(CRANE_RISE);
+  const leg = (lx: number, gy: number, far: boolean): void => {
     for (let v = 0; v <= CRANE_RISE; v++) {
-      cv.set(lx, Y(gy) - v, CRANE_Y);
-      cv.set(lx + 1, Y(gy) - v, CRANE_DK);
-      cv.set(lx + 2, Y(gy) - v, CRANE_DEEP);
+      const px = lx + leanOf(v);
+      cv.set(px, Y(gy) - v, far ? CRANE_DK : PAL.gold);
+      cv.set(px + 1, Y(gy) - v, far ? CRANE_DK : CRANE_Y);
+      cv.set(px + 2, Y(gy) - v, far ? CRANE_DEEP : CRANE_DK);
+      cv.set(px + 3, Y(gy) - v, CRANE_DEEP);
       if (v % 16 < 3 && v > 6) {
-        cv.set(lx, Y(gy) - v, PAL.coral);
-        cv.set(lx + 1, Y(gy) - v, PAL.coralDim);
+        cv.set(px, Y(gy) - v, PAL.coral);
+        cv.set(px + 1, Y(gy) - v, PAL.coralDim);
       }
     }
-    cv.rect(lx - 2, Y(gy) - 2, 7, 3, PAL.steelDark);
-    cv.hline(lx - 2, Y(gy) - 2, 7, PAL.steel);
+    // Bogie on the rail.
+    cv.rect(lx - 3, Y(gy) - 3, 10, 4, PAL.steelDark);
+    cv.hline(lx - 3, Y(gy) - 3, 10, PAL.steelLight);
+    cv.hline(lx - 3, Y(gy), 10, PAL.ink);
   };
   // Back legs and their bracing first.
-  leg(mx - 27, railA);
-  leg(mx + 24, railA);
+  leg(mx - 27, railA, true);
+  leg(mx + 23, railA, true);
   for (let k = 0; k <= 50; k++) {
-    const yy = Y(railA) - 8 - Math.round((k / 50) * 30);
-    cv.set(mx - 25 + k, yy, CRANE_DK);
-    cv.set(mx + 24 - k, yy, CRANE_DEEP);
+    const v = 8 + Math.round((k / 50) * 30);
+    cv.set(mx - 25 + k + leanOf(v), Y(railA) - v, CRANE_DK);
+    cv.set(mx + 24 - k + leanOf(v), Y(railA) - v, CRANE_DEEP);
   }
-  cv.rect(mx - 27, Y(railA) - 44, 54, 3, CRANE_DK);
+  cv.rect(mx - 27 + leanOf(44), Y(railA) - 44, 54, 3, CRANE_DK);
   // A-frame over the landward legs, seen from the front as a triangle.
-  const apexY = Y(railA) - CRANE_RISE - 22;
+  const apexV = CRANE_RISE + 22;
+  const apexY = Y(railA) - apexV;
   for (let k = 0; k <= 26; k++) {
-    const yy = Y(railA) - CRANE_RISE - Math.round((k / 26) * 22);
-    cv.set(mx - 26 + k, yy, PAL.gold);
-    cv.set(mx - 25 + k, yy, CRANE_Y);
-    cv.set(mx + 26 - k, yy, CRANE_DK);
-    cv.set(mx + 25 - k, yy, CRANE_DEEP);
+    const v = CRANE_RISE + Math.round((k / 26) * 22);
+    const yy = Y(railA) - v;
+    cv.set(mx - 26 + k + leanOf(v), yy, PAL.gold);
+    cv.set(mx - 25 + k + leanOf(v), yy, CRANE_Y);
+    cv.set(mx + 26 - k + leanOf(v), yy, CRANE_DK);
+    cv.set(mx + 25 - k + leanOf(v), yy, CRANE_DEEP);
   }
-  cv.rect(mx - 2, apexY - 1, 5, 3, CRANE_Y);
-  emissive(cv, () => cv.rect(mx - 1, apexY - 3, 2, 2, PAL.red));
-  // Front legs and the portal beam.
-  leg(mx - 27, railB);
-  leg(mx + 24, railB);
-  cv.rect(mx - 27, Y(railB) - 44, 54, 4, CRANE_Y);
-  cv.hline(mx - 27, Y(railB) - 44, 54, PAL.gold);
-  cv.hline(mx - 27, Y(railB) - 41, 54, CRANE_DEEP);
-  for (let k = 0; k < 54; k += 6) cv.rect(mx - 27 + k, Y(railB) - 43, 3, 2, PAL.coral);
-  // Side girders at the top, tying the legs together under the boom.
-  for (const lx of [mx - 27, mx + 24]) {
+  cv.rect(mx - 2 + leanOf(apexV), apexY - 1, 5, 3, CRANE_Y);
+  emissive(cv, () => cv.rect(mx - 1 + leanOf(apexV), apexY - 3, 2, 2, PAL.red));
+  // Sill beams along the rails tie each pair of legs: the west one faces the light.
+  for (const [lx, c0, c1] of [
+    [mx - 27, PAL.gold, CRANE_Y],
+    [mx + 23, CRANE_DK, CRANE_DEEP],
+  ] as const) {
     for (let wy = railA; wy <= railB; wy++) {
-      cv.set(lx, Y(wy) - CRANE_RISE, PAL.gold);
-      cv.set(lx + 1, Y(wy) - CRANE_RISE, CRANE_Y);
-      cv.set(lx + 2, Y(wy) - CRANE_RISE, CRANE_DK);
+      for (let v = 4; v < 8; v++) cv.set(lx + leanOf(v), Y(wy) - v, v === 7 ? c0 : c1);
     }
   }
-  cv.rect(mx - 27, Y(railB) - CRANE_RISE, 54, 4, CRANE_Y);
-  cv.hline(mx - 27, Y(railB) - CRANE_RISE + 3, 54, CRANE_DEEP);
+  // Front legs and the portal beam.
+  leg(mx - 27, railB, false);
+  leg(mx + 23, railB, false);
+  const pb = leanOf(44);
+  cv.rect(mx - 27 + pb, Y(railB) - 44, 54, 5, CRANE_Y);
+  cv.hline(mx - 27 + pb, Y(railB) - 44, 54, PAL.gold);
+  cv.hline(mx - 27 + pb, Y(railB) - 40, 54, CRANE_DEEP);
+  for (let k = 0; k < 54; k += 6) cv.rect(mx - 27 + pb + k, Y(railB) - 43, 3, 2, PAL.coral);
+  // Side girders at the top, tying the legs together under the boom.
+  for (const lx of [mx - 27, mx + 23]) {
+    for (let wy = railA; wy <= railB; wy++) {
+      cv.set(lx + up, Y(wy) - CRANE_RISE, PAL.gold);
+      cv.set(lx + up + 1, Y(wy) - CRANE_RISE, CRANE_Y);
+      cv.set(lx + up + 2, Y(wy) - CRANE_RISE, CRANE_DK);
+      cv.set(lx + up + 3, Y(wy) - CRANE_RISE, CRANE_DEEP);
+    }
+  }
+  cv.rect(mx - 27 + up, Y(railB) - CRANE_RISE, 54, 5, CRANE_Y);
+  cv.hline(mx - 27 + up, Y(railB) - CRANE_RISE, 54, PAL.gold);
+  cv.hline(mx - 27 + up, Y(railB) - CRANE_RISE + 4, 54, CRANE_DEEP);
   // Hanging load: wires from the trolley down to a container over the water.
   const loadY = 2668;
   const loadRise = 26;
   const livery = LIVERIES[seed % LIVERIES.length]!;
   for (const wx of [mx - 9, mx + 8])
     for (let v = loadRise + CONTAINER_RISE; v < CRANE_RISE; v++)
-      cv.set(wx, Y(loadY) - v, PAL.steelDark);
-  const load = containerSprite(true, livery, false).art;
-  cv.blit(load, mx - 15, Y(loadY) - loadRise - load.h + 7);
-  // Boom: two chords with lacing, seen from above at full height, and its south end face.
+      cv.set(wx + leanOf(v), Y(loadY) - v, PAL.steelDark);
+  const load = containerSprite(true, livery, false);
+  cv.blit(load.art, mx - load.ax + leanOf(loadRise), Y(loadY) - loadRise - load.art.h + 7);
+  // Boom: two chords with lacing, seen from above at full height, with its west side and its
+  // south end face.
   const by0 = Y(land) - CRANE_RISE;
   const by1 = Y(tip) - CRANE_RISE;
+  const bx = mx + up;
   for (let y = by0; y <= by1; y++) {
     const m = (y - by0) % 12;
     const zig = m < 6 ? m : 12 - m;
-    cv.set(mx - 5 + Math.round((zig * 9) / 6), y, CRANE_DK);
-    if (m === 0) cv.hline(mx - 5, y, 10, CRANE_Y);
-    cv.set(mx - 7, y, PAL.gold);
-    cv.set(mx - 6, y, CRANE_Y);
-    cv.set(mx + 5, y, CRANE_Y);
-    cv.set(mx + 6, y, CRANE_DK);
+    cv.set(bx - 5 + Math.round((zig * 9) / 6), y, CRANE_DK);
+    if (m === 0) cv.hline(bx - 5, y, 10, CRANE_Y);
+    // The west chord's side face, lit, two pixels deep.
+    cv.set(bx - 9, y + 4, CRANE_DK);
+    cv.set(bx - 8, y + 2, CRANE_Y);
+    cv.set(bx - 7, y, PAL.gold);
+    cv.set(bx - 6, y, CRANE_Y);
+    cv.set(bx + 5, y, CRANE_Y);
+    cv.set(bx + 6, y, CRANE_DK);
     if ((y - by0) % 24 < 3) {
-      cv.set(mx - 7, y, PAL.coral);
-      cv.set(mx - 6, y, PAL.coral);
-      cv.set(mx + 5, y, PAL.coral);
-      cv.set(mx + 6, y, PAL.coralDim);
+      cv.set(bx - 7, y, PAL.coral);
+      cv.set(bx - 6, y, PAL.coral);
+      cv.set(bx + 5, y, PAL.coral);
+      cv.set(bx + 6, y, PAL.coralDim);
     }
   }
-  cv.rect(mx - 7, by1, 14, 5, CRANE_DEEP);
-  cv.hline(mx - 7, by1, 14, CRANE_DK);
-  cv.rect(mx - 7, by0 - 2, 14, 3, CRANE_DK);
+  cv.rect(bx - 7, by1, 14, 6, CRANE_DEEP);
+  cv.hline(bx - 7, by1, 14, CRANE_DK);
+  cv.rect(bx - 7, by0 - 2, 14, 3, CRANE_DK);
   // Machinery house on the landward end, trolley and cab under the boom.
-  drawBox(cv, mx - 12, by0 + 6 - 7, 24, 26, 7, PAL.kerbIvory, PAL.kerbIvoryDark);
-  cv.rect(mx - 10, by0 + 3, 20, 3, PAL.kerbCoral);
-  cv.rect(mx - 7, by0 + 12, 6, 6, PAL.steelDark);
-  cv.rect(mx + 2, by0 + 12, 7, 4, PAL.steel);
-  drawBox(cv, mx - 10, Y(loadY) - CRANE_RISE - 3, 20, 8, 4, PAL.steel, PAL.steelDark);
-  drawBox(cv, mx + 8, Y(2612) - CRANE_RISE + 2, 11, 10, 8, PAL.kerbIvory, PAL.kerbIvoryDark);
+  drawBox(cv, bx - 12 + 3, by0 + 6 - 10, 24, 26, 10, PAL.kerbIvory, PAL.kerbIvoryDark);
+  cv.rect(bx - 10 + 3, by0, 20, 3, PAL.kerbCoral);
+  cv.rect(bx - 7 + 3, by0 + 9, 6, 6, PAL.steelDark);
+  cv.rect(bx + 2 + 3, by0 + 9, 7, 4, PAL.steel);
+  drawBox(cv, bx - 10, Y(loadY) - CRANE_RISE - 3, 20, 8, 4, PAL.steel, PAL.steelDark);
+  drawBox(cv, bx + 8, Y(2612) - CRANE_RISE + 2, 11, 10, 8, PAL.kerbIvory, PAL.kerbIvoryDark);
   emissive(cv, () => {
-    cv.rect(mx + 10, Y(2612) - CRANE_RISE + 14, 7, 3, PAL.windowWarm);
-    cv.rect(mx - 1, by1 + 2, 2, 2, PAL.red);
-    cv.rect(mx - 1, by0 - 2, 2, 2, PAL.red);
+    cv.rect(bx + 8, Y(2612) - CRANE_RISE + 14, 7, 3, PAL.windowWarm);
+    cv.rect(bx - 1, by1 + 2, 2, 2, PAL.red);
+    cv.rect(bx - 1, by0 - 2, 2, 2, PAL.red);
     // Floodlights under the portal.
-    cv.rect(mx - 20, Y(railB) - 40, 3, 2, PAL.lamp);
-    cv.rect(mx + 17, Y(railB) - 40, 3, 2, PAL.lamp);
+    cv.rect(mx - 20 + pb, Y(railB) - 39, 3, 2, PAL.lamp);
+    cv.rect(mx + 17 + pb, Y(railB) - 39, 3, 2, PAL.lamp);
   });
   const sx = x - mx;
   if (!scene.artFits(cv, sx, top)) console.warn(`crane at ${x} would cover drivable ground`);
   scene.add({ art: cv, x: sx, y: top, baseY: tip });
   // Ground shadows: boom, portal, and the load far below its container.
-  scene.shadeRect(x - 7 + 14, land + 14, 14, tip - land);
-  scene.shadeRect(x - 27 + 6, railA + 4, 56, railB - railA + 4);
+  scene.shadeRect(x - 7 + 26, land + 26, 14, tip - land);
+  scene.shadeRect(x - 27 + 20, railA + 18, 56, railB - railA + 4);
   scene.shadeRect(x - 15 + 12, loadY - 12 + 10, 30, 13);
-  for (const lx of [x - 27, x + 24])
-    for (const ry of [railA, railB]) scene.footprint(lx, ry - 1, 3, 2, 10);
+  for (const lx of [x - 27, x + 23])
+    for (const ry of [railA, railB]) scene.footprint(lx, ry - 1, 4, 2, 12);
   out.pools.push({ x, y: 2552, radii: [44, 78], tint: TINT_COOL });
   out.pools.push({ x, y: 2640, radii: [24, 40], tint: TINT_GOLD });
   out.lights.push({ x, y: 2548, radius: 88, color: TINT_HEX[TINT_COOL]!, intensity: 0.9 });
@@ -996,13 +1074,15 @@ function paintWarehouse(scene: Scene, lot: Lot, out: LightOut): void {
   const fy = d;
   for (let ly = 0; ly < r; ly++)
     for (let lx = 0; lx < w; lx++) cv.set(lx, fy + ly, lx % 3 === 2 ? b.wallAlt : b.wall);
-  cv.hline(0, fy, w, b.trim);
-  cv.hline(0, fy + 1, w, b.line);
+  cv.hline(0, fy, w, b.rimLow);
+  cv.hline(0, fy + 1, w, b.trim);
+  cv.hline(1, fy + 2, w - 1, b.deep);
+  cv.vline(0, fy, r, b.edge);
   cv.vline(w - 1, fy, r, b.line);
   cv.hline(0, fy + r - 1, w, PAL.ink);
   const tw = textWidth(label, 'micro', 2);
   const tx = (w - tw) >> 1;
-  drawText(cv, tx, fy + 5, label, mixc(b.trim, PAL.kerbIvory, 0.4), 'micro', 2);
+  drawText(cv, tx, fy + 6, label, mixc(b.trim, PAL.kerbIvory, 0.4), 'micro', 2);
   for (let x = 8; x + 22 < w - 6; x += 34) {
     if (x + 22 > tx - 6 && x < tx + tw + 6) continue;
     const lit = hash2(lot.x + x, 5, 73) < 0.4;
@@ -1022,8 +1102,9 @@ function paintWarehouse(scene: Scene, lot: Lot, out: LightOut): void {
         squashY: 1.5,
       });
   }
-  scene.add(standBox(cv, lot.x, lot.y, d, r));
-  scene.footprint(lot.x, lot.y, w, d, 6);
+  standFlat(scene, cv, lot, r, (u, v) =>
+    v <= 1 ? b.westLine : v >= r - 3 ? b.rimLow : u % 3 === 2 ? b.westAlt : b.west,
+  );
 }
 
 function paintHarbor(ctx: BakeContext, scene: Scene, layout: CityLayout, out: LightOut): void {
@@ -1088,19 +1169,46 @@ function paintHarbor(ctx: BakeContext, scene: Scene, layout: CityLayout, out: Li
     }
     cv.frame(x - 3, H.y0 + 12, bw + 4, 100, PAL.paintGoldWorn);
     const livery = LIVERIES[(rnd() * LIVERIES.length) | 0]!;
+    // Each block of the yard is one solid: stacks up to three high, every stack with its lit
+    // west side and its door end, the tall ones shading the low ones beside them.
+    const stacks: Array<Mass & { paint: Color; levels: number }> = [];
     for (let row = 0; row < 3; row++) {
       for (let c = 0; c < cols; c++) {
-        if (rnd() < 0.2) continue;
+        if (rnd() < 0.18) continue;
         const paint = rnd() < 0.55 ? livery : LIVERIES[(rnd() * LIVERIES.length) | 0]!;
-        // Nothing is stacked in the row beside the road: that strip stays low.
-        const stacked = row > 0 && rnd() < 0.4;
-        const sp = containerSprite(false, paint, stacked);
-        const gx = x + c * 15 + 6;
-        const gy = H.y0 + 15 + row * 32 + 29;
-        if (!scene.spriteFits(sp, gx, gy)) continue;
-        scene.place(sp, gx, gy, undefined, true);
-        scene.footprint(gx - 6, gy - 29, 13, 30, stacked ? 5 : 3);
+        const gx = x + c * 15;
+        const gy = H.y0 + 15 + row * 32;
+        // Nothing is stacked high beside the road: that strip stays low.
+        let room = Math.floor(scene.maxRise(gx, gy, 13, 30, 40) / CONTAINER_RISE);
+        // A single box may stand in the row beside the road as long as it hides none of it.
+        if (room < 1 && scene.driveCount(gx, gy - CONTAINER_RISE - 3, 13 + 8, 34) === 0) room = 1;
+        const roll = rnd();
+        const levels = Math.min(room, roll < 0.42 ? 1 : roll < 0.8 ? 2 : 3);
+        if (levels < 1) continue;
+        const m = {
+          x: gx,
+          y: gy,
+          w: 13,
+          d: 30,
+          r: levels * CONTAINER_RISE,
+          base: 0,
+          paint,
+          levels,
+        };
+        stacks.push(m);
+        scene.solid(m.x, m.y, m.w, m.d, m.r);
       }
+    }
+    if (stacks.length > 0) {
+      scene.later(() => {
+        const solid = new Solid(scene, stacks, 2);
+        for (const m of stacks) {
+          solid.roof(m, (lx, ly) => containerTop(m.paint, m.w, m.d, lx, ly));
+          solid.west(m, (u, v) => containerSide(m.paint, u, v, m.levels));
+          solid.south(m, containerFace(m.paint, m.w, m.levels, true));
+        }
+        scene.add(solid.item());
+      });
     }
     x += bw + 20 + ((rnd() * 3) | 0) * 6;
   }
@@ -1248,20 +1356,22 @@ function paintViaduct(
   const under = VIADUCT_RISE - VIADUCT_GIRDER;
   const segment = (x0: number, x1: number, tram: boolean): void => {
     const head = 14;
-    const cv = Canvas.sprite(x1 - x0, head + VIADUCT_HALF * 2 + VIADUCT_RISE);
-    // Piers stand under the deck: draw them first, the deck goes over their heads.
+    const lean = leanOf(VIADUCT_RISE);
+    const cv = Canvas.sprite(x1 - x0 + lean, head + VIADUCT_HALF * 2 + VIADUCT_RISE);
+    // Piers stand under the deck: draw them first, the deck goes over their heads. The deck
+    // leans east with the rest of the city, and the piers lean up to meet it.
     for (let x = x0; x < x1; x++) {
       const m = ((x % 64) + 64) % 64;
       if (m >= 8) continue;
       for (let v = 0; v < under + 4; v++) {
         const c = m === 0 ? PAL.kerb : m === 7 ? PAL.steelDark : v === 0 ? PAL.ink : PAL.kerbShade;
-        cv.set(x - x0, head + VIADUCT_HALF * 2 + VIADUCT_RISE - 1 - v, c);
+        cv.set(x - x0 + leanOf(v), head + VIADUCT_HALF * 2 + VIADUCT_RISE - 1 - v, c);
       }
     }
     const deck = new Canvas(x1 - x0, VIADUCT_HALF * 2 + VIADUCT_GIRDER);
     drawViaductDeck(deck, x0, x0, x1);
-    cv.blit(deck, 0, head);
-    if (tram) drawTram(cv, 24, head + 4);
+    cv.blit(deck, lean, head);
+    if (tram) drawTram(cv, 24 + lean, head + 4);
     scene.add({ art: cv, x: x0, y: top - head, baseY: yc + VIADUCT_HALF - 1 });
     scene.shadeRect(x0 + 8, yc - VIADUCT_HALF + 10, x1 - x0, VIADUCT_HALF * 2);
     for (let x = x0; x < x1; x++)
@@ -1327,8 +1437,10 @@ function paintViaduct(
     const fy = d;
     for (let ly = 0; ly < r; ly++)
       for (let lx = 0; lx < w; lx++) cv.set(lx, fy + ly, lx % 14 === 13 ? b.wallAlt : b.wall);
-    cv.hline(0, fy, w, b.trim);
-    cv.hline(0, fy + 1, w, b.line);
+    cv.hline(0, fy, w, b.rimLow);
+    cv.hline(0, fy + 1, w, b.trim);
+    cv.hline(1, fy + 2, w - 1, b.deep);
+    cv.vline(0, fy, r, b.edge);
     cv.vline(w - 1, fy, r, b.line);
     cv.hline(0, fy + r - 1, w, PAL.ink);
     for (let k = 0; k < 5; k++) {
@@ -1342,8 +1454,12 @@ function paintViaduct(
         cv.hline(ax + 1, fy + 13, 12, PAL.windowDim);
       });
     }
-    scene.add(standBox(cv, lot.x, lot.y, d, r));
-    scene.footprint(lot.x, lot.y, w, d, 7);
+    standFlat(scene, cv, lot, r, (u, v) => {
+      if (v <= 1) return b.westLine;
+      if (v >= r - 3) return b.rimLow;
+      if (u % 20 >= 6 && u % 20 < 16 && v > 5 && v < r - 6) return -PAL.windowMid;
+      return b.west;
+    });
     out.pools.push({
       x: lot.x + w / 2,
       y: lot.y + d + 8,
@@ -1378,65 +1494,119 @@ function paintGrandstand(scene: Scene, lot: Lot, sites: LandmarkSites, out: Ligh
     PAL.kerbCoral,
     PAL.steelLight,
   ];
-  // Tiers climb away from the track: each is a tread seen from above and a riser below it.
+  // A real stepped mass: a front wall on the collision edge, eight tiers climbing away from
+  // the track, and a roofed back block. Each tier is its own box, so the stand shows a stepped
+  // west flank toward the light and the roof throws its shadow down the seats.
   const TIERS = 8;
   const TREAD = 6;
-  const STEP = 3;
-  const front = 6;
-  const cv = Canvas.sprite(w, canopyRise + d);
-  const baseRow = canopyRise + d - 1;
-  // Back wall up to the canopy.
-  const backY = baseRow - TIERS * (TREAD + STEP) - front;
-  cv.rect(0, 30, w, backY - 26, b.wallLow);
-  for (let x = 6; x < w; x += 19) cv.vline(x, 30, backY - 26, b.line);
-  for (let t = TIERS - 1; t >= 0; t--) {
-    const y0 = baseRow - front - (t + 1) * (TREAD + STEP) + 1;
-    for (let x = 0; x < w; x++) {
-      const aisle = x % 38 < 3 || x < 2 || x >= w - 2;
-      for (let k = 0; k < TREAD; k++) {
-        let c: Color = t % 2 === 0 ? b.roofAlt : b.roof;
-        if (aisle) c = b.rimLow;
-        else if (k >= 1 && k <= 3 && x % 3 !== 2) {
-          const hsh = hash2((x / 3) | 0, t, 6021);
-          if (hsh < 0.78) {
-            const seat = seats[(hash2((x / 3) | 0, t, 6022) * seats.length) | 0]!;
-            c = k === 1 ? lighter(seat, 0.2) : k === 2 ? seat : darker(seat, 0.4);
-          } else c = k === 3 ? b.inner : b.roofLine;
+  const STEP = 4;
+  const FRONT_D = 3;
+  const FRONT_R = 7;
+  const south = lot.y + d;
+  const front: Mass = { x: lot.x, y: south - FRONT_D, w, d: FRONT_D, r: FRONT_R, base: 0 };
+  const tiers: Mass[] = [];
+  for (let t = 0; t < TIERS; t++)
+    tiers.push({
+      x: lot.x,
+      y: south - FRONT_D - (t + 1) * TREAD,
+      w,
+      d: TREAD,
+      r: FRONT_R + (t + 1) * STEP,
+      base: FRONT_R + t * STEP,
+      wbase: 0,
+    });
+  const topTier = tiers[TIERS - 1]!;
+  const back: Mass = {
+    x: lot.x,
+    y: lot.y,
+    w,
+    d: topTier.y - lot.y,
+    r: canopyRise,
+    base: topTier.r,
+    wbase: 0,
+  };
+  const masses = [back, ...tiers, front];
+  for (const m of masses) scene.solid(m.x, m.y, m.w, m.d, m.r);
+  scene.later(() => {
+    const solid = new Solid(scene, masses, 4);
+    const west = plainWest(b.west, b.westAlt, b.westLine, b.rimLow, 999, 4);
+    // Back block: a ribbed roof, and under its fascia the dark of the upper concourse.
+    solid.roof(back, (lx, ly) =>
+      lx === 0 || ly === 0
+        ? b.rim
+        : lx === w - 1 || ly === back.d - 1
+          ? b.trim
+          : lx % 14 === 13
+            ? b.roofLine
+            : ly < 3
+              ? b.roofAlt
+              : b.roof,
+    );
+    solid.west(back, plainWest(b.west, b.westAlt, b.westLine, b.rimLow, back.r, 7));
+    const rows = back.r - back.base;
+    const hall = Canvas.sprite(w, rows);
+    hall.rect(0, 0, w, rows, b.deep);
+    hall.rect(0, 0, w, 9, PAL.ink);
+    hall.hline(0, 0, w, b.rimLow);
+    hall.hline(0, 9, w, b.line);
+    for (let x = 8; x < w; x += 53) {
+      hall.vline(x, 10, rows - 10, PAL.steelLight);
+      hall.vline(x + 1, 10, rows - 10, PAL.steelDark);
+    }
+    for (let x = 3; x < w - 3; x += 3)
+      if (x % 53 > 12 && hash2(x, 3, 6023) < 0.5 && rows > 13)
+        hall.set(x, rows - 3, seats[(hash2(x, 5, 6024) * seats.length) | 0]!);
+    emissive(hall, () => {
+      for (let x = 6; x < w - 4; x += 12) hall.rect(x, 10, 2, 1, PAL.lamp);
+    });
+    hall.vline(0, 0, rows, b.edge);
+    solid.south(back, hall);
+    const text = 'BOLT RIVALS GRAND PRIX';
+    const tw = textWidth(text, 'micro', 1);
+    const sign = Canvas.sprite(tw + 2, 7);
+    neonText(sign, 1, 1, text, 3, 1);
+    solid.decal(back, (w - tw) >> 1, 1, sign);
+    // Tiers: seats on the tread, a riser below.
+    tiers.forEach((tier, t) => {
+      solid.roof(tier, (lx, k) => {
+        const aisle = lx % 38 < 3 || lx < 2 || lx >= w - 2;
+        if (aisle) return b.rimLow;
+        if (k >= 1 && k <= 3 && lx % 3 !== 2) {
+          if (hash2((lx / 3) | 0, t, 6021) < 0.78) {
+            const seat = seats[(hash2((lx / 3) | 0, t, 6022) * seats.length) | 0]!;
+            return k === 1 ? lighter(seat, 0.2) : k === 2 ? seat : darker(seat, 0.4);
+          }
+          return k === 3 ? b.inner : b.roofLine;
         }
-        cv.set(x, y0 + k, c);
+        return t % 2 === 0 ? b.roofAlt : b.roof;
+      });
+      solid.west(tier, west);
+      const riser = Canvas.sprite(w, STEP);
+      for (let x = 0; x < w; x++)
+        for (let k = 0; k < STEP; k++)
+          riser.set(
+            x,
+            k,
+            x % 38 < 3 ? b.line : k === 0 ? b.pier : k === STEP - 1 ? b.deep : b.wall,
+          );
+      solid.south(tier, riser);
+    });
+    // Front wall on the collision edge, with hoardings.
+    solid.roof(front, (_lx, ly) => (ly === 0 ? b.rim : b.rimLow));
+    solid.west(front, west);
+    const boards = Canvas.sprite(w, FRONT_R);
+    for (let x = 0; x < w; x++) {
+      for (let k = 0; k < FRONT_R; k++) {
+        const board = Math.floor(x / 38) % 3;
+        let c: Color = k === 0 ? b.trim : k === FRONT_R - 1 ? PAL.ink : b.wall;
+        if (k > 0 && k < FRONT_R - 1 && x % 38 > 3 && x % 38 < 36)
+          c = board === 0 ? PAL.coralDim : board === 1 ? PAL.cyanDim : PAL.purpleDim;
+        boards.set(x, k, c);
       }
-      for (let k = 0; k < STEP; k++)
-        cv.set(x, y0 + TREAD + k, aisle ? b.line : k === 0 ? b.wall : b.line);
     }
-  }
-  // Front wall on the collision edge, with hoardings.
-  for (let x = 0; x < w; x++) {
-    for (let k = 0; k < front; k++) {
-      const board = Math.floor(x / 38) % 3;
-      let c: Color = k === 0 ? b.trim : k === front - 1 ? PAL.ink : b.wall;
-      if (k > 0 && k < front - 1 && x % 38 > 3 && x % 38 < 36)
-        c = board === 0 ? PAL.coralDim : board === 1 ? PAL.cyanDim : PAL.purpleDim;
-      cv.set(x, baseRow - front + 1 + k, c);
-    }
-  }
-  // Canopy over the back rows, on columns, its fascia facing the track.
-  const cd = 26;
-  const cy0 = 0;
-  for (let x = 8; x < w; x += 53) {
-    cv.vline(x, cy0 + cd, backY - cd + 4, PAL.steelLight);
-    cv.vline(x + 1, cy0 + cd, backY - cd + 4, PAL.steelDark);
-  }
-  paintRoofSurface(cv, 0, cy0, w, cd, b, (lx) => (lx % 14 === 13 ? b.roofLine : b.roof));
-  cv.rect(0, cy0 + cd, w, 9, PAL.ink);
-  cv.hline(0, cy0 + cd, w, b.trim);
-  const text = 'BOLT RIVALS GRAND PRIX';
-  neonText(cv, (w - textWidth(text, 'micro', 1)) >> 1, cy0 + cd + 2, text, 3, 1);
-  emissive(cv, () => {
-    for (let x = 6; x < w - 4; x += 12) cv.rect(x, cy0 + cd + 9, 2, 1, PAL.lamp);
+    solid.south(front, boards);
+    scene.add(solid.item());
   });
-  cv.hline(0, cy0 + cd + 9, w, b.line);
-  scene.add({ art: cv, x: lot.x, y: lot.y - canopyRise, baseY: lot.y + d - 1 });
-  scene.footprint(lot.x, lot.y, w, d, 8);
   // Flood pools on the grid: the best lit place on the circuit.
   out.pools.push({
     x: sites.start.x + 14,
@@ -1537,7 +1707,7 @@ export function paintLandmarks(
   for (const lot of layout.lots) {
     if (!lot || !lot.tag) continue;
     if (lot.tag === 'clock') paintClock(scene, lot, out);
-    else if (lot.tag === 'arcade') paintArcade(scene, lot, out);
+    else if (lot.tag === 'arcade') paintArcade(scene, lot, sites, out);
     else if (lot.tag === 'grandstand') paintGrandstand(scene, lot, sites, out);
   }
   paintTower(scene, sites, out);

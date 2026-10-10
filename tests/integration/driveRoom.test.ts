@@ -1,7 +1,14 @@
 import { Client } from 'colyseus.js';
 import type { Room } from 'colyseus.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DEFAULT_LOADOUT, getTrack } from '@bolt/content';
+import {
+  BASELINE_BLUEPRINT,
+  CATALOG_VERSION,
+  EXAMPLE_TEMPLATES,
+  ROOKIE_BLUEPRINT,
+  baselineBlueprint,
+  getTrack,
+} from '@bolt/content';
 import type {
   ApiError,
   DriveJoinOptions,
@@ -18,7 +25,9 @@ import {
   PROTOCOL_VERSION,
   ROOM_DRIVE,
   ServerMessage,
+  buildHash,
   buildTrack,
+  canonicalizeBlueprint,
 } from '@bolt/shared';
 import type { MatchPhaseMessage } from '../../apps/server/src/rooms/DriveRoom.js';
 import { CLOSE_CODE_ABUSE } from '../../apps/server/src/rooms/DriveRoom.js';
@@ -60,7 +69,7 @@ function joinOptions(overrides: Record<string, unknown> = {}): DriveJoinOptions 
     guestToken: guest.token,
     trackId: TRACK_ID,
     weatherPresetId: WEATHER_ID,
-    loadout: { ...DEFAULT_LOADOUT },
+    blueprint: BASELINE_BLUEPRINT,
     ...overrides,
   } as DriveJoinOptions;
 }
@@ -146,19 +155,28 @@ describe('joining the drive room', () => {
   it('refuses unknown part ids in any slot', async () => {
     for (const slot of ['chassisId', 'engineId', 'tireKitId', 'paintId'] as const) {
       await expectJoinRefused(
-        { loadout: { ...DEFAULT_LOADOUT, [slot]: 'part_from_nowhere' } },
+        { blueprint: { ...BASELINE_BLUEPRINT, [slot]: 'part_from_nowhere' } },
         JOIN_ERROR_CODES.UNKNOWN_PART,
       );
     }
     // Names that exist on every JavaScript object are still not parts.
     for (const inherited of ['__proto__', 'constructor', 'to_string', 'has_own_property']) {
       await expectJoinRefused(
-        { loadout: { ...DEFAULT_LOADOUT, engineId: inherited } },
+        { blueprint: { ...BASELINE_BLUEPRINT, engineId: inherited } },
+        JOIN_ERROR_CODES.UNKNOWN_PART,
+      );
+      await expectJoinRefused(
+        {
+          blueprint: {
+            ...ROOKIE_BLUEPRINT,
+            parts: [{ ...ROOKIE_BLUEPRINT.parts[0]!, partId: inherited }],
+          },
+        },
         JOIN_ERROR_CODES.UNKNOWN_PART,
       );
     }
     await expectJoinRefused(
-      { loadout: { ...DEFAULT_LOADOUT, engineId: 'Engine Four' } },
+      { blueprint: { ...BASELINE_BLUEPRINT, engineId: 'Engine Four' } },
       JOIN_ERROR_CODES.BAD_REQUEST,
     );
   });
@@ -166,10 +184,192 @@ describe('joining the drive room', () => {
   it('refuses client-supplied totals, coefficients and other extra fields', async () => {
     await expectJoinRefused({ totalCost: 0 }, JOIN_ERROR_CODES.BAD_REQUEST);
     await expectJoinRefused({ params: { driveForce: 1e9 } }, JOIN_ERROR_CODES.BAD_REQUEST);
+    // The Milestone A join shape is gone.
     await expectJoinRefused(
-      { loadout: { ...DEFAULT_LOADOUT, massKg: 1 } },
+      {
+        blueprint: undefined,
+        loadout: {
+          chassisId: 'chassis_beetle',
+          engineId: 'engine_four_cylinder',
+          tireKitId: 'tires_street',
+          paintId: 'paint_signal',
+        },
+      },
       JOIN_ERROR_CODES.BAD_REQUEST,
     );
+    // Forged totals, masses, hashes and stats inside the blueprint are refused outright.
+    for (const forged of [
+      { massKg: 1 },
+      { totalCost: 0 },
+      { creditsLeft: 99999 },
+      { buildHash: 'f'.repeat(64) },
+      { stats: { speed: 100 } },
+      { params: { driveForce: 1e9 } },
+    ])
+      await expectJoinRefused(
+        { blueprint: { ...BASELINE_BLUEPRINT, ...forged } },
+        JOIN_ERROR_CODES.BAD_REQUEST,
+      );
+    for (const forged of [{ price: -500 }, { massKg: 0 }, { integrity: 9999 }, { charges: 99 }])
+      await expectJoinRefused(
+        {
+          blueprint: {
+            ...ROOKIE_BLUEPRINT,
+            parts: [{ ...ROOKIE_BLUEPRINT.parts[0]!, ...forged }, ROOKIE_BLUEPRINT.parts[1]],
+          },
+        },
+        JOIN_ERROR_CODES.BAD_REQUEST,
+      );
+    // Malformed values never reach the validator.
+    for (const part of [
+      { offsetX: 'NaN' },
+      { offsetY: 1e9 },
+      { rotationQuarterTurns: 7 },
+      { rotationQuarterTurns: -1 },
+      { assignedActionSlot: 2 },
+    ])
+      await expectJoinRefused(
+        { blueprint: { ...ROOKIE_BLUEPRINT, parts: [{ ...ROOKIE_BLUEPRINT.parts[0]!, ...part }] } },
+        JOIN_ERROR_CODES.BAD_REQUEST,
+      );
+    await expectJoinRefused(
+      { blueprint: { ...BASELINE_BLUEPRINT, name: '<script>alert(1)</script>' } },
+      JOIN_ERROR_CODES.BAD_REQUEST,
+    );
+    await expectJoinRefused({ blueprint: 'chassis_beetle' }, JOIN_ERROR_CODES.BAD_REQUEST);
+    await expectJoinRefused({ blueprint: null }, JOIN_ERROR_CODES.BAD_REQUEST);
+    // More parts than any car can hold: refused by the schema. A truly oversized body never
+    // gets that far: the matchmaking guard answers 413 before a room hook runs.
+    const stuffed = (count: number) => ({
+      blueprint: {
+        ...BASELINE_BLUEPRINT,
+        parts: Array.from({ length: count }, (_, i) => ({
+          ...ROOKIE_BLUEPRINT.parts[0]!,
+          instanceId: `p${i}`,
+        })),
+      },
+    });
+    await expectJoinRefused(stuffed(25), JOIN_ERROR_CODES.BAD_REQUEST);
+    const oversized = await client.joinOrCreate(ROOM_DRIVE, joinOptions(stuffed(400))).then(
+      () => undefined,
+      (error: { code?: number }) => error,
+    );
+    expect(oversized).toBeDefined();
+    expect([413, JOIN_ERROR_CODES.BAD_REQUEST]).toContain(oversized!.code);
+  });
+
+  it('refuses illegal builds with a reason a player can act on', async () => {
+    const withParts = (
+      parts: Array<Record<string, unknown>>,
+      essentials: Record<string, string> = {},
+    ) => ({
+      blueprint: {
+        ...baselineBlueprint(
+          { chassisId: 'chassis_platform', engineId: 'engine_four_cylinder', ...essentials },
+          'Illegal',
+        ),
+        parts: parts.map((p, i) => ({
+          instanceId: `p${i + 1}`,
+          offsetX: 0,
+          offsetY: 0,
+          rotationQuarterTurns: 0,
+          ...p,
+        })),
+      },
+    });
+    const refusal = async (overrides: Record<string, unknown>) => {
+      try {
+        const room = await client.joinOrCreate(ROOM_DRIVE, joinOptions(overrides));
+        await room.leave();
+        return undefined;
+      } catch (error) {
+        return error as { code?: number; message?: string };
+      }
+    };
+    // Over budget: 1,025 credits of perfectly real parts.
+    const dear = withParts(
+      [
+        { partId: 'weapon_mortar', mountId: 'deck_fore', autoMode: true },
+        { partId: 'defense_antimissile', mountId: 'deck_aft' },
+      ],
+      { engineId: 'engine_v12', tireKitId: 'tires_track' },
+    );
+    expect(await refusal(dear)).toMatchObject({
+      code: JOIN_ERROR_CODES.ILLEGAL_BUILD,
+      message: "That car can't race as built. Not enough credits.",
+    });
+    // Over weight, with the approved sentence.
+    const heavy = {
+      blueprint: {
+        ...baselineBlueprint(
+          { chassisId: 'chassis_trike', engineId: 'engine_twin', tireKitId: 'tires_track' },
+          'Heavy',
+        ),
+        parts: [
+          {
+            instanceId: 'a',
+            partId: 'weapon_shotgun',
+            mountId: 'front_center',
+            offsetX: 0,
+            offsetY: 0,
+            rotationQuarterTurns: 0,
+            assignedActionSlot: 0,
+          },
+          {
+            instanceId: 'b',
+            partId: 'utility_generator',
+            mountId: 'left_rear',
+            offsetX: 0,
+            offsetY: 0,
+            rotationQuarterTurns: 0,
+          },
+        ],
+      },
+    };
+    expect(await refusal(heavy)).toMatchObject({
+      code: JOIN_ERROR_CODES.ILLEGAL_BUILD,
+      message:
+        "That car can't race as built. Too heavy for this chassis. Remove weight or swap frames.",
+    });
+    // Geometry and limits.
+    for (const illegal of [
+      withParts([{ partId: 'utility_fan', mountId: 'no_such_mount' }]),
+      withParts([{ partId: 'utility_fan', mountId: 'engine_bay' }]),
+      withParts([{ partId: 'utility_fan', mountId: 'deck_fore', offsetX: 30 }]),
+      withParts([
+        {
+          partId: 'weapon_front_mg',
+          mountId: 'deck_front',
+          rotationQuarterTurns: 2,
+          assignedActionSlot: 0,
+        },
+        { partId: 'weapon_front_mg', mountId: 'deck_front', assignedActionSlot: 0 },
+      ]),
+      withParts([
+        { partId: 'utility_fan', mountId: 'deck_fore' },
+        { partId: 'utility_radar', mountId: 'deck_fore' },
+      ]),
+      withParts([
+        { partId: 'utility_gyro', mountId: 'deck_fore' },
+        { partId: 'utility_gyro', mountId: 'deck_aft' },
+      ]),
+      withParts([
+        { partId: 'utility_fan', mountId: 'deck_fore', instanceId: 'same' },
+        { partId: 'utility_repair', mountId: 'deck_aft', instanceId: 'same' },
+      ]),
+      withParts([{ partId: 'weapon_tesla', mountId: 'deck_fore', assignedActionSlot: 0 }]),
+    ])
+      await expectJoinRefused(illegal, JOIN_ERROR_CODES.ILLEGAL_BUILD);
+    // A blueprint from another catalog version is its own refusal.
+    await expectJoinRefused(
+      { blueprint: { ...ROOKIE_BLUEPRINT, catalogVersion: '0.2.0' } },
+      JOIN_ERROR_CODES.CATALOG_MISMATCH,
+    );
+    await expectJoinRefused(
+      { blueprint: { ...ROOKIE_BLUEPRINT, engineId: 'tires_street' } },
+      JOIN_ERROR_CODES.ILLEGAL_BUILD,
+    );
+    expect(CATALOG_VERSION).not.toBe('0.2.0');
   });
 
   it('creates no room for any refused join', async () => {
@@ -242,7 +442,7 @@ describe('driving', () => {
     if (left === undefined) await room?.leave();
   });
 
-  it('joins with a valid guest token and the default loadout, held on the grid', async () => {
+  it('joins with a valid guest token and the baseline blueprint, held on the grid', async () => {
     room = await join();
     listen(room);
     const state = room.state;
@@ -257,6 +457,13 @@ describe('driving', () => {
     expect(state.y).toBe(spawn.y);
     expect(state.headingRad).toBe(spawn.headingRad);
     expect(await roomCount()).toBe(1);
+    // The server reports the hash of the build it accepted and the car's runtime state.
+    expect(state.buildHash).toBe(buildHash(BASELINE_BLUEPRINT));
+    expect(Array.from(state.wheelIntegrity)).toEqual([100, 100, 100, 100]);
+    expect(state.coreHeat).toBe(0);
+    expect(state.batteryEnergy).toBe(40);
+    expect(state.thermalLimited).toBe(false);
+    expect(state.engineCharge).toBe(1);
   });
 
   it('carries every CarSnapshot field in the synchronized state', () => {
@@ -279,6 +486,13 @@ describe('driving', () => {
       'throttleFraction',
       'reverseHold',
       'wallGrace',
+      'coreHeat',
+      'batteryEnergy',
+      'engineSpool',
+      'engineCharge',
+      'engineClock',
+      'engineBurst',
+      'tireWearSeconds',
       'checkpointIndex',
       'lap',
       'courseProgress',
@@ -289,6 +503,9 @@ describe('driving', () => {
     for (const field of numeric) expect(typeof state[field], field).toBe('number');
     expect(typeof state.phase).toBe('string');
     expect(typeof state.reversing).toBe('boolean');
+    expect(typeof state.thermalLimited).toBe('boolean');
+    expect(typeof state.buildHash).toBe('string');
+    expect(Array.from(state.wheelIntegrity as Iterable<number>)).toHaveLength(4);
   });
 
   it('does not let the car move before the countdown ends, whatever the client sends', async () => {
@@ -532,6 +749,76 @@ describe('driving', () => {
     await room.leave();
     expect(left).toBe(4000);
     await waitFor(() => left !== undefined, 1000, 'the leave to complete');
+    const deadline = Date.now() + 3000;
+    while ((await roomCount()) !== 0 && Date.now() < deadline) await sleep(50);
+    expect(await roomCount()).toBe(0);
+  });
+});
+
+describe('racing a built car', () => {
+  async function joinWith(blueprint: unknown): Promise<DriveRoomClient> {
+    return join({ blueprint });
+  }
+
+  it('accepts every shipped example build and reports the hash of what it accepted', async () => {
+    for (const template of EXAMPLE_TEMPLATES) {
+      const room = await joinWith(template.blueprint);
+      expect(room.state.buildHash, template.id).toBe(buildHash(template.blueprint));
+      expect(room.state.phase).toBe('COUNTDOWN');
+      await room.leave();
+    }
+  });
+
+  it('sizes wheel state to the chassis: six for the Spider, three for the Trike', async () => {
+    const spider = await joinWith(
+      EXAMPLE_TEMPLATES.find((t) => t.name === 'Dust Spider')!.blueprint,
+    );
+    expect(Array.from(spider.state.wheelIntegrity)).toEqual([100, 100, 100, 100, 100, 100]);
+    await spider.leave();
+    const trike = await joinWith(
+      EXAMPLE_TEMPLATES.find((t) => t.name === 'Tiny Trouble')!.blueprint,
+    );
+    expect(Array.from(trike.state.wheelIntegrity)).toEqual([100, 100, 100]);
+    await trike.leave();
+  });
+
+  it('canonicalizes what the client sent: purchase order and sub-pixel noise do not matter', async () => {
+    const shuffled = {
+      ...ROOKIE_BLUEPRINT,
+      name: 'Shuffled',
+      parts: [...ROOKIE_BLUEPRINT.parts]
+        .reverse()
+        .map((p, i) => ({ ...p, instanceId: `zz${i}`, offsetX: p.offsetX + 0.2 })),
+    };
+    expect(canonicalizeBlueprint(shuffled).parts.map((p) => p.offsetX)).toEqual([0, 0]);
+    const room = await joinWith(shuffled);
+    expect(room.state.buildHash).toBe(buildHash(ROOKIE_BLUEPRINT));
+    await room.leave();
+  });
+
+  it('simulates heat and energy on the server: a Sport Electric drains its battery under throttle', async () => {
+    const room = await joinWith(EXAMPLE_TEMPLATES.find((t) => t.name === 'Rain Runner')!.blueprint);
+    expect(room.state.batteryEnergy).toBe(40);
+    let sequence = 0;
+    const until = Date.now() + (COUNTDOWN_SECONDS + 3.5) * 1000;
+    while (Date.now() < until) {
+      room.send(ClientMessage.PLAYER_INPUT, { inputs: [sample(sequence++)] });
+      await sleep(33);
+    }
+    await waitFor(
+      () => room.state.phase === 'RACING' && room.state.raceTimeMs > 2500,
+      4000,
+      'a few seconds of racing',
+    );
+    // Fourteen for the motor and three for the shield against ten generated.
+    expect(room.state.batteryEnergy).toBeLessThan(30);
+    expect(room.state.batteryEnergy).toBeGreaterThanOrEqual(0);
+    expect(room.state.coreHeat).toBeGreaterThan(1);
+    expect(Math.hypot(room.state.x - spawn.x, room.state.y - spawn.y)).toBeGreaterThan(100);
+    await room.leave();
+  });
+
+  it('leaves no rooms behind', async () => {
     const deadline = Date.now() + 3000;
     while ((await roomCount()) !== 0 && Date.now() < deadline) await sleep(50);
     expect(await roomCount()).toBe(0);

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { MAX_INPUTS_PER_PACKET, PROTOCOL_VERSION } from './balance.js';
+import { blueprintSchema } from './blueprint.js';
 import type { MatchPhase, VehicleMotionState, VehicleProgressState } from './types.js';
 
 /**
@@ -48,17 +49,18 @@ const idSchema = z
   .max(48)
   .regex(/^[a-z0-9_]+$/);
 
-export const loadoutSchema = z
-  .object({ chassisId: idSchema, engineId: idSchema, tireKitId: idSchema, paintId: idSchema })
-  .strict();
-
+/**
+ * A drive room join carries the whole blueprint. The server parses it with the strict schema,
+ * validates it against its own catalog and derives every total, mass and coefficient itself;
+ * nothing a client computed is accepted, and any extra field is a refusal.
+ */
 export const driveJoinOptionsSchema = z
   .object({
     protocolVersion: z.literal(PROTOCOL_VERSION),
     guestToken: z.string().min(16).max(512),
     trackId: idSchema,
     weatherPresetId: idSchema,
-    loadout: loadoutSchema,
+    blueprint: blueprintSchema,
   })
   .strict();
 export type DriveJoinOptions = z.infer<typeof driveJoinOptionsSchema>;
@@ -70,6 +72,7 @@ export const ERROR_CODES = [
   'UNKNOWN_TRACK',
   'UNKNOWN_PART',
   'ILLEGAL_BUILD',
+  'CATALOG_MISMATCH',
   'RATE_LIMITED',
   'SERVER_FULL',
   'NOT_FOUND',
@@ -89,6 +92,8 @@ export const JOIN_ERROR_CODES = {
   UNKNOWN_TRACK: 4404,
   VERSION_MISMATCH: 4409,
   UNKNOWN_PART: 4422,
+  ILLEGAL_BUILD: 4423,
+  CATALOG_MISMATCH: 4426,
   RATE_LIMITED: 4429,
   INTERNAL: 4500,
   SERVER_FULL: 4503,
@@ -117,10 +122,19 @@ export type CarSnapshot = {
   countdown: number;
   /** Exact simulation ticks left before GO, so a predicting client starts on the same tick. */
   countdownTicks: number;
+  /**
+   * Includes the powertrain state (core heat, battery, thermal limit, engine wind-up, charge,
+   * cycle clock and burst, tire wear), so a predicting client resumes from exactly the state
+   * the server simulated.
+   */
   motion: VehicleMotionState;
   progress: VehicleProgressState;
   bestLapMs: number;
   lastLapMs: number;
+  /** Integrity of each wheel, one entry per wheel anchor of the chassis. */
+  wheelIntegrity: number[];
+  /** Mechanical hash of the blueprint the server accepted for this car. */
+  buildHash: string;
 };
 
 export type GuestSessionResponse = {

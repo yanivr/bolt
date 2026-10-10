@@ -2,10 +2,18 @@ import { sampleBranch } from '@bolt/shared';
 import type { AnimatedArt, BakeContext } from '../biome.js';
 import { Canvas } from '../canvas.js';
 import type { Color } from '../canvas.js';
+import { leanOf } from '../oblique.js';
 import type { Scene } from '../oblique.js';
 import { ROOF_HEAD } from './buildings.js';
 import type { SignRequest } from './buildings.js';
-import { RING_BOX_H, drawMarquee, drawTowerHub, drawTowerRings } from './landmarks.js';
+import {
+  RING_BOX_CX,
+  RING_BOX_H,
+  RING_BOX_W,
+  drawMarquee,
+  drawTowerHub,
+  drawTowerRings,
+} from './landmarks.js';
 import type { LandmarkSites } from './landmarks.js';
 import type { CityLayout, Lot } from './layout.js';
 import { drawNeonSign, neonSignSize } from './neon.js';
@@ -77,15 +85,18 @@ export function planFeatureSigns(layout: CityLayout): FeatureSign[] {
     let bestD = Infinity;
     for (const lot of layout.lots) {
       if (!lot || lot.tag || used.has(lot.id)) continue;
-      if (lot.w < size.w + 12 || lot.h < 16 || lot.floors > 2) continue;
-      // Screen row of the foot of the sign.
-      const foot = lot.y + Math.max(8, lot.h - 8) - lot.rise;
+      if (lot.w < size.w + 12 || lot.h < 16 || lot.floors > 4 || lot.tower > 0) continue;
+      // The sign stands at the front of the roof. Anything south of it, or west of it and
+      // tall enough to lean across, could hide it: look at what each neighbor covers on screen.
+      const top = lot.y + Math.max(8, lot.h - 8) - lot.rise - size.h - 8;
+      const bottom = lot.y + lot.h - lot.rise + 4;
       let hidden = false;
       for (const other of layout.lots) {
         if (!other || other === lot) continue;
-        if (other.x >= lot.x + lot.w || other.x + other.w <= lot.x) continue;
-        if (other.y < lot.y + lot.h) continue;
-        if (other.y - other.rise - ROOF_HEAD < foot + 2) hidden = true;
+        if (other.y + other.h <= lot.y + lot.h - 12) continue;
+        const reach = other.rise + ROOF_HEAD;
+        if (other.x >= lot.x + lot.w + 8 || other.x + other.w + leanOf(reach) <= lot.x) continue;
+        if (other.y - reach < bottom && other.y + other.h > top) hidden = true;
       }
       if (hidden) continue;
       const d = Math.hypot(lot.x + lot.w / 2 - wish.tx, lot.y + lot.h / 2 - wish.ty);
@@ -204,8 +215,8 @@ export function buildAnimated(
     [1, 1, 1],
   ];
   const rings = ringStates.map((state) => {
-    const cv = new Canvas(50, RING_BOX_H);
-    drawTowerRings(cv, 25, RING_BOX_H, state);
+    const cv = new Canvas(RING_BOX_W, RING_BOX_H);
+    drawTowerRings(cv, RING_BOX_CX, RING_BOX_H, state);
     return cv;
   });
   out.push({

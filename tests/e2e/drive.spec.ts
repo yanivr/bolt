@@ -104,9 +104,11 @@ test('floating joystick appears under the finger, drives, and brakes when pulled
   const touch = new Touch(page);
   const disc = page.locator('.joy-disc');
   await expect(disc).not.toHaveClass(/is-active/);
-  await expect(page.getByText('Drag toward where you want to go. Pull back to brake.')).toBeVisible({
-    timeout: 20_000,
-  });
+  await expect(page.getByText('Drag toward where you want to go. Pull back to brake.')).toBeVisible(
+    {
+      timeout: 20_000,
+    },
+  );
 
   const origin = { x: 300, y: 260 };
   await touch.down({ id: 1, ...origin });
@@ -149,7 +151,9 @@ test('pointing the stick turns the car toward that direction on screen', async (
   await touch.up(1);
 });
 
-test('the stick origin trails a thumb that wanders, so it never gets far away', async ({ page }) => {
+test('the stick origin trails a thumb that wanders, so it never gets far away', async ({
+  page,
+}) => {
   await startRace(page);
   const touch = new Touch(page);
   await touch.down({ id: 1, x: 250, y: 250 });
@@ -168,7 +172,9 @@ test('the wheel-style option steers left and right relative to the car and brake
     window.localStorage.setItem('bolt.settings.v1', JSON.stringify({ steering: 'wheel' })),
   );
   await startRace(page);
-  await expect(page.getByText('Drag to steer. Pull down to brake.')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText('Drag to steer. Pull down to brake.')).toBeVisible({
+    timeout: 20_000,
+  });
   const touch = new Touch(page);
   await touch.down({ id: 1, x: 300, y: 260 });
   await expect.poll(() => speed(page), { timeout: 20_000 }).toBeGreaterThan(25);
@@ -290,7 +296,8 @@ test('leaving a race asks first and returns home', async ({ page }) => {
 test('every shipped chassis can be picked and driven', async ({ page }) => {
   test.slow();
   await page.goto('/?debug=1');
-  for (const name of ['Arrow', 'Turtle', 'Spider', 'Beetle']) {
+  // The picker offers the chassis that have sprites, in catalog order.
+  for (const name of ['Turtle', 'Spider', 'Arrow', 'Beetle']) {
     await page.getByRole('button', { name: 'Next car' }).tap();
     await expect(page.locator('.car-pick-name strong')).toHaveText(name);
     await page.getByRole('button', { name: 'Start Racing' }).tap();
@@ -301,4 +308,112 @@ test('every shipped chassis can be picked and driven', async ({ page }) => {
     await page.getByRole('button', { name: 'Leave Race' }).tap();
     await expect(page.getByRole('button', { name: 'Start Racing' })).toBeVisible();
   }
+});
+
+test('a pick stored by the Milestone A build is migrated to a blueprint and survives a reload', async ({
+  page,
+}) => {
+  const problems = collectProblems(page);
+  await page.goto('/');
+  await page.evaluate(() => {
+    window.localStorage.clear();
+    window.localStorage.setItem(
+      'bolt.loadout.v1',
+      JSON.stringify({
+        chassisId: 'chassis_turtle',
+        engineId: 'engine_four_cylinder',
+        tireKitId: 'tires_street',
+        paintId: 'paint_mint',
+      }),
+    );
+  });
+  await page.reload();
+  await expect(page.locator('.car-pick-name strong')).toHaveText('Turtle');
+  await expect(page.getByRole('radio', { name: 'Mint' })).toHaveAttribute('aria-checked', 'true');
+  const stored = await page.evaluate(() => ({
+    legacy: window.localStorage.getItem('bolt.loadout.v1'),
+    blueprint: window.localStorage.getItem('bolt.blueprint.v1'),
+  }));
+  expect(stored.legacy).toBeNull();
+  expect(JSON.parse(stored.blueprint ?? '{}')).toMatchObject({
+    formatVersion: 1,
+    chassisId: 'chassis_turtle',
+    paintId: 'paint_mint',
+    parts: [],
+  });
+  await page.reload();
+  await expect(page.locator('.car-pick-name strong')).toHaveText('Turtle');
+  // Garbage in storage falls back to the baseline car instead of breaking the page.
+  await page.evaluate(() =>
+    window.localStorage.setItem('bolt.blueprint.v1', '{"chassisId":"<script>","totalCost":0}'),
+  );
+  await page.reload();
+  await expect(page.locator('.car-pick-name strong')).toHaveText('Beetle');
+  expect(problems).toEqual([]);
+});
+
+test('a build with parts that have no art yet races online, drawn with stand-in sprites', async ({
+  page,
+}) => {
+  const problems = collectProblems(page);
+  await page.goto('/?debug=1');
+  // The catalog version is read from the server so this test does not go stale with it.
+  const catalogVersion = await page.evaluate(async () => {
+    const response = await fetch('/api/v1/catalog');
+    return ((await response.json()) as { catalogVersion: string }).catalogVersion;
+  });
+  // An Arrow with a V8, Slicks, a machine gun, nitro and a fan. Only the Arrow has sprites.
+  const blueprint = {
+    formatVersion: 1,
+    catalogVersion,
+    name: 'Straight-Line Rocket',
+    chassisId: 'chassis_arrow',
+    engineId: 'engine_v8',
+    tireKitId: 'tires_slick',
+    paintId: 'paint_signal',
+    parts: [
+      {
+        instanceId: 'p1',
+        partId: 'weapon_front_mg',
+        mountId: 'front_center',
+        offsetX: 0,
+        offsetY: 0,
+        rotationQuarterTurns: 0,
+        assignedActionSlot: 0,
+      },
+      {
+        instanceId: 'p2',
+        partId: 'utility_nitro',
+        mountId: 'roof_mid',
+        offsetX: 0,
+        offsetY: 0,
+        rotationQuarterTurns: 0,
+      },
+      {
+        instanceId: 'p3',
+        partId: 'utility_fan',
+        mountId: 'roof_rear',
+        offsetX: 0,
+        offsetY: 0,
+        rotationQuarterTurns: 0,
+      },
+    ],
+    createdAt: '2026-10-10T00:00:00Z',
+  };
+  await page.evaluate(
+    (json) => window.localStorage.setItem('bolt.blueprint.v1', json),
+    JSON.stringify(blueprint),
+  );
+  await page.goto('/?debug=1&autopilot=1');
+  await expect(page.locator('.car-pick-name strong')).toHaveText('Arrow');
+  await page.getByRole('button', { name: 'Start Racing' }).tap();
+  await expect(page.locator('.hud')).toBeVisible({ timeout: 40_000 });
+  // The server accepted the full blueprint: this is an authoritative drive, not the fallback.
+  await expect(page.getByTestId('debug')).toContainText('online');
+  await expect(page.getByTestId('debug')).toContainText('heat');
+  // It is the V8 car that is being simulated: it passes the stock car's top speed.
+  await expect
+    .poll(async () => speed(page), { timeout: 40_000, intervals: [500] })
+    .toBeGreaterThan(92);
+  expect(problems).toEqual([]);
 });

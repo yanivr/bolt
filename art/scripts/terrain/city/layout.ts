@@ -7,8 +7,13 @@ import { ROOF_WEIGHTS } from './palette.js';
  * City plan outside the corridor: a recursive street grid, blocks, and rectangular building
  * lots aligned to the world axes. Every lot is a clean rectangle that stays clear of the
  * corridor. Lots on the far (north) bank of a road are pulled down to the collision edge so
- * their facades form the wall; lots on the near (south) bank are pushed back until neither
- * their roof nor a car parked against the edge can overlap them on screen.
+ * their facades form the wall. Lots south or west of a road, whose mass would rise or lean
+ * toward it on screen, are cut back and capped until nothing they carry can reach the road or
+ * the strip beside it that a car is drawn across.
+ *
+ * Heights are planned block by block so that the city reads as built mass and not as a carpet
+ * of roofs: inside a block each lot stands taller than the neighbor built against its south
+ * side, yards and alleys open up walls, and a few lots carry a tower.
  */
 
 export const G_STREET = 1;
@@ -19,23 +24,29 @@ export const G_PLAZA = 5;
 export const G_WATER = 6;
 export const G_QUAY = 7;
 
-/** Depth of the strip south of a road in which nothing tall may stand or appear. */
-export const NEAR_STRIP = 24;
-/** Screen height of a ground floor and of each further storey. */
+/** Screen height of a ground floor, of each further storey, and of the cornice above them. */
 export const FLOOR_0 = 18;
-export const FLOOR_N = 10;
+export const FLOOR_N = 12;
+export const CORNICE = 3;
+/** Most storeys an ordinary building has; towers add more on a set-back shaft. */
+export const MAX_FLOORS = 7;
 
 /** Shift of the storey roll per roof family: slate, teal, maroon, plum, olive, concrete. */
-const FAMILY_HEIGHT_BIAS: readonly number[] = [0.12, -0.24, 0.04, 0, -0.14, 0.1];
+const FAMILY_HEIGHT_BIAS: readonly number[] = [0.5, -0.9, 0.1, 0, -0.5, 0.4];
 
 export type Rect = { x: number; y: number; w: number; h: number };
 
 export type Lot = Rect & {
   id: number;
   family: number;
-  /** Screen rise of the roof above the ground, in pixels. */
+  /** Screen rise of the tallest roof above the ground, in pixels. */
   rise: number;
+  /** Storeys of the main body. */
   floors: number;
+  /** Further storeys on a set-back tower shaft; 0 for most buildings. */
+  tower: number;
+  /** Tallest any mass on the full footprint may be without leaning over drivable ground. */
+  cap: number;
   seed: number;
   /** Rows of open ground between the facade and drivable ground to the south; 999 if none. */
   front: number;
@@ -45,6 +56,8 @@ export type Lot = Rect & {
 };
 
 export type Block = Rect & { kind: number; seed: number };
+/** Gap to the next roof south of a lot beyond which its south wall counts as open to view. */
+const OPEN_FRONT = 12;
 export type Street = Rect & { horizontal: boolean };
 export type Reserve = Rect & { ground: number };
 export type FixedLot = Rect & { family: number; rise: number; tag: string };
@@ -64,7 +77,12 @@ const overlaps = (a: Rect, b: Rect): boolean =>
   a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
 export function riseForFloors(floors: number): number {
-  return FLOOR_0 + (floors - 1) * FLOOR_N + 1;
+  return FLOOR_0 + (floors - 1) * FLOOR_N + CORNICE;
+}
+
+/** Storeys that fit under a rise. */
+export function floorsForRise(rise: number): number {
+  return Math.max(0, Math.floor((rise - CORNICE - FLOOR_0) / FLOOR_N) + 1);
 }
 
 export function buildLayout(
@@ -155,7 +173,7 @@ export function buildLayout(
     if ((mustSplit || maySplit) && big >= 56) {
       const horizontal = r.w === r.h ? rnd() < 0.5 : r.w > r.h;
       const span = horizontal ? r.w : r.h;
-      const gap = [0, 0, 0, 0, 2, 4, 8][(rnd() * 7) | 0]!;
+      const gap = [0, 0, 0, 2, 4, 6, 10, 14][(rnd() * 8) | 0]!;
       const cutAt = even(Math.max(26, Math.min(span - 26 - gap, span * (0.3 + rnd() * 0.4))));
       // Neighbors usually keep the block's material; sometimes a different building moves in.
       const fam2 = rnd() < 0.4 ? ROOF_WEIGHTS[(rnd() * ROOF_WEIGHTS.length) | 0]! : family;
@@ -239,6 +257,8 @@ export function buildLayout(
       family,
       rise,
       floors,
+      tower: 0,
+      cap: rise,
       seed: (rnd() * 0x7fffffff) | 0,
       front: 999,
       roadDist: 999,
@@ -304,43 +324,9 @@ export function buildLayout(
     paintId(lot, id);
   }
 
-  // Heights, and the near-bank rule.
-  for (let id = fixedCount; id < lots.length; id++) {
-    const lot = lots[id]!;
-    const area = lot.w * lot.h;
-    // Each family has its own habit: offices and tenements climb, sheds and workshops stay low.
-    const roll = Math.min(0.999, Math.max(0, rnd() + (FAMILY_HEIGHT_BIAS[lot.family] ?? 0)));
-    let floors = roll < 0.3 ? 1 : roll < 0.68 ? 2 : roll < 0.9 ? 3 : 4;
-    if (lot.w < 30) floors = Math.min(floors, 2);
-    if (area > 9000) floors = Math.min(floors, 3);
-    if (area > 14000) floors = Math.min(floors, 2);
-    let gap = 255;
-    for (let x = lot.x; x < lot.x + lot.w; x++) gap = Math.min(gap, scene.clearN[lot.y * w + x]!);
-    if (gap < 200) {
-      // A road lies to the north: step the building back, lower it, or give the lot up.
-      let need = riseForFloors(floors) + NEAR_STRIP - gap;
-      while (need > 0 && lot.h - need < 20 && floors > 1) {
-        floors--;
-        need = riseForFloors(floors) + NEAR_STRIP - gap;
-      }
-      if (need > 0) {
-        if (lot.h - need < 16) {
-          paintId(lot, 0);
-          lots[id] = null;
-          continue;
-        }
-        paintId(lot, 0);
-        lot.y += need;
-        lot.h -= need;
-        paintId(lot, id);
-      }
-    }
-    lot.floors = floors;
-    lot.rise = riseForFloors(floors);
-  }
-
-  for (const lot of lots) {
-    if (!lot) continue;
+  const measure = (lot: Lot): void => {
+    lot.roadDist = 999;
+    lot.front = 999;
     for (let y = lot.y; y < lot.y + lot.h; y += 2) {
       for (let x = lot.x; x < lot.x + lot.w; x += 2) {
         const e = field.edge[Math.min(h - 1, y) * w + Math.min(w - 1, x)]!;
@@ -358,6 +344,110 @@ export function buildLayout(
         }
       }
     }
+  };
+
+  // Footprints. Away from the track some lots give up a strip for a yard or an alley, which
+  // opens the wall behind it to view. Then every lot is cut back until at least one storey can
+  // stand on it without leaning over the road, and two where there is depth to spare.
+  const ONE = riseForFloors(1);
+  const TWO = riseForFloors(2);
+  for (let id = fixedCount; id < lots.length; id++) {
+    const lot = lots[id]!;
+    measure(lot);
+    paintId(lot, 0);
+    if (lot.roadDist > 30) {
+      if (lot.h >= 44 && rnd() < 0.4) lot.h -= 6 + ((rnd() * 4) | 0) * 4;
+      if (lot.w >= 40 && rnd() < 0.3) {
+        const cut = 4 + ((rnd() * 3) | 0) * 2;
+        if (rnd() < 0.5) lot.x += cut;
+        lot.w -= cut;
+      }
+    }
+    let cap = scene.maxRise(lot.x, lot.y, lot.w, lot.h, 255);
+    let guard = 0;
+    while (cap < TWO && guard++ < 40) {
+      const north = lot.h >= 24 ? scene.maxRise(lot.x, lot.y + 4, lot.w, lot.h - 4, 255) : -1;
+      const east = lot.w >= 28 ? scene.maxRise(lot.x, lot.y, lot.w - 4, lot.h, 255) : -1;
+      if (north < 0 && east < 0) break;
+      // One storey will do when the lot has no more depth to give.
+      if (cap >= ONE && Math.max(north, east) <= cap && lot.h < 40) break;
+      if (north >= east) {
+        lot.y += 4;
+        lot.h -= 4;
+        cap = north;
+      } else {
+        lot.w -= 4;
+        cap = east;
+      }
+    }
+    if (cap < ONE || lot.w < 20 || lot.h < 16) {
+      lots[id] = null;
+      continue;
+    }
+    lot.cap = cap;
+    paintId(lot, id);
+    measure(lot);
   }
+
+  // Heights. Lots are taken from the south of the map to the north. A lot whose south wall is
+  // open to a road or a street chooses freely; a lot with a neighbor built up against its south
+  // side is made taller than that neighbor, so that inside a block the walls stack up into view
+  // one behind the other instead of hiding behind a carpet of roofs.
+  const order: Lot[] = [];
+  for (let id = fixedCount; id < lots.length; id++) if (lots[id]) order.push(lots[id]!);
+  order.sort((a, b) => b.y + b.h - (a.y + a.h) || a.x - b.x || a.id - b.id);
+  for (const lot of order) {
+    const sy = lot.y + lot.h;
+    // What stands south of this lot, and how much of its wall each neighbor would hide.
+    let need = 0;
+    let blockedCols = 0;
+    const seen = new Set<number>();
+    for (let x = lot.x + 2; x < lot.x + lot.w - 2; x += 3) {
+      for (let k = 0; k <= OPEN_FRONT; k++) {
+        const y = sy + k;
+        if (y >= h) break;
+        const other = roofId[y * w + x]!;
+        if (other === 0 || other === lot.id) continue;
+        blockedCols++;
+        if (seen.has(other)) break;
+        seen.add(other);
+        const o = lots[other]!;
+        if (o.tag) break;
+        const overlap = Math.min(o.x + o.w, lot.x + lot.w) - Math.max(o.x, lot.x);
+        if (overlap >= Math.min(18, lot.w * 0.4)) need = Math.max(need, o.rise - k);
+        break;
+      }
+    }
+    const open = blockedCols * 3 < lot.w * 0.4;
+    const bias = FAMILY_HEIGHT_BIAS[lot.family] ?? 0;
+    const roll = rnd();
+    let floors: number;
+    if (lot.front <= 12) {
+      // Facing the track: the showpiece walls. Mostly three to five storeys.
+      floors = Math.round(2.6 + roll * 2.6 + bias);
+    } else if (open) {
+      floors = Math.round(1.1 + roll * roll * 2.8 + bias);
+    } else {
+      // Rise far enough above the neighbor in front to show a storey or two of wall.
+      const show = FLOOR_N + 2 + ((rnd() * 3) | 0) * 6;
+      floors = Math.max(Math.round(1.4 + roll * 2 + bias), floorsForRise(need + show) + 1);
+      // Deep in a block the climb levels off, so a few tall roofs stay the exception.
+      if (floors > 5 && rnd() < 0.6) floors = 5;
+    }
+    const area = lot.w * lot.h;
+    if (lot.w < 26) floors = Math.min(floors, 4);
+    if (area > 12000) floors = Math.min(floors, 4);
+    floors = Math.max(1, Math.min(MAX_FLOORS, floors, floorsForRise(lot.cap)));
+    lot.floors = floors;
+    lot.rise = riseForFloors(floors);
+    // A few lots carry a tower: a slim shaft set back on the main body.
+    const roomy = lot.w >= 44 && lot.h >= 40 && area <= 9000;
+    const tall = floorsForRise(lot.cap) - floors;
+    if (roomy && floors >= 3 && tall >= 3 && lot.roadDist > 24 && rnd() < 0.1) {
+      lot.tower = Math.min(tall, 3 + ((rnd() * 4) | 0));
+      lot.rise = riseForFloors(floors + lot.tower);
+    }
+  }
+
   return { w, h, ground, roofId, lots, blocks, streets };
 }

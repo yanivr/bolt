@@ -228,11 +228,34 @@ describe('GET /api/v1/catalog', () => {
     expect(Object.keys(body).sort()).toEqual([
       'catalogVersion',
       'chassis',
+      'defenses',
       'engines',
       'paints',
       'protocolVersion',
+      'startingCredits',
+      'templates',
       'tires',
+      'utilities',
+      'weapons',
     ]);
+    // The whole catalog: 120 parts, twenty of each kind.
+    for (const list of [
+      body.chassis,
+      body.engines,
+      body.tires,
+      body.weapons,
+      body.defenses,
+      body.utilities,
+    ])
+      expect(list).toHaveLength(20);
+    expect(body.startingCredits).toBe(1000);
+    expect(body.templates.map((t) => t.id)).toContain('example_tiny_trouble');
+    for (const part of [...body.weapons, ...body.defenses, ...body.utilities]) {
+      expect(typeof part.price).toBe('number');
+      expect(typeof part.description).toBe('string');
+      expect(typeof part.drawback).toBe('string');
+      expect(part.params).toBeDefined();
+    }
     expect(body.catalogVersion).toBe(CATALOG_VERSION);
     expect(body.protocolVersion).toBe(PROTOCOL_VERSION);
     expect(body.chassis.map((part) => part.id)).toContain(DEFAULT_LOADOUT.chassisId);

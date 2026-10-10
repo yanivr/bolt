@@ -1,4 +1,5 @@
 import { STRINGS } from '@bolt/content';
+import { resolveCarSprites } from '@bolt/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TRACK_ID, WEATHER_PRESET_ID, bootAssets } from '../app/App.js';
 import { useApp, useHud } from '../app/store.js';
@@ -68,7 +69,7 @@ export function RaceScreen() {
       try {
         const [m, setup] = await Promise.all([
           bootAssets(),
-          startDrive(TRACK_ID, WEATHER_PRESET_ID, useApp.getState().loadout),
+          startDrive(TRACK_ID, WEATHER_PRESET_ID, useApp.getState().blueprint),
         ]);
         if ('error' in setup) {
           if (!cancelled) setLoad({ kind: 'error', reason: setup.error });
@@ -79,6 +80,14 @@ export function RaceScreen() {
           leave();
           return;
         }
+        // Until every part has art, engines and wheel kits without a sprite sheet are drawn
+        // with the default one. The session above already runs the real blueprint.
+        const sprites = resolveCarSprites(m.cars, setup.blueprint).loadout;
+        if (!sprites) {
+          leave();
+          setLoad({ kind: 'error', reason: 'content' });
+          return;
+        }
         setManifests(m);
         setLoad({ kind: 'loading', stage: 'track', progress: 0 });
         input.attach(touch);
@@ -86,7 +95,7 @@ export function RaceScreen() {
           manifests: m,
           session: setup.session,
           link: setup.link,
-          loadout: setup.loadout,
+          loadout: sprites,
           input,
           audio,
           autopilot: new URLSearchParams(window.location.search).get('autopilot') === '1',

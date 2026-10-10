@@ -59,8 +59,12 @@ export class Predictor {
     const beforeY = s.motion.y;
     const beforeH = s.motion.headingRad;
 
+    // The motion state includes heat, battery and engine state, so the replay below starts
+    // from exactly what the server simulated.
     copyMotionState(snapshot.motion, s.motion);
     Object.assign(s.progress, snapshot.progress);
+    for (let i = 0; i < s.wheelIntegrity.length && i < snapshot.wheelIntegrity.length; i++)
+      s.wheelIntegrity[i] = snapshot.wheelIntegrity[i]!;
     s.phase = snapshot.phase;
     s.tick = snapshot.tick;
     s.countdownTicks = snapshot.countdownTicks;

@@ -165,35 +165,55 @@ export const ROOFS: readonly RoofRamp[] = [
 ];
 
 /**
- * A building in the oblique view: the roof catches the sky and is the lightest plane, the south
- * face sits in shadow tones and leaves the work to windows and neon.
+ * A building in the oblique view has three planes with three clearly separate values. The roof
+ * catches the sky and is the lightest. The west wall is turned toward the light and sits in
+ * the middle. The south wall is turned away from it and stays in deep blue-violet shade, which
+ * leaves the work there to windows and neon.
  */
 export type BuildingRamp = {
   roof: Color;
   roofAlt: Color;
   roofLine: Color;
+  /** Lit top of a parapet or cornice, and its shaded counterpart. */
   rim: Color;
   rimLow: Color;
+  /** Inner face of a parapet, in shade. */
   inner: Color;
+  /** West wall, toward the light. */
+  west: Color;
+  westAlt: Color;
+  westLine: Color;
+  /** The lit corner where the west wall meets the south wall. */
+  edge: Color;
+  /** South wall, in shade. */
   wall: Color;
   wallAlt: Color;
   wallLow: Color;
+  /** Piers and string courses on the south wall. */
+  pier: Color;
   line: Color;
   trim: Color;
+  deep: Color;
 };
 
 export const BUILDINGS: readonly BuildingRamp[] = ROOFS.map((r) => ({
-  roof: mixc(r.alt, r.par, 0.44),
-  roofAlt: mixc(r.alt, r.par, 0.26),
-  roofLine: mixc(r.base, r.par, 0.12),
-  rim: r.hi,
-  rimLow: mixc(r.hi, r.par, 0.55),
+  roof: mixc(r.par, r.hi, 0.2),
+  roofAlt: mixc(r.par, r.hi, 0.06),
+  roofLine: mixc(r.alt, r.par, 0.5),
+  rim: mixc(r.hi, col('#F2EEDC'), 0.18),
+  rimLow: mixc(r.hi, r.par, 0.4),
   inner: r.dark,
-  wall: mixc(r.base, r.par, 0.3),
-  wallAlt: mixc(r.base, r.par, 0.14),
-  wallLow: mixc(r.base, r.dark, 0.35),
-  line: r.dark,
-  trim: mixc(r.par, r.hi, 0.25),
+  west: mixc(r.alt, r.par, 0.4),
+  westAlt: mixc(r.alt, r.par, 0.16),
+  westLine: mixc(r.base, r.dark, 0.3),
+  edge: mixc(r.par, r.hi, 0.55),
+  wall: mixc(r.dark, r.base, 0.62),
+  wallAlt: mixc(r.dark, r.base, 0.3),
+  wallLow: mixc(r.deep, r.dark, 0.5),
+  pier: mixc(r.base, r.alt, 0.7),
+  line: r.deep,
+  trim: mixc(r.alt, r.par, 0.75),
+  deep: mixc(r.deep, col('#0E1124'), 0.3),
 }));
 
 /** Slate and concrete dominate; the saturated families are accents. */
@@ -224,6 +244,44 @@ export function shadeNight(c: Color): Color {
   const ng = Math.round(g * 0.6 + 4);
   const nb = Math.round(b * 0.68 + 10);
   return (nr << 16) | (ng << 8) | nb;
+}
+
+/**
+ * A building's shadow across drivable ground: a gentle step down that leaves paint, kerbs and
+ * edges fully readable and never takes pavement below the darkest tone the road already uses.
+ */
+export function shadeRoad(c: Color): Color {
+  const r = (c >> 16) & 255;
+  const g = (c >> 8) & 255;
+  const b = c & 255;
+  const nr = Math.max(Math.min(r, 0x27), Math.round(r * 0.8 + 2));
+  const ng = Math.max(Math.min(g, 0x2d), Math.round(g * 0.8 + 3));
+  const nb = Math.max(Math.min(b, 0x40), Math.round(b * 0.84 + 7));
+  return (nr << 16) | (ng << 8) | nb;
+}
+
+/**
+ * Shadow of a structure that stands over the road (a bridge, the gantry, a barrier): deeper
+ * than a building's, but held to the same floor so the pavement never drops out of sight.
+ */
+export function shadeRoadDeep(c: Color): Color {
+  const r = (c >> 16) & 255;
+  const g = (c >> 8) & 255;
+  const b = c & 255;
+  const nr = Math.max(Math.min(r, 0x27), Math.round(r * 0.68 + 2));
+  const ng = Math.max(Math.min(g, 0x2d), Math.round(g * 0.68 + 3));
+  const nb = Math.max(Math.min(b, 0x40), Math.round(b * 0.74 + 9));
+  return (nr << 16) | (ng << 8) | nb;
+}
+
+/** Shadow one mass throws onto the roof or west wall of another: a full, hard step down. */
+export function castShade(c: Color): Color {
+  const r = (c >> 16) & 255;
+  const g = (c >> 8) & 255;
+  const b = c & 255;
+  return (
+    (Math.round(r * 0.56 + 4) << 16) | (Math.round(g * 0.57 + 5) << 8) | Math.round(b * 0.66 + 14)
+  );
 }
 
 /** Small contact shadow under roof dressing and street furniture. */

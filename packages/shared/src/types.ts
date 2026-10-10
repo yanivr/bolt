@@ -49,26 +49,8 @@ export type WeatherPreset = {
 // ---------------------------------------------------------------------------------------------
 
 export type PartCategory = 'chassis' | 'engine' | 'tires' | 'weapon' | 'defense' | 'utility';
+export type AccessoryCategory = 'weapon' | 'defense' | 'utility';
 export type TriggerMode = 'manual' | 'automatic' | 'hybrid' | 'passive';
-
-export type PartDefinition = {
-  id: string;
-  displayName: string;
-  category: PartCategory;
-  price: number;
-  massKg: number;
-  footprint: { w: number; h: number };
-  compatibleMounts: string[];
-  spriteKey: string;
-  soundKey: string;
-  description: string;
-  drawback: string;
-  modifiers: Record<string, number>;
-  behaviorId?: string;
-  triggerMode?: TriggerMode;
-  params?: Record<string, number | string | boolean>;
-  maxPerCar?: number;
-};
 
 export type MountCategory =
   | 'ENGINE'
@@ -82,21 +64,298 @@ export type MountCategory =
   | 'ARMOR'
   | 'UNIVERSAL';
 
+export type QuarterTurn = 0 | 1 | 2 | 3;
+
+/** Which way a hit arrives, or a part faces, in the car's own frame. */
+export type CarArc = 'front' | 'rear' | 'left' | 'right';
+
+/**
+ * Tags that incoming damage and impulses carry. `ModifyDamageByTag` scales one of them.
+ * Direction tags (`front`, `rear`, `left`, `right`) refer to the arc the hit arrives from.
+ */
+export type DamageTag =
+  | 'bullet'
+  | 'direct'
+  | 'heavy'
+  | 'ram'
+  | 'ram_front'
+  | 'ram_rear'
+  | 'burn'
+  | 'heat_status'
+  | 'emp_duration'
+  | 'oil'
+  | 'puncture'
+  | 'wheel'
+  | 'engine'
+  | 'steering'
+  | 'engine_output_loss'
+  | 'front'
+  | 'rear'
+  | 'left'
+  | 'right'
+  | 'rear_mounted_part'
+  | 'mounted_part';
+
+/** Engine output over speed and time. Every number is consumed by `stepVehicle`. */
+export type TorqueCurve = {
+  /** Relative wheel force. The Four-Cylinder is 100. */
+  forceIndex: number;
+  /** Extra low-speed pull, as a fraction of rated force, that fades with speed. */
+  launchBoost: number;
+  /** Speed scale of the launch boost fade, world px/s. */
+  launchFadeSpeed: number;
+  /** Multiplier on the speeds at which force tapers out: the engine's rev ceiling. */
+  topEndFactor: number;
+  /** Multiplier on the speed where the taper starts. Above 1 holds rated force for longer. */
+  taperStartFactor: number;
+  /** Multiplier on traction-limited acceleration (how well force reaches the road). */
+  tractionFactor: number;
+  /**
+   * Wind-up. Output is `spoolFloor` of rated force when cold and rises to full over
+   * `spoolUpSeconds` of throttle, then falls back over `spoolDownSeconds`. Zero disables it.
+   */
+  spoolUpSeconds: number;
+  spoolDownSeconds: number;
+  spoolFloor: number;
+  /** While fully spooled the rev ceiling is raised by this factor (Turbine). 1 for none. */
+  spoolTopEndFactor: number;
+  /**
+   * Repeating output cycle tied to race time: output swings between `cycleLowFactor` and 1
+   * with this period (Wildcard Motor). Zero disables it.
+   */
+  cyclePeriodSeconds: number;
+  cycleLowFactor: number;
+  /**
+   * Fuel pulses (Rocket Engine). A full tank burns for `pulseBurnSeconds` at rated force,
+   * then the engine idles at `pulseRestFactor` while the tank refills over
+   * `pulseRefillSeconds`. Lifting the throttle also refills. Zero burn time disables it.
+   */
+  pulseBurnSeconds: number;
+  pulseRefillSeconds: number;
+  pulseRestFactor: number;
+  /**
+   * Stored launch (Spring Drive). One burst of `burstFactor` times rated force lasting
+   * `burstSeconds` is stored every `burstRechargeSeconds` and released on full throttle.
+   */
+  burstRechargeSeconds: number;
+  burstSeconds: number;
+  burstFactor: number;
+  /** Multiplier on top-end speed on paved surfaces (asphalt, cobble, metal). */
+  roadSpeedFactor: number;
+  /** Multiplier on rolling resistance on loose surfaces (sand, dirt, mud, snow). */
+  looseRollingFactor: number;
+  /** Multiplier on traction-limited acceleration on loose surfaces. */
+  looseTractionFactor: number;
+};
+
+/** Where an electrical consumer sits when power runs short. Lower numbers are served first. */
+export type PowerPriority = 0 | 1 | 2 | 3 | 4;
+
+/** What an electrical consumer contributes while it is supplied. Scaled by its supply. */
+export type PoweredEffect = {
+  cooling?: number;
+  stability?: number;
+  /** Multiplier on kinetic (sliding) grip, minus one. */
+  slipRecovery?: number;
+  /** Extra grip per (speed / reference speed) squared. */
+  downforce?: number;
+  /** Extra grip multiplier, minus one, on the listed surfaces. */
+  surfaceGrip?: Partial<Record<SurfaceId, number>>;
+  /** Extra grip multiplier, minus one, on every surface in wet weather. */
+  wetGrip?: number;
+};
+
+/**
+ * Passive mechanic primitives (Section 11.8). Every passive effect of every part is one or
+ * more of these. `aggregateModifiers` folds a car's whole list into totals, and
+ * `deriveVehicleParams` turns the totals into integrator coefficients. Nothing reads a part id.
+ */
+export type PartModifier =
+  | { type: 'AddMass'; kg: number }
+  | { type: 'ModifyTorqueCurve'; set?: TorqueCurve; scale?: Partial<TorqueCurve> }
+  | { type: 'ModifyDrag'; factor: number }
+  | {
+      type: 'ModifyGripBySurface';
+      /** Multiplier on grip. */
+      factor: number;
+      /** Surfaces it applies to. Omitted means every surface. */
+      surfaces?: SurfaceId[];
+      /** `wet` applies only in wet weather, `dry` only otherwise. */
+      when?: 'wet' | 'dry';
+    }
+  | {
+      type: 'ModifySlipRecovery';
+      /** Multiplier on sliding grip, the share of peak force kept in a slide. */
+      factor?: number;
+      /** Multiplier on how readily the tires let go (lower slides sooner). */
+      stiffness?: number;
+      /** Multiplier on self-aligning yaw. */
+      align?: number;
+    }
+  | {
+      type: 'ModifyHeatGeneration';
+      /** Heat per second at sustained full throttle (engine) or constantly (`constant`). */
+      add?: number;
+      constant?: number;
+      factor?: number;
+      /** Multiplier on engine heat below the partial-load throttle threshold. */
+      partialLoadFactor?: number;
+      /** Shifts the performance threshold: negative suffers from heat sooner. */
+      toleranceOffset?: number;
+      /** Share of full-throttle heat produced at idle. */
+      idleFraction?: number;
+    }
+  | { type: 'ModifyCooling'; add: number }
+  | {
+      type: 'ModifyEnergyGeneration';
+      add: number;
+      /** `solar` scales with daylight and weather, `off_throttle` applies while lifting. */
+      condition?: 'solar' | 'off_throttle';
+    }
+  | { type: 'ModifyEnergyCapacity'; add: number; reserve?: boolean }
+  | {
+      type: 'ModifyPowerPriority';
+      /** Continuous draw in power units per second. */
+      draw: number;
+      priority: PowerPriority;
+      /** True when the draw follows the throttle (electric drivetrains). */
+      drivetrain?: boolean;
+      /** What the consumer provides while supplied. */
+      effect?: PoweredEffect;
+    }
+  | { type: 'AddArmorArc'; hp: number; arcs: CarArc[] | 'mounted' }
+  | {
+      type: 'ModifyIntegrity';
+      target: 'chassis' | 'wheels' | 'engine' | 'armor';
+      factor: number;
+    }
+  | { type: 'ModifyDamageByTag'; tag: DamageTag; factor: number }
+  | {
+      type: 'ModifyImpulse';
+      /** `obstacle` scales wall and obstacle strikes taken, `ram_dealt` what a ram delivers. */
+      kind: 'obstacle' | 'ram_dealt' | 'displacement';
+      factor: number;
+    }
+  | {
+      type: 'ModifySteeringResponse';
+      /** Multiplier on yaw response. */
+      yaw?: number;
+      /** Multiplier on the turning radius at low speed. */
+      turnRadius?: number;
+      /** Additive stability score. */
+      stability?: number;
+      /** Multiplier on peak lateral grip. */
+      peakGrip?: number;
+      /** Extra lateral grip, as a fraction, while cornering (Sliding Ballast). */
+      corneringGrip?: number;
+      /** Multiplier on braking deceleration. */
+      braking?: number;
+      /** Multiplier on top speed everywhere. */
+      topSpeed?: number;
+      /** Multiplier on top speed on paved surfaces only. */
+      roadSpeed?: number;
+      /** Multiplier on grip lost on the shoulder (0 removes the penalty). */
+      shoulderPenalty?: number;
+      /** Tire wear: grip fades to `wornGrip` between these race seconds. */
+      wearStartSeconds?: number;
+      wearRampSeconds?: number;
+      wornGrip?: number;
+      /** Extra rolling resistance, px/s2, on the listed surfaces. */
+      rollingAdd?: number;
+      rollingSurfaces?: SurfaceId[];
+      /** Multiplier on rolling resistance on the listed surfaces. */
+      rollingFactor?: number;
+      /** Multiplier on width for collision. */
+      width?: number;
+    }
+  | {
+      type: 'AddHardpoint';
+      category: MountCategory;
+      /** Extra attachments beyond one per mount, realised as rack capacity in the layout. */
+      count: number;
+    }
+  | {
+      type: 'OverrideAimingArc';
+      /** Mount categories the change applies to. */
+      mounts: MountCategory[];
+      addDegrees?: number;
+      rangeFactor?: number;
+    };
+
+export type PartModifierType = PartModifier['type'];
+
+/** Active mechanic primitives (Section 11.8). Declared in data now, executed in Milestone C. */
+export type ActivePrimitiveType =
+  | 'SpawnProjectile'
+  | 'SpawnMine'
+  | 'SpawnAreaHazard'
+  | 'ApplyDirectDamage'
+  | 'ApplyDamageOverTime'
+  | 'ApplyHeat'
+  | 'ApplyGripDebuff'
+  | 'ApplyEMP'
+  | 'ApplyImpulse'
+  | 'ApplyTether'
+  | 'GrantTemporaryShield'
+  | 'RepairComponent'
+  | 'ReplaceWheel'
+  | 'PulseTorque'
+  | 'ConsumeCharge'
+  | 'StartCooldown'
+  | 'AcquireTarget'
+  | 'InterceptProjectile'
+  | 'ShowTelegraph';
+
+export type PartParamValue = number | string | boolean;
+export type PartParams = Record<string, PartParamValue>;
+export type ActivePrimitive = { type: ActivePrimitiveType } & PartParams;
+
+export type PartDefinition = {
+  id: string;
+  displayName: string;
+  category: PartCategory;
+  price: number;
+  massKg: number;
+  /** Width and length in world pixels at rotation 0 (length runs along the car). */
+  footprint: { w: number; h: number };
+  compatibleMounts: MountCategory[];
+  spriteKey: string;
+  soundKey: string;
+  /** One-line benefit shown on the part card. */
+  description: string;
+  /** One-line downside shown on the part card. */
+  drawback: string;
+  modifiers: PartModifier[];
+  behaviorId?: string;
+  triggerMode?: TriggerMode;
+  /** Every number of the part's defining effect, flat, for cards and for Milestone C. */
+  params?: PartParams;
+  /** The same effect as an ordered list of active primitives. */
+  actions?: ActivePrimitive[];
+  maxPerCar?: number;
+};
+
 /**
  * Chassis-local coordinates: origin at the body centre, front is negative Y, right is
  * positive X, units are world pixels.
  */
 export type MountPoint = {
   id: string;
+  /** The first entry is the mount's primary category. */
   categories: MountCategory[];
   x: number;
   y: number;
   /** Half-extent of the bounded installation region around the hardpoint. */
   regionHalfW: number;
   regionHalfH: number;
-  /** Largest part footprint this mount accepts. */
+  /** Largest part footprint, after rotation, this mount accepts. */
   maxFootprint: { w: number; h: number };
-  allowedQuarterTurns: Array<0 | 1 | 2 | 3>;
+  /** Orientations a rotatable part may take here. The first is the default. */
+  allowedQuarterTurns: QuarterTurn[];
+  /** How many small parts may share this mount. A large part always takes all of it. */
+  capacity: number;
+  /** Accepts any weapon, whatever its own mount list says (Horseshoe front cavity). */
+  acceptsAnyWeapon?: boolean;
 };
 
 export type WheelAnchor = {
@@ -124,30 +383,93 @@ export type ChassisDefinition = PartDefinition & {
   yawFactor: number;
   /** Additive stability score offset. */
   stabilityOffset: number;
+  /** Below this stability score the handling penalties of Section 6.2 begin. */
+  stabilityThreshold: number;
+  /** Share of the maximum safe load that may be armor plate. */
+  armorLoadShare: number;
+  /** Engine the garage starts this chassis with. */
+  defaultEngineId: string;
+  /** Section 6.4 handling character, shown with the mount layout. */
+  handling: string;
 };
 
 export type EngineDefinition = PartDefinition & {
   category: 'engine';
   /** Relative wheel force. The Four-Cylinder is 100. */
   forceIndex: number;
+  /** Heat per second at sustained full throttle, before cooling. */
   heatPerSecond: number;
-  /** Continuous electrical draw in power units per second. */
+  /** Continuous electrical draw in power units per second at full throttle. */
   powerDraw: number;
-  /** Extra low-speed pull, as a fraction of rated force, that fades with speed. */
-  launchBoost: number;
-  /** Multiplier on the speed at which force starts to taper. */
-  topEndFactor: number;
+  curve: TorqueCurve;
 };
 
 export type TireDefinition = PartDefinition & {
   category: 'tires';
   /** Clear-weather asphalt grip multiplier. */
   grip: number;
-  /** Extra multiplier per surface. Missing entries are 1. */
-  surfaceGrip: Partial<Record<SurfaceId, number>>;
-  /** Multiplier applied to grip whenever the weather preset is wet. */
-  wetGripFactor: number;
-  slipRecoveryFactor: number;
+  /** Continuous electrical draw in power units per second. */
+  powerDraw: number;
+};
+
+export type AccessoryDefinition = PartDefinition & {
+  category: AccessoryCategory;
+  triggerMode: TriggerMode;
+  behaviorId: string;
+  params: PartParams;
+  /** `full` takes the whole hardpoint, `shared` may sit on a rack beside another small part. */
+  hardpointUse: 'full' | 'shared';
+  /** False when orientation means nothing for the part; it must then stay at rotation 0. */
+  rotatable: boolean;
+  /** 0 flush, 1 raised, 2 tall. Tall parts raise the centre of mass. */
+  heightLevel: 0 | 1 | 2;
+  /** Sustained electrical draw shown on the part card (zero for parts that draw per shot). */
+  powerDraw: number;
+  /** Sustained heat effect shown on the part card: positive heats, negative cools. */
+  heatEffect: number;
+};
+
+export type AnyPartDefinition =
+  ChassisDefinition | EngineDefinition | TireDefinition | AccessoryDefinition;
+
+export type PaintOption = { id: string; displayName: string };
+
+/** The whole shipped catalog. Shared rules take it as an argument so they stay pure. */
+export type Catalog = {
+  version: string;
+  chassis: Record<string, ChassisDefinition>;
+  engines: Record<string, EngineDefinition>;
+  tires: Record<string, TireDefinition>;
+  /** Weapons, defenses and utilities. */
+  parts: Record<string, AccessoryDefinition>;
+  paints: Record<string, PaintOption>;
+};
+
+// ---------------------------------------------------------------------------------------------
+// Blueprints (Section 15.6)
+// ---------------------------------------------------------------------------------------------
+
+export type BlueprintPart = {
+  instanceId: string;
+  partId: string;
+  mountId: string;
+  offsetX: number;
+  offsetY: number;
+  rotationQuarterTurns: QuarterTurn;
+  assignedActionSlot?: 0 | 1;
+  autoMode?: boolean;
+};
+
+export type VehicleBlueprint = {
+  formatVersion: 1;
+  catalogVersion: string;
+  name: string;
+  chassisId: string;
+  engineId: string;
+  tireKitId: string;
+  paintId: string;
+  parts: BlueprintPart[];
+  createdAt: string;
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -260,6 +582,22 @@ export type VehicleMotionState = {
   reversing: boolean;
   /** Seconds remaining of reduced scrape loss after a wall strike. */
   wallGrace: number;
+  /** Shared core heat, in heat units (Section 6.5). */
+  coreHeat: number;
+  /** Stored electrical energy, in energy units. */
+  batteryEnergy: number;
+  /** True from the thermal protection threshold until heat falls below recovery. */
+  thermalLimited: boolean;
+  /** Engine wind-up, 0 cold to 1 fully spooled. */
+  engineSpool: number;
+  /** Engine reservoir, 0 to 1: rocket fuel or the stored spring launch. */
+  engineCharge: number;
+  /** Seconds into the engine's repeating output cycle. */
+  engineClock: number;
+  /** Seconds left of a stored launch burst, or 1 while a fuel pulse burns. */
+  engineBurst: number;
+  /** Seconds of driving the tires have done, for compounds that wear. */
+  tireWearSeconds: number;
 };
 
 export type VehicleProgressState = {
@@ -293,6 +631,21 @@ export type VehicleTelemetry = {
   wallImpactSpeed: number;
   wallNormalX: number;
   wallNormalY: number;
+  /** Engine output this step as a fraction of rated force, after every limit. */
+  powerFraction: number;
+  /** Share of the electric drivetrain's demand that was supplied, 1 when it has none. */
+  drivetrainSupply: number;
+  /** Share of optional electrical demand that was supplied this step. */
+  auxSupply: number;
+  /** Power generated and demanded this step, units per second. */
+  generation: number;
+  powerDemand: number;
+  /** Heat produced and shed this step, units per second. */
+  heatProduction: number;
+  heatCooling: number;
+  /** 0 normal, 1 warning (70), 2 performance loss (90), 3 thermal protection (110). */
+  heatLevel: 0 | 1 | 2 | 3;
+  lowPower: boolean;
 };
 
 /**
@@ -331,6 +684,78 @@ export type VehicleParams = {
   /** Two collision circles on the body axis, front and rear. */
   colliderOffset: number;
   colliderRadius: number;
+
+  // --- Milestone B: everything below comes from the blueprint and published conditions ---
+  wheelCount: number;
+  /** Multiplier on grip, per surface, that applies only in dry weather. */
+  tireDryGrip: Partial<Record<SurfaceId, number>>;
+  /** Multiplier on grip, per surface, that applies only in wet weather. */
+  tireWetSurfaceGrip: Partial<Record<SurfaceId, number>>;
+  /** Peak lateral grip multiplier from chassis, stability and load. */
+  peakGripFactor: number;
+  /** Extra lateral grip fraction at full steering lock. */
+  corneringGrip: number;
+  /** Multiplier on grip lost on the shoulder. 1 is the standard penalty, 0 none. */
+  shoulderPenalty: number;
+  /** Multiplier on top-end speed on paved surfaces. */
+  roadSpeedFactor: number;
+  looseRollingFactor: number;
+  looseTractionFactor: number;
+  rollingAdd: Partial<Record<SurfaceId, number>>;
+  rollingFactor: Partial<Record<SurfaceId, number>>;
+  /** Multiplier on speed lost and bounce taken from walls and obstacles. */
+  obstacleImpulse: number;
+  wearStartSeconds: number;
+  wearRampSeconds: number;
+  wornGrip: number;
+  engine: {
+    spoolUpSeconds: number;
+    spoolDownSeconds: number;
+    spoolFloor: number;
+    spoolTopEndFactor: number;
+    cyclePeriodSeconds: number;
+    cycleLowFactor: number;
+    pulseBurnSeconds: number;
+    pulseRefillSeconds: number;
+    pulseRestFactor: number;
+    burstRechargeSeconds: number;
+    burstSeconds: number;
+    burstFactor: number;
+  };
+  heat: {
+    /** Engine heat per second at sustained full throttle and rated output. */
+    enginePerSecond: number;
+    idleFraction: number;
+    partialLoadFactor: number;
+    /** Heat per second produced regardless of throttle (generators). */
+    constantPerSecond: number;
+    /** Unpowered cooling capacity before weather and airflow. */
+    cooling: number;
+    /** Heat at which engine output starts to fall for this car. */
+    performanceThreshold: number;
+  };
+  power: {
+    /** Units per second generated at all times under the published conditions. */
+    generation: number;
+    /** Extra generation while off the throttle. */
+    offThrottleGeneration: number;
+    capacity: number;
+    /** Electric drivetrain draw at full throttle. Served before everything else. */
+    drivetrainDraw: number;
+    /** Optional consumers in the order they are served. */
+    consumers: Array<{ draw: number; priority: number; effect: PoweredEffect }>;
+  };
+  /** Stability before clamping and before powered stabilisers, which the step adds as supplied. */
+  stability: number;
+  stabilityThreshold: number;
+};
+
+/** Published conditions a build is evaluated under (Sections 5.5 and 6.2). */
+export type BuildConditions = {
+  weather: WeatherId;
+  timeOfDay: 'day' | 'dusk' | 'night';
+  /** Share of the lap on each surface. Missing means all asphalt. */
+  surfaceMix?: Partial<Record<SurfaceId, number>>;
 };
 
 export type RaceEnvironment = {
@@ -351,7 +776,10 @@ export type MatchPhase =
   | 'REMATCH_VOTE'
   | 'CLOSED';
 
-/** Minimal blueprint used through Milestone A. Parts, mounts and paint arrive in Milestone B. */
+/**
+ * The four ids the race renderer draws a car from. Derived from a blueprint; after the
+ * sprite fallback of `resolveCarSprites` it may name stand-in art, never physics.
+ */
 export type VehicleLoadout = {
   chassisId: string;
   engineId: string;

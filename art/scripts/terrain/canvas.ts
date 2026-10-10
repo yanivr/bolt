@@ -34,6 +34,11 @@ export const F_EMISSIVE = 1;
 export const F_NOSHADOW = 2;
 /** Pixel already carries a hand-painted contact shadow. */
 export const F_SHADED = 4;
+/** Pixel belongs to the foot of an upright face and takes street light from the ground. */
+export const F_WASH = 8;
+
+/** Depth key of a pixel nothing has been drawn on. */
+export const KEY_NONE = -32768;
 
 export type Stencil = { rows: readonly string[]; w: number; h: number };
 
@@ -52,6 +57,15 @@ export class Canvas {
   flags: Uint8Array | null = null;
   /** Flags written with every pixel. */
   curFlags = 0;
+  /**
+   * Optional depth plane. A key is the world row of the ground point under the surface a pixel
+   * shows: along one line of sight a point further south (and so higher up) always hides one
+   * further north, so the larger key wins. Writes with a smaller key than the pixel already
+   * holds are dropped.
+   */
+  keys: Int16Array | null = null;
+  /** Key written with every pixel while `keys` is present. */
+  curKey = 0;
 
   constructor(w: number, h: number) {
     this.w = w;
@@ -73,9 +87,21 @@ export class Canvas {
     return c;
   }
 
+  /** A sprite surface with a depth plane, for solids that hide one another. */
+  static solid(w: number, h: number): Canvas {
+    const c = new Canvas(w, h);
+    c.flags = new Uint8Array(w * h);
+    c.keys = new Int16Array(w * h).fill(KEY_NONE);
+    return c;
+  }
+
   set(x: number, y: number, c: Color): void {
     if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
     const p = y * this.w + x;
+    if (this.keys) {
+      if (this.keys[p]! > this.curKey) return;
+      this.keys[p] = this.curKey;
+    }
     const i = p * 4;
     this.data[i] = (c >> 16) & 255;
     this.data[i + 1] = (c >> 8) & 255;
@@ -118,6 +144,7 @@ export class Canvas {
     if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
     const p = y * this.w + x;
     if (this.data[p * 4 + 3] === 0) return;
+    if (this.keys && this.keys[p]! > this.curKey) return;
     if (this.flags) {
       if (this.flags[p]! & (F_EMISSIVE | F_SHADED)) return;
       this.flags[p] = this.flags[p]! | F_SHADED;

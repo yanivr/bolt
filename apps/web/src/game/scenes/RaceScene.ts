@@ -542,6 +542,8 @@ export class RaceScene extends Phaser.Scene {
       fps: Math.round(this.fpsSmooth),
       headingDeg: Math.round((wrapAngle(heading) * 180) / Math.PI + 360) % 360,
       reversing: session.motion.reversing,
+      coreHeat: Math.round(session.motion.coreHeat),
+      batteryEnergy: Math.round(session.motion.batteryEnergy),
       hasSteered: input.steered,
       hasBraked: input.braked,
       pendingInputs: this.predictor.pendingCount,

@@ -1,5 +1,7 @@
-import { DEFAULT_LOADOUT } from '@bolt/content';
-import type { MatchPhase, VehicleLoadout } from '@bolt/shared';
+import { BASELINE_BLUEPRINT, CATALOG } from '@bolt/content';
+import type { MatchPhase, VehicleBlueprint } from '@bolt/shared';
+import { serializeBlueprint, validateUntrustedBlueprint } from '@bolt/shared';
+import { BLUEPRINT_KEY, restoreBlueprint } from './savedBlueprint.js';
 import { create } from 'zustand';
 import type { SteeringMode } from '../input/driveInput.js';
 import type { LinkMode, LinkStatus } from '../network/link.js';
@@ -35,17 +37,16 @@ export const DEFAULT_SETTINGS: Settings = {
 
 const SETTINGS_KEY = 'bolt.settings.v1';
 const MILESTONES_KEY = 'bolt.tutorial.v1';
-const LOADOUT_KEY = 'bolt.loadout.v1';
-
-function loadLoadout(): VehicleLoadout {
+function loadBlueprint(): VehicleBlueprint {
   try {
-    const parsed = JSON.parse(
-      window.localStorage.getItem(LOADOUT_KEY) ?? 'null',
-    ) as Partial<VehicleLoadout> | null;
-    // Unknown ids are caught again by the server; this only restores the last pick.
-    return parsed ? { ...DEFAULT_LOADOUT, ...parsed } : { ...DEFAULT_LOADOUT };
+    const blueprint = restoreBlueprint(window.localStorage);
+    // Written straight back, so a migrated Milestone A pick survives the next reload and a
+    // stale entry is replaced by the car that will actually be raced.
+    window.localStorage.setItem(BLUEPRINT_KEY, serializeBlueprint(blueprint));
+    return blueprint;
   } catch {
-    return { ...DEFAULT_LOADOUT };
+    // Storage is unavailable (private browsing, blocked cookies): start from the baseline.
+    return BASELINE_BLUEPRINT;
   }
 }
 
@@ -93,13 +94,15 @@ type AppState = {
   boot: BootState;
   settings: Settings;
   milestones: Record<string, boolean>;
-  loadout: VehicleLoadout;
+  /** The car the player will race: always a legal blueprint for the current catalog. */
+  blueprint: VehicleBlueprint;
   paused: boolean;
   setScreen: (screen: Screen) => void;
   setBoot: (boot: BootState) => void;
   updateSettings: (patch: Partial<Settings>) => void;
   completeMilestone: (id: string) => void;
-  setLoadout: (patch: Partial<VehicleLoadout>) => void;
+  /** Replaces the car. Refused, and false returned, unless it is a legal build. */
+  setBlueprint: (blueprint: VehicleBlueprint) => boolean;
   setPaused: (paused: boolean) => void;
 };
 
@@ -108,7 +111,7 @@ export const useApp = create<AppState>((set, get) => ({
   boot: { stage: 'garage', progress: 0 },
   settings: loadSettings(),
   milestones: loadMilestones(),
-  loadout: loadLoadout(),
+  blueprint: loadBlueprint(),
   paused: false,
   setScreen: (screen) => set({ screen, paused: false }),
   setBoot: (boot) => set({ boot }),
@@ -131,14 +134,16 @@ export const useApp = create<AppState>((set, get) => ({
     }
     set({ milestones });
   },
-  setLoadout: (patch) => {
-    const loadout = { ...get().loadout, ...patch };
+  setBlueprint: (candidate) => {
+    const check = validateUntrustedBlueprint(candidate, CATALOG);
+    if (!check.ok) return false;
     try {
-      window.localStorage.setItem(LOADOUT_KEY, JSON.stringify(loadout));
+      window.localStorage.setItem(BLUEPRINT_KEY, serializeBlueprint(check.blueprint));
     } catch {
       // The pick still applies for this session.
     }
-    set({ loadout });
+    set({ blueprint: check.blueprint });
+    return true;
   },
   setPaused: (paused) => set({ paused }),
 }));
@@ -171,6 +176,9 @@ export type HudState = {
   headingDeg: number;
   /** True while the local car is backing up. Debug readout. */
   reversing: boolean;
+  /** Core heat and stored energy of the local car, whole units. Debug readout. */
+  coreHeat: number;
+  batteryEnergy: number;
   hasSteered: boolean;
   hasBraked: boolean;
   /** Prediction diagnostics, shown only with ?debug=1. */
@@ -203,6 +211,8 @@ export const useHud = create<HudState>(() => ({
   fps: 60,
   headingDeg: 0,
   reversing: false,
+  coreHeat: 0,
+  batteryEnergy: 0,
   hasSteered: false,
   hasBraked: false,
   pendingInputs: 0,

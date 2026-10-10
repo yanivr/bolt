@@ -3,12 +3,11 @@ import type { CarSnapshot, DriveSession, InputSample } from '@bolt/shared';
 import {
   SIM_DT,
   buildTrack,
-  countdownSeconds,
   createDriveSession,
   createDriverScratch,
   driveCenterline,
   mulberry32,
-  raceTimeMs,
+  sessionSnapshot,
 } from '@bolt/shared';
 import { FramePacer, StepClock } from '../../apps/web/src/game/rendering/frame.js';
 import { Predictor } from '../../apps/web/src/network/prediction.js';
@@ -52,18 +51,7 @@ export type NetResult = {
 };
 
 function snapshot(s: DriveSession, ack: number): CarSnapshot {
-  return {
-    tick: s.tick,
-    ackSequence: ack,
-    raceTimeMs: raceTimeMs(s),
-    phase: s.phase,
-    countdown: countdownSeconds(s),
-    countdownTicks: s.phase === 'COUNTDOWN' ? Math.max(0, s.countdownTicks) : 0,
-    motion: { ...s.motion },
-    progress: { ...s.progress },
-    bestLapMs: s.bestLapMs,
-    lastLapMs: s.lastLapMs,
-  };
+  return sessionSnapshot(s, ack);
 }
 
 export function benchSessions(): { client: DriveSession; server: DriveSession } {

@@ -76,10 +76,13 @@ function DebugReadout() {
   const renderer = useHud((s) => s.renderer);
   const heading = useHud((s) => s.headingDeg);
   const reversing = useHud((s) => s.reversing);
+  const heat = useHud((s) => s.coreHeat);
+  const battery = useHud((s) => s.batteryEnergy);
   return (
     <div className="debug" data-testid="debug">
       {fps} fps · {renderer} · {mode} · {Math.round(latency)} ms · pending {pending} · corrections{' '}
-      {corrections} · max {maxCorrection.toFixed(2)} px · heading {heading} deg
+      {corrections} · max {maxCorrection.toFixed(2)} px · heading {heading} deg · heat {heat} ·
+      power {battery}
       {reversing ? ' · reversing' : ''}
     </div>
   );

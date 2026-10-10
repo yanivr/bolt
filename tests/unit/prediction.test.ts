@@ -1,13 +1,30 @@
-import { CITY_01, DEFAULT_LOADOUT, environmentFor, resolveLoadout } from '@bolt/content';
-import type { CarSnapshot, DriveSession, InputSample } from '@bolt/shared';
+import {
+  CATALOG,
+  CITY_01,
+  DEFAULT_LOADOUT,
+  EXAMPLE_TEMPLATES,
+  baselineBlueprint,
+  conditionsFor,
+  environmentFor,
+  resolveLoadout,
+} from '@bolt/content';
+import type {
+  CarSnapshot,
+  DriveSession,
+  InputSample,
+  VehicleBlueprint,
+  VehicleParams,
+} from '@bolt/shared';
 import {
   MAX_QUEUED_INPUTS,
   buildTrack,
-  countdownSeconds,
+  deriveVehicleParams,
+  installPart,
+  resolveBlueprint,
   createDriveSession,
   createDriverScratch,
   driveCenterline,
-  raceTimeMs,
+  sessionSnapshot,
   stepDriveSession,
 } from '@bolt/shared';
 import { describe, expect, it } from 'vitest';
@@ -19,25 +36,18 @@ const track = buildTrack(CITY_01);
 const env = environmentFor('city_clear_night')!;
 const resolved = resolveLoadout(DEFAULT_LOADOUT);
 if (!resolved.ok) throw new Error('default loadout must resolve');
-const params = resolved.params;
+const defaultParams = resolved.params;
 
 function snapshot(s: DriveSession, ack: number): CarSnapshot {
-  return {
-    tick: s.tick,
-    ackSequence: ack,
-    raceTimeMs: raceTimeMs(s),
-    phase: s.phase,
-    countdown: countdownSeconds(s),
-    countdownTicks: s.phase === 'COUNTDOWN' ? Math.max(0, s.countdownTicks) : 0,
-    motion: { ...s.motion },
-    progress: { ...s.progress },
-    bestLapMs: s.bestLapMs,
-    lastLapMs: s.lastLapMs,
-  };
+  return sessionSnapshot(s, ack);
 }
 
 /** Server stand-in: the drive room's own input policy stepping one authoritative session. */
-function harness(delayTicks: number, drop: (tick: number) => boolean = () => false) {
+function harness(
+  delayTicks: number,
+  drop: (tick: number) => boolean = () => false,
+  params: VehicleParams = defaultParams,
+) {
   const server = createDriveSession(track, env, params);
   const predictor = new Predictor(createDriveSession(track, env, params));
   const scratch = createDriverScratch();
@@ -107,9 +117,111 @@ describe('client prediction and reconciliation (Section 15.4)', () => {
   });
 });
 
+describe('prediction with heat, energy and engine state', () => {
+  const conditions = conditionsFor('city_01', 'city_clear_night')!;
+  const paramsOf = (blueprint: VehicleBlueprint) =>
+    deriveVehicleParams(resolveBlueprint(blueprint, CATALOG)!, conditions);
+  const withParts = (blueprint: VehicleBlueprint, ...partIds: string[]) =>
+    partIds.reduce((bp, id) => {
+      const result = installPart(bp, CATALOG, id);
+      if (!result.ok) throw new Error(`${id}: ${result.issue.code}`);
+      return result.blueprint;
+    }, blueprint);
+  // Cars whose force depends on state the Milestone A snapshot did not carry: a battery
+  // that runs flat, fuel pulses, a stored launch, a wind-up, an output cycle, thermal
+  // limiting, tire wear and powered grip.
+  const cars: Array<[string, VehicleBlueprint]> = [
+    [
+      'Rain Runner (flat battery, shield throttled)',
+      EXAMPLE_TEMPLATES.find((t) => t.name === 'Rain Runner')!.blueprint,
+    ],
+    [
+      'Tiny Trouble (below its stability threshold)',
+      EXAMPLE_TEMPLATES.find((t) => t.name === 'Tiny Trouble')!.blueprint,
+    ],
+    [
+      'Rocket Engine (fuel pulses, thermal limit)',
+      baselineBlueprint({ engineId: 'engine_rocket' }),
+    ],
+    ['Spring Drive (stored launch)', baselineBlueprint({ engineId: 'engine_spring' })],
+    ['Turbine (wind-up)', baselineBlueprint({ engineId: 'engine_turbine' })],
+    ['Wildcard Motor (output cycle)', baselineBlueprint({ engineId: 'engine_experimental' })],
+    [
+      'Twin Turbo on Soft Compound (lag, heat, wear)',
+      baselineBlueprint({ engineId: 'engine_twin_turbo', tireKitId: 'tires_soft' }),
+    ],
+    [
+      'Sport Electric on Adaptive Tires with a gyro and a wing',
+      withParts(
+        baselineBlueprint({ engineId: 'engine_electric_sport', tireKitId: 'tires_adaptive' }),
+        'utility_gyro',
+        'utility_spoiler',
+      ),
+    ],
+  ];
+
+  it.each(cars)('%s: replay from snapshots is exact at 100 ms each way', (_name, blueprint) => {
+    const params = paramsOf(blueprint);
+    const { server, predictor, run } = harness(3, () => false, params);
+    run(30 * 45);
+    expect(server.phase).toBe('RACING');
+    // The state in question really was exercised.
+    expect(server.motion.coreHeat).toBeGreaterThan(0);
+    // Every snapshot was reconciled with unacknowledged inputs replayed on top, and the
+    // prediction never had to be corrected: the powertrain state travels with the snapshot.
+    expect(predictor.pendingCount).toBeGreaterThan(3);
+    expect(predictor.maxCorrection).toBeLessThan(1e-6);
+  });
+
+  it('diverges if any powertrain field is left out of the snapshot (the test above is not vacuous)', () => {
+    const params = paramsOf(cars[2]![1]);
+    for (const field of ['coreHeat', 'engineCharge', 'engineBurst'] as const) {
+      const server = createDriveSession(track, env, params);
+      const predictor = new Predictor(createDriveSession(track, env, params));
+      const scratch = createDriverScratch();
+      const pacer = new InputPacer(MAX_QUEUED_INPUTS);
+      const wire: Array<{ at: number; sample: InputSample }> = [];
+      const back: Array<{ at: number; snap: CarSnapshot }> = [];
+      for (let tick = 0; tick < 30 * 30; tick++) {
+        const control = driveCenterline(track, predictor.session.motion, params, env, scratch);
+        const { sample } = predictor.step(control);
+        wire.push({ at: tick + 3, sample });
+        while (wire.length > 0 && wire[0]!.at <= tick) pacer.accept([wire.shift()!.sample]);
+        pacer.tick(true, (input) => stepDriveSession(server, input));
+        if (tick % 2 === 0) {
+          const snap = snapshot(server, pacer.ackSequence);
+          // A snapshot that forgets one field, as the old schema would have.
+          (snap.motion as Record<string, number | boolean>)[field] =
+            field === 'engineCharge' ? 1 : 0;
+          back.push({ at: tick + 3, snap });
+        }
+        while (back.length > 0 && back[0]!.at <= tick) predictor.reconcile(back.shift()!.snap);
+      }
+      expect(predictor.maxCorrection, field).toBeGreaterThan(0.01);
+    }
+  });
+
+  it('carries wheel integrity and the build hash in the snapshot', () => {
+    const spider = createDriveSession(
+      track,
+      env,
+      paramsOf(baselineBlueprint({ chassisId: 'chassis_spider' })),
+    );
+    const snap = sessionSnapshot(spider, 4, 'abc123');
+    expect(snap.wheelIntegrity).toEqual([100, 100, 100, 100, 100, 100]);
+    expect(snap.buildHash).toBe('abc123');
+    const predictor = new Predictor(
+      createDriveSession(track, env, paramsOf(baselineBlueprint({ chassisId: 'chassis_spider' }))),
+    );
+    snap.wheelIntegrity[2] = 40;
+    predictor.reconcile(snap);
+    expect(predictor.session.wheelIntegrity).toEqual([100, 100, 40, 100, 100, 100]);
+  });
+});
+
 describe('offline link', () => {
   it('reports the same snapshots and events as an authority and ignores replayed samples', () => {
-    const authority = createDriveSession(track, env, params);
+    const authority = createDriveSession(track, env, defaultParams);
     const link = new OfflineLink(authority);
     const snaps: CarSnapshot[] = [];
     link.onSnapshot = (s) => snaps.push(s);

@@ -4,7 +4,7 @@ Tracks the milestone gates of Section 20 and the launch acceptance list of Secti
 An item is checked only when it has actually been verified, and the note says how. "Done in
 code" is not the same as "verified"; where those differ, the item stays open.
 
-Last updated: October 10, 2026, end of Milestone A implementation.
+Last updated: October 10, 2026, Milestone B data and rules implemented.
 
 ## Milestone gates
 
@@ -34,10 +34,36 @@ high-quality pixel art at 60 FPS on a standard test device."**
 Milestone A is therefore **implemented, not passed**. Milestone B should not start mass
 production of the remaining sixteen chassis until the car art and driving feel are approved.
 
-### Milestones B to G
+### Milestone B: garage and engineering
 
-Not started. B: garage, 120-part catalog, blueprint serializer, five indicators, heat, energy.
-C: 20 weapons, defenses, utilities, damage, repairs, effects library, sound. D: seven more
+Split between three engineers. The data and rules half is implemented and tested; the art
+and the garage screen are not, so the milestone is **in progress**.
+
+Data and rules (verified by the automated suite, see `docs/TEST_PLAN.md`):
+
+- [x] 120-part catalog with exact Section 11 ids, names, prices and masses, card copy, footprints, mounts and typed parameters. Catalog 0.3.0.
+- [x] 20 chassis with wheel anchors and mounts.
+- [x] Blueprint format, canonical serializer, SHA-256 build hash, strict schema.
+- [x] Validation with issue codes and approved player copy, shared by client and server.
+- [x] Edit operations for the garage (install, remove, move, rotate, swaps, fire buttons, repair, cost preview, undo and redo). Reference: `docs/GARAGE_API.md`.
+- [x] Five indicators and five scores computed from the same model the race runs.
+- [x] Heat, energy, overload, stability and engine character in the authoritative simulation and in client prediction.
+- [x] Baseline (370), Rookie (480), three starter and six example blueprints, all legal, all raced on Neon Cut.
+- [x] Server accepts a blueprint on join and refuses illegal ones. Protocol 3.
+
+Still open in Milestone B:
+
+- [ ] Garage screen (Section 15.4 to 15.6). **Not started here.** The home screen has only the Milestone A chassis picker, now backed by blueprints.
+- [ ] Sprites for 16 chassis, 19 engines, 19 wheel kits and all 60 mounted parts. Tracked by `SPRITES_PENDING` in `tests/unit/assets.test.ts`. Until they exist those chassis cannot be picked and mounted parts are not drawn.
+- [ ] Mounted parts drawn on the car. Needs the sprites and the composition work.
+- [ ] Player-facing HUD for heat and power. Only the debug readout shows them.
+- [ ] Blueprint storage and codes on the server (PostgreSQL arrives in Milestone E); blueprints live in local storage today.
+- [ ] Balance review of the seed values by a person. One known question: Tiny Trouble is nearly as fast as the Straight-Line Rocket for two thirds of the price (`docs/BALANCE_CHANGELOG.md`).
+- [ ] Weapons, defenses and utilities do nothing in a race yet beyond mass, drag, heat, power and handling. Their actions are data awaiting Milestone C.
+
+### Milestones C to G
+
+Not started. C: 20 weapons, defenses, utilities, damage, repairs, effects library, sound. D: seven more
 tracks, weather presets, AI, bot tournament harness. E: two-player rooms, friend links,
 PostgreSQL blueprints and codes. F: VS sequence, results, highlights, daily challenge, full
 settings. G: load, security, Docker deployment, public HTTPS.

@@ -1,5 +1,6 @@
-import { Canvas, F_EMISSIVE } from '../canvas.js';
+import { Canvas, F_EMISSIVE, mixc } from '../canvas.js';
 import type { Color } from '../canvas.js';
+import { LEAN_RUN, leanOf } from '../oblique.js';
 import type { Sprite } from '../oblique.js';
 import { PAL, darker, lighter } from './palette.js';
 
@@ -16,7 +17,11 @@ export function emissive(cv: Canvas, fn: () => void): void {
   cv.curFlags = prev;
 }
 
-/** A plain box: lit top with a bright north-west rim, darker south face, dark foot. */
+/**
+ * A plain box in the leaning view: lit top with a bright north-west rim, a west side toward the
+ * light, a darker south face and a dark foot. (x, y) is the top-left corner of the top; the
+ * faces fall away below it and drift west toward the ground.
+ */
 export function drawBox(
   cv: Canvas,
   x: number,
@@ -27,13 +32,28 @@ export function drawBox(
   top: Color,
   face: Color,
 ): void {
+  const span = leanOf(r);
+  const side = mixc(top, face, 0.4);
+  for (let j = 0; j < span; j++) {
+    const v = Math.min(r - 1, j * LEAN_RUN + 1);
+    for (let k = -1; k < d; k++)
+      cv.set(x - span + j, y + r + k - v, j === 0 ? darker(side, 0.3) : side);
+  }
+  for (let k = 0; k < r; k++) {
+    const v = r - 1 - k;
+    const sx = x - span + leanOf(v);
+    for (let i = 0; i < w; i++) {
+      let c = face;
+      if (i === 0 && span > 0) c = lighter(side, 0.12);
+      else if (i === w - 1) c = darker(face, 0.25);
+      if (v === 0) c = darker(face, 0.4);
+      cv.set(sx + i, y + d + k, c);
+    }
+  }
   cv.rect(x, y, w, d, top);
   cv.hline(x, y, w, lighter(top, 0.25));
   cv.vline(x, y, d, lighter(top, 0.18));
   cv.vline(x + w - 1, y, d, darker(top, 0.18));
-  cv.rect(x, y + d, w, r, face);
-  cv.vline(x + w - 1, y + d, r, darker(face, 0.25));
-  cv.hline(x, y + d + r - 1, w, darker(face, 0.4));
 }
 
 function lcg(seed: number): () => number {
@@ -449,48 +469,78 @@ export function carSprite(horizontal: boolean, flip: boolean, paint: Color): Spr
   return { art: cv, ax: wid >> 1, ay: len + side - 1 };
 }
 
-export const CONTAINER_RISE = 9;
+export const CONTAINER_RISE = 10;
 
-/** Shipping container, single or stacked two high. */
+/** Ribbed top of a shipping container at local pixel (lx, ly) of a `w` by `d` footprint. */
+export function containerTop(paint: Color, w: number, d: number, lx: number, ly: number): Color {
+  const top = lighter(paint, 0.2);
+  if (ly === 0 || lx === 0) return lighter(top, 0.35);
+  if (ly === d - 1 || lx === w - 1) return darker(top, 0.3);
+  const along = w > d ? lx : ly;
+  return along % 3 === 2 ? darker(top, 0.16) : top;
+}
+
+/** Corrugated long side of a container, toward the light. */
+export function containerSide(paint: Color, u: number, v: number, levels: number): Color {
+  const tier = v % CONTAINER_RISE;
+  if (v === 0) return darker(paint, 0.55);
+  if (tier === 0 && v < levels * CONTAINER_RISE) return darker(paint, 0.5);
+  return u % 2 === 0 ? lighter(paint, 0.05) : darker(paint, 0.12);
+}
+
+/** South end or flank of a container stack, `levels` high, painted upright. */
+export function containerFace(paint: Color, w: number, levels: number, doors: boolean): Canvas {
+  const r = CONTAINER_RISE * levels;
+  const cv = Canvas.sprite(w, r);
+  cv.rect(0, 0, w, r, darker(paint, 0.34));
+  for (let k = 0; k < levels; k++) {
+    const y0 = k * CONTAINER_RISE;
+    if (doors) {
+      // Door end: two leaves, lock rods and a placard.
+      cv.rect(1, y0 + 1, w - 2, CONTAINER_RISE - 2, darker(paint, 0.26));
+      cv.vline(w >> 1, y0 + 1, CONTAINER_RISE - 2, darker(paint, 0.6));
+      cv.vline(3, y0 + 2, CONTAINER_RISE - 4, PAL.steelLight);
+      cv.vline(w - 4, y0 + 2, CONTAINER_RISE - 4, PAL.steel);
+      cv.set(w - 3, y0 + 2, PAL.kerbIvory);
+    } else {
+      for (let x = 1; x < w - 1; x += 2)
+        cv.vline(x, y0 + 1, CONTAINER_RISE - 2, darker(paint, 0.46));
+      cv.rect(3, y0 + 2, 5, 3, darker(paint, 0.1));
+      cv.set(4, y0 + 3, PAL.kerbIvory);
+      cv.set(6, y0 + 3, PAL.kerbIvory);
+    }
+    cv.hline(0, y0, w, darker(paint, 0.12));
+    cv.hline(0, y0 + CONTAINER_RISE - 1, w, darker(paint, 0.62));
+  }
+  cv.vline(0, 0, r, lighter(paint, 0.12));
+  cv.vline(w - 1, 0, r, darker(paint, 0.62));
+  cv.hline(0, r - 1, w, PAL.ink);
+  return cv;
+}
+
+/**
+ * Shipping container, single or stacked two high, as a loose sprite for decks and crane loads.
+ * The footprint sits at the left of the bottom row; the top leans east above it.
+ */
 export function containerSprite(horizontal: boolean, paint: Color, stacked: boolean): Sprite {
   const w = horizontal ? 30 : 13;
   const d = horizontal ? 13 : 30;
-  const r = CONTAINER_RISE * (stacked ? 2 : 1);
-  const cv = Canvas.sprite(w, d + r);
-  const top = lighter(paint, 0.16);
-  cv.rect(0, 0, w, d, top);
-  for (let k = 2; k < (horizontal ? w : d) - 1; k += 3) {
-    if (horizontal) cv.vline(k, 1, d - 2, darker(top, 0.16));
-    else cv.hline(1, k, w - 2, darker(top, 0.16));
+  const levels = stacked ? 2 : 1;
+  const r = CONTAINER_RISE * levels;
+  const span = leanOf(r);
+  const cv = Canvas.sprite(w + span, d + r);
+  // West side.
+  for (let j = 0; j < span; j++) {
+    const v = Math.min(r - 1, j * LEAN_RUN + 1);
+    for (let k = -1; k < d; k++) cv.set(j, r + k - v, containerSide(paint, k + 1, v, levels));
   }
-  cv.frame(0, 0, w, d, darker(top, 0.35));
-  cv.hline(0, 0, w, lighter(top, 0.35));
-  cv.vline(0, 0, d, lighter(top, 0.2));
-  const face = darker(paint, 0.28);
-  cv.rect(0, d, w, r, face);
-  for (let x = 1; x < w - 1; x += 2) cv.vline(x, d + 1, r - 2, darker(paint, 0.42));
-  if (stacked) {
-    cv.hline(0, d + CONTAINER_RISE - 1, w, darker(paint, 0.6));
-    cv.hline(0, d + CONTAINER_RISE, w, darker(paint, 0.12));
+  // South face, sheared to follow the lean.
+  const face = containerFace(paint, w, levels, !horizontal);
+  for (let k = 0; k < r; k++) {
+    const sx = leanOf(r - 1 - k);
+    for (let i = 0; i < w; i++) cv.set(sx + i, d + k, face.get(i, k));
   }
-  cv.hline(0, d, w, darker(paint, 0.1));
-  cv.vline(0, d, r, darker(paint, 0.5));
-  cv.vline(w - 1, d, r, darker(paint, 0.6));
-  cv.hline(0, d + r - 1, w, PAL.ink);
-  if (!horizontal) {
-    // Door end faces the camera: lock rods and a placard.
-    for (let k = 0; k < (stacked ? 2 : 1); k++) {
-      const y0 = d + k * CONTAINER_RISE;
-      cv.rect(1, y0 + 1, w - 2, CONTAINER_RISE - 2, darker(paint, 0.2));
-      cv.vline(6, y0 + 1, CONTAINER_RISE - 2, darker(paint, 0.55));
-      cv.vline(3, y0 + 2, CONTAINER_RISE - 4, PAL.steelLight);
-      cv.vline(9, y0 + 2, CONTAINER_RISE - 4, PAL.steelLight);
-      cv.set(10, y0 + 2, PAL.kerbIvory);
-    }
-  } else {
-    cv.rect(3, d + 2, 5, 3, darker(paint, 0.05));
-    cv.set(4, d + 3, PAL.kerbIvory);
-    cv.set(6, d + 3, PAL.kerbIvory);
-  }
+  for (let ly = 0; ly < d; ly++)
+    for (let lx = 0; lx < w; lx++) cv.set(span + lx, ly, containerTop(paint, w, d, lx, ly));
   return { art: cv, ax: w >> 1, ay: d + r - 1 };
 }

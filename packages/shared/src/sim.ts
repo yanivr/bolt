@@ -5,8 +5,10 @@ import {
   createMotionState,
   createStepScratch,
   createTelemetry,
+  resetPowertrain,
   stepVehicle,
 } from './physics.js';
+import type { CarSnapshot } from './protocol.js';
 import type { ProgressEvent, TrackRuntime } from './track.js';
 import { createProgress, updateProgress } from './track.js';
 import type {
@@ -31,6 +33,11 @@ export type DriveSession = {
   motion: VehicleMotionState;
   progress: VehicleProgressState;
   telemetry: VehicleTelemetry;
+  /**
+   * Integrity of each wheel, 0 to 100, one entry per wheel anchor of the chassis in anchor
+   * order. State only for now: damage arrives with combat in Milestone C.
+   */
+  wheelIntegrity: number[];
   scratch: StepScratch;
   phase: MatchPhase;
   tick: number;
@@ -53,9 +60,10 @@ export function createDriveSession(
     track,
     env,
     params,
-    motion: createMotionState(spawn.x, spawn.y, spawn.headingRad),
+    motion: createMotionState(spawn.x, spawn.y, spawn.headingRad, params),
     progress: createProgress(),
     telemetry: createTelemetry(),
+    wheelIntegrity: Array.from({ length: params.wheelCount }, () => 100),
     scratch: createStepScratch(),
     phase: 'COUNTDOWN',
     tick: 0,
@@ -73,6 +81,32 @@ export function raceTimeMs(session: DriveSession): number {
 
 export function countdownSeconds(session: DriveSession): number {
   return session.phase === 'COUNTDOWN' ? Math.ceil(session.countdownTicks * SIM_DT) : 0;
+}
+
+/**
+ * The plain snapshot of a session that an authority hands to a predicting client. The server
+ * room sends the same fields through its synchronized schema; the offline link, the benches
+ * and the tests build theirs here, so there is one definition of what a snapshot contains.
+ */
+export function sessionSnapshot(
+  session: DriveSession,
+  ackSequence: number,
+  buildHash = '',
+): CarSnapshot {
+  return {
+    tick: session.tick,
+    ackSequence,
+    raceTimeMs: raceTimeMs(session),
+    phase: session.phase,
+    countdown: countdownSeconds(session),
+    countdownTicks: session.phase === 'COUNTDOWN' ? Math.max(0, session.countdownTicks) : 0,
+    motion: { ...session.motion },
+    progress: { ...session.progress },
+    bestLapMs: session.bestLapMs,
+    lastLapMs: session.lastLapMs,
+    wheelIntegrity: [...session.wheelIntegrity],
+    buildHash,
+  };
 }
 
 /** Puts the car back on the grid for another run. Development convenience for Milestone A. */
@@ -108,6 +142,8 @@ export function stepDriveSession(session: DriveSession, input: ControlInput): St
     session.motion.yawRate = 0;
     session.motion.reverseHold = 0;
     session.motion.reversing = false;
+    // Every car leaves the grid cold, charged and with its launch stored.
+    resetPowertrain(session.motion, session.params);
     if (session.countdownTicks <= 0) session.phase = 'RACING';
     return result;
   }

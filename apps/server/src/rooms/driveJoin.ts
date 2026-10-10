@@ -1,7 +1,19 @@
 import { ServerError } from '@colyseus/core';
-import { environmentFor, getTrack, resolveLoadout } from '@bolt/content';
-import type { RaceEnvironment, TrackDefinition, VehicleLoadout, VehicleParams } from '@bolt/shared';
-import { JOIN_ERROR_CODES, PROTOCOL_VERSION, driveJoinOptionsSchema } from '@bolt/shared';
+import { CATALOG, conditionsFor, environmentFor, getTrack } from '@bolt/content';
+import type {
+  BlueprintIssue,
+  RaceEnvironment,
+  TrackDefinition,
+  VehicleBlueprint,
+  VehicleParams,
+} from '@bolt/shared';
+import {
+  JOIN_ERROR_CODES,
+  PROTOCOL_VERSION,
+  deriveVehicleParams,
+  driveJoinOptionsSchema,
+  validateBlueprint,
+} from '@bolt/shared';
 import type { DriveJoinOptions, JoinErrorCode } from '@bolt/shared';
 
 /**
@@ -23,6 +35,8 @@ export const JOIN_ERROR_MESSAGES: Record<JoinErrorCode, string> = {
   UNKNOWN_TRACK: 'That track is not available.',
   VERSION_MISMATCH: 'This version of the game is out of date. Refresh the page to update.',
   UNKNOWN_PART: 'That car uses a part this server does not recognize.',
+  ILLEGAL_BUILD: "That car can't race as built. Open the garage to fix it.",
+  CATALOG_MISMATCH: 'This build uses older part values. Review it before racing.',
   RATE_LIMITED: 'You are joining too quickly. Wait a moment and try again.',
   INTERNAL: 'Something went wrong on the server. Try again in a moment.',
   SERVER_FULL: 'All race servers are busy right now. Try again in a moment.',
@@ -71,19 +85,61 @@ export function resolveCourse(trackId: string, weatherPresetId: string): DriveCo
   return { track, env };
 }
 
-export function resolveParams(loadout: VehicleLoadout): VehicleParams {
-  const check = resolveLoadout(loadout);
-  if (!check.ok) throw joinError('UNKNOWN_PART');
-  return check.params;
+export type ResolvedCar = {
+  params: VehicleParams;
+  /** The canonical form of the accepted blueprint. */
+  blueprint: VehicleBlueprint;
+  buildHash: string;
+  totalCost: number;
+};
+
+function sentence(text: string): string {
+  return /[.!?]$/.test(text) ? text : `${text}.`;
+}
+
+/** Turns the first error into a refusal a player can act on. */
+function buildRefusal(issues: BlueprintIssue[]): ServerError {
+  const errors = issues.filter((i) => i.severity === 'error');
+  if (errors.some((i) => i.code === 'CATALOG_MISMATCH')) return joinError('CATALOG_MISMATCH');
+  if (errors.some((i) => i.code === 'UNKNOWN_PART')) return joinError('UNKNOWN_PART');
+  const first = errors[0];
+  if (!first) return joinError('ILLEGAL_BUILD');
+  return joinError(
+    'ILLEGAL_BUILD',
+    `That car can't race as built. ${sentence(first.hint ?? first.message)}`,
+  );
+}
+
+/**
+ * The server's own verdict on a blueprint. Every id is looked up in the server's catalog,
+ * the build is validated in full, and mass, cost and every physical coefficient are derived
+ * here for the published track and weather. Nothing the client computed is consulted.
+ */
+export function resolveCar(
+  blueprint: VehicleBlueprint,
+  trackId: string,
+  weatherPresetId: string,
+): ResolvedCar {
+  const conditions = conditionsFor(trackId, weatherPresetId);
+  if (!conditions) throw joinError('BAD_REQUEST');
+  const check = validateBlueprint(blueprint, CATALOG);
+  if (!check.ok) throw buildRefusal(check.issues);
+  return {
+    params: deriveVehicleParams(check.build, conditions),
+    blueprint: check.blueprint,
+    buildHash: check.buildHash,
+    totalCost: check.totalCost,
+  };
 }
 
 /**
  * What the room keeps about an admitted driver. It crosses Colyseus's seat reservation as
- * JSON, so it holds ids only; derived physics values are rebuilt from content on arrival.
+ * JSON, so it holds the blueprint only; derived physics values are rebuilt from content on
+ * arrival.
  */
 export type DriveAuth = {
   guestId: string;
   trackId: string;
   weatherPresetId: string;
-  loadout: VehicleLoadout;
+  blueprint: VehicleBlueprint;
 };

@@ -8,6 +8,7 @@ const uint16 = (value = 0) => ({ type: 'uint16', default: value }) as const;
 const uint32 = (value = 0) => ({ type: 'uint32', default: value }) as const;
 const int32 = (value = 0) => ({ type: 'int32', default: value }) as const;
 const float64 = (value = 0) => ({ type: 'float64', default: value }) as const;
+const bool = (value = false) => ({ type: 'boolean', default: value }) as const;
 
 /**
  * Synchronized state of a test-drive room. Field names mirror `CarSnapshot` in the shared
@@ -35,6 +36,10 @@ export const DriveState = schema(
     ackSequence: int32(-1),
     bestLapMs: uint32(),
     lastLapMs: uint32(),
+    /** Mechanical hash of the blueprint the server accepted for this car (Section 15.5). */
+    buildHash: { type: 'string', default: '' },
+    /** One entry per wheel anchor of the chassis, 0 to 100. */
+    wheelIntegrity: ['float32'],
 
     // VehicleMotionState
     x: float64(),
@@ -49,6 +54,17 @@ export const DriveState = schema(
     reverseHold: float64(),
     reversing: { type: 'boolean', default: false },
     wallGrace: float64(),
+    // Powertrain state. Synchronized exactly for the same reason as the motion values: the
+    // client replays its unconfirmed inputs from here, and heat, battery and engine state all
+    // feed back into the force the engine makes.
+    coreHeat: float64(),
+    batteryEnergy: float64(),
+    thermalLimited: bool(),
+    engineSpool: float64(),
+    engineCharge: float64(1),
+    engineClock: float64(),
+    engineBurst: float64(),
+    tireWearSeconds: float64(),
 
     // VehicleProgressState
     checkpointIndex: uint16(),
@@ -94,6 +110,20 @@ export function writeDriveState(
   state.reverseHold = motion.reverseHold;
   state.reversing = motion.reversing;
   state.wallGrace = motion.wallGrace;
+  state.coreHeat = motion.coreHeat;
+  state.batteryEnergy = motion.batteryEnergy;
+  state.thermalLimited = motion.thermalLimited;
+  state.engineSpool = motion.engineSpool;
+  state.engineCharge = motion.engineCharge;
+  state.engineClock = motion.engineClock;
+  state.engineBurst = motion.engineBurst;
+  state.tireWearSeconds = motion.tireWearSeconds;
+
+  const wheels = session.wheelIntegrity;
+  while (state.wheelIntegrity.length < wheels.length) state.wheelIntegrity.push(100);
+  while (state.wheelIntegrity.length > wheels.length) state.wheelIntegrity.pop();
+  for (let i = 0; i < wheels.length; i++)
+    if (state.wheelIntegrity[i] !== wheels[i]) state.wheelIntegrity[i] = wheels[i]!;
 
   const progress = session.progress;
   state.checkpointIndex = progress.checkpointIndex;

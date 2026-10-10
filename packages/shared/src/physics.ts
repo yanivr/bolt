@@ -1,26 +1,44 @@
 import {
+  AIRFLOW_FULL_SPEED,
+  AIRFLOW_STILL,
+  BASE_BATTERY,
   BRAKE_LIFT_THRESHOLD,
+  COOLING_MULTIPLIER,
+  DOWNFORCE_REF_SPEED,
+  DRIVETRAIN_MIN_SUPPLY,
   FREE_ROLL_SLIP,
+  HEAT_PROTECTION,
+  HEAT_RECOVERY,
+  HEAT_SHED_BASE,
+  HEAT_SHED_SCALE,
+  HEAT_WARNING,
   IDLE_THROTTLE,
   KINETIC_GRIP_FACTOR,
   MAX_COMBINED_GRIP,
+  PARTIAL_LOAD_THROTTLE,
   REVERSE_ACCEL,
   REVERSE_HOLD_SECONDS,
   SHOULDER_GRIP_FACTOR,
   SHOULDER_ROLLING_DECEL,
   SCRUB_FULL_SLIP,
+  STABILITY_MAX,
+  STABILITY_MIN,
   STEER_BLEND_SHARPNESS,
   STEER_ENGAGE_TIME,
   STEER_GRIP_SENSE,
   STEER_RELEASE_TIME,
   SURFACE_GRIP,
   SURFACE_ROLLING_DECEL,
+  THERMAL_PENALTY_MAX,
   THROTTLE_ASSIST_MIN,
   THROTTLE_ASSIST_SLIP_FULL,
   THROTTLE_ASSIST_SLIP_START,
   TIRE_FADE_END,
   TIRE_FADE_START,
   TIRE_KNEE_SHARPNESS,
+  UNSTABLE_ALIGN_LOSS,
+  UNSTABLE_GRIP_LOSS,
+  UNSTABLE_RECOVERY_LOSS,
   WALL_FORGIVE_SPEED,
   WALL_FRICTION_DECEL,
   WALL_GRACE_SECONDS,
@@ -30,7 +48,7 @@ import {
   WALL_SCRAPE_LOSS_MIN,
   WET_WEATHER,
 } from './balance.js';
-import { approach, clamp, expBlend, lerp, smoothstep, wrapAngle } from './math.js';
+import { TAU, approach, clamp, expBlend, lerp, smoothstep, wrapAngle } from './math.js';
 import type { TrackLocation, TrackRuntime } from './track.js';
 import { createLocation, locate, surfaceAt } from './track.js';
 import type {
@@ -65,7 +83,16 @@ export type ControlInput = {
 
 export const NEUTRAL_INPUT: ControlInput = Object.freeze({ steer: 0, brake: 0, coast: true });
 
-export function createMotionState(x: number, y: number, headingRad: number): VehicleMotionState {
+/**
+ * A car at rest. Pass the car's params so the battery starts full for that build; without
+ * them it starts with the base battery every chassis has.
+ */
+export function createMotionState(
+  x: number,
+  y: number,
+  headingRad: number,
+  params?: VehicleParams,
+): VehicleMotionState {
   return {
     x,
     y,
@@ -79,7 +106,27 @@ export function createMotionState(x: number, y: number, headingRad: number): Veh
     reverseHold: 0,
     reversing: false,
     wallGrace: 0,
+    coreHeat: 0,
+    batteryEnergy: params ? params.power.capacity : BASE_BATTERY,
+    thermalLimited: false,
+    engineSpool: 0,
+    engineCharge: 1,
+    engineClock: 0,
+    engineBurst: 0,
+    tireWearSeconds: 0,
   };
+}
+
+/** Puts the powertrain back in its starting state: cold, fully charged, launch stored. */
+export function resetPowertrain(state: VehicleMotionState, params: VehicleParams): void {
+  state.coreHeat = 0;
+  state.batteryEnergy = params.power.capacity;
+  state.thermalLimited = false;
+  state.engineSpool = 0;
+  state.engineCharge = 1;
+  state.engineClock = 0;
+  state.engineBurst = 0;
+  state.tireWearSeconds = 0;
 }
 
 export function createTelemetry(): VehicleTelemetry {
@@ -97,6 +144,15 @@ export function createTelemetry(): VehicleTelemetry {
     wallImpactSpeed: 0,
     wallNormalX: 0,
     wallNormalY: 0,
+    powerFraction: 1,
+    drivetrainSupply: 1,
+    auxSupply: 1,
+    generation: 0,
+    powerDemand: 0,
+    heatProduction: 0,
+    heatCooling: 0,
+    heatLevel: 0,
+    lowPower: false,
   };
 }
 
@@ -113,6 +169,52 @@ export function copyMotionState(from: VehicleMotionState, to: VehicleMotionState
   to.reverseHold = from.reverseHold;
   to.reversing = from.reversing;
   to.wallGrace = from.wallGrace;
+  to.coreHeat = from.coreHeat;
+  to.batteryEnergy = from.batteryEnergy;
+  to.thermalLimited = from.thermalLimited;
+  to.engineSpool = from.engineSpool;
+  to.engineCharge = from.engineCharge;
+  to.engineClock = from.engineClock;
+  to.engineBurst = from.engineBurst;
+  to.tireWearSeconds = from.tireWearSeconds;
+}
+
+function isRoad(surface: SurfaceId): boolean {
+  return surface === 'asphalt' || surface === 'cobble' || surface === 'metal';
+}
+function isLoose(surface: SurfaceId): boolean {
+  return surface === 'sand' || surface === 'dirt' || surface === 'mud' || surface === 'snow';
+}
+
+/**
+ * Grip for a surface under the published conditions before the Section 9.2 cap: the weather
+ * table, the tire kit's base grip and every surface, wet and dry specialization. Powered
+ * tire effects (magnetic rollers, adaptive tires) are scaled by `poweredShare`, the share of
+ * their electrical demand that is being met.
+ */
+function rawSurfaceGrip(
+  params: VehicleParams,
+  env: RaceEnvironment,
+  surface: SurfaceId,
+  onShoulder: boolean,
+  poweredShare: number,
+): number {
+  const wet = WET_WEATHER[env.weather];
+  let grip =
+    SURFACE_GRIP[env.weather][surface] * params.tireGrip * (params.tireSurfaceGrip[surface] ?? 1);
+  if (wet) grip *= params.tireWetGripFactor * (params.tireWetSurfaceGrip[surface] ?? 1);
+  else grip *= params.tireDryGrip[surface] ?? 1;
+  if (poweredShare > 0) {
+    const consumers = params.power.consumers;
+    for (let i = 0; i < consumers.length; i++) {
+      const effect = consumers[i]!.effect;
+      const bonus = effect.surfaceGrip?.[surface];
+      if (bonus !== undefined) grip *= 1 + bonus * poweredShare;
+      if (wet && effect.wetGrip !== undefined) grip *= 1 + effect.wetGrip * poweredShare;
+    }
+  }
+  if (onShoulder) grip *= 1 - (1 - SHOULDER_GRIP_FACTOR) * params.shoulderPenalty;
+  return grip;
 }
 
 /** Combined grip for a surface under the published conditions, capped per Section 9.2. */
@@ -121,12 +223,25 @@ export function surfaceGrip(
   env: RaceEnvironment,
   surface: SurfaceId,
   onShoulder: boolean,
+  poweredShare = 1,
 ): number {
-  let grip =
-    SURFACE_GRIP[env.weather][surface] * params.tireGrip * (params.tireSurfaceGrip[surface] ?? 1);
-  if (WET_WEATHER[env.weather]) grip *= params.tireWetGripFactor;
-  if (onShoulder) grip *= SHOULDER_GRIP_FACTOR;
-  return Math.min(MAX_COMBINED_GRIP, grip);
+  return Math.min(
+    MAX_COMBINED_GRIP,
+    rawSurfaceGrip(params, env, surface, onShoulder, poweredShare),
+  );
+}
+
+/** Rolling resistance on a surface for this car, world px/s2. */
+export function rollingDecel(
+  params: VehicleParams,
+  surface: SurfaceId,
+  onShoulder: boolean,
+): number {
+  let rolling = SURFACE_ROLLING_DECEL[surface];
+  if (onShoulder) rolling = Math.max(SHOULDER_ROLLING_DECEL, rolling);
+  rolling *= params.rollingFactor[surface] ?? 1;
+  if (isLoose(surface)) rolling *= params.looseRollingFactor;
+  return rolling + (params.rollingAdd[surface] ?? 0);
 }
 
 /** Wheel force available at a given forward speed with full throttle. */
@@ -179,9 +294,248 @@ export function tireResponse(r: number, kinetic: number): number {
   return knee * lerp(1, kinetic, smoothstep(TIRE_FADE_START, TIRE_FADE_END, r));
 }
 
-export type StepScratch = { loc: TrackLocation; probe: TrackLocation };
+/** What the powertrain decided this step. Reused between steps to avoid allocation. */
+export type PowertrainOutput = {
+  /** Engine force this step as a fraction of rated force. */
+  output: number;
+  /** Multiplier on the engine's rev ceiling this step. */
+  revScale: number;
+  /** Share of powered tire effects that is supplied. */
+  gripSupply: number;
+  stabilityAdd: number;
+  slipRecoveryAdd: number;
+  downforce: number;
+};
+
+export function createPowertrainOutput(): PowertrainOutput {
+  return {
+    output: 1,
+    revScale: 1,
+    gripSupply: 1,
+    stabilityAdd: 0,
+    slipRecoveryAdd: 0,
+    downforce: 0,
+  };
+}
+
+/**
+ * Section 11.8 steps 2 and 3 for one car: electrical generation, battery and consumer
+ * priorities, then heat production, cooling and thermal limiting, along with the engine's
+ * own runtime character (wind-up, output cycle, fuel pulses, stored launch). Everything it
+ * remembers lives in the motion state, so the server, the predicting client and a replay all
+ * produce the same numbers from the same inputs.
+ */
+export function stepPowertrain(
+  state: VehicleMotionState,
+  throttle: number,
+  speed: number,
+  params: VehicleParams,
+  env: RaceEnvironment,
+  dt: number,
+  out: PowertrainOutput,
+  telemetry: VehicleTelemetry,
+): void {
+  const engine = params.engine;
+  let output = 1;
+  let revScale = 1;
+
+  // --- Engine character --------------------------------------------------------------------
+  if (engine.spoolUpSeconds > 0) {
+    state.engineSpool =
+      throttle > 0.5
+        ? Math.min(1, state.engineSpool + dt / engine.spoolUpSeconds)
+        : Math.max(0, state.engineSpool - dt / Math.max(0.05, engine.spoolDownSeconds));
+    output *= lerp(engine.spoolFloor, 1, state.engineSpool);
+    revScale *= lerp(1, engine.spoolTopEndFactor, state.engineSpool);
+  }
+  if (engine.cyclePeriodSeconds > 0) {
+    state.engineClock = (state.engineClock + dt) % engine.cyclePeriodSeconds;
+    const wave = 0.5 + 0.5 * Math.cos((TAU * state.engineClock) / engine.cyclePeriodSeconds);
+    output *= lerp(engine.cycleLowFactor, 1, wave);
+  }
+  if (engine.pulseBurnSeconds > 0) {
+    if (state.engineBurst > 0 && throttle > 0.3) {
+      state.engineCharge -= dt / engine.pulseBurnSeconds;
+      if (state.engineCharge <= 0) {
+        state.engineCharge = 0;
+        state.engineBurst = 0;
+      }
+    } else {
+      state.engineCharge = Math.min(
+        1,
+        state.engineCharge + dt / Math.max(0.05, engine.pulseRefillSeconds),
+      );
+      if (state.engineCharge >= 1) state.engineBurst = 1;
+    }
+    if (!(state.engineBurst > 0)) output *= engine.pulseRestFactor;
+  } else if (engine.burstRechargeSeconds > 0) {
+    if (state.engineBurst > 0) {
+      state.engineBurst = Math.max(0, state.engineBurst - dt);
+      output *= engine.burstFactor;
+    } else {
+      state.engineCharge = Math.min(1, state.engineCharge + dt / engine.burstRechargeSeconds);
+      if (state.engineCharge >= 1 && throttle >= 0.8) {
+        state.engineCharge = 0;
+        state.engineBurst = engine.burstSeconds;
+        output *= engine.burstFactor;
+      }
+    }
+  }
+
+  // --- Power: generation, battery, consumers by priority -------------------------------------
+  const power = params.power;
+  const generation = power.generation + (throttle < 0.5 ? power.offThrottleGeneration : 0);
+  let available = state.batteryEnergy + generation * dt;
+  let demand = 0;
+  let driveSupply = 1;
+  const driveNeed = power.drivetrainDraw * throttle * dt;
+  if (driveNeed > 0) {
+    demand += driveNeed;
+    driveSupply = Math.min(1, available / driveNeed);
+    available -= driveNeed * driveSupply;
+    // The drivetrain is served first and still keeps a protected minimum when starved.
+    if (driveSupply < 1) output *= Math.max(DRIVETRAIN_MIN_SUPPLY, driveSupply);
+  }
+  let cooling = params.heat.cooling;
+  let stabilityAdd = 0;
+  let slipRecoveryAdd = 0;
+  let downforce = 0;
+  let gripSupply = 1;
+  let auxNeed = 0;
+  let auxGot = 0;
+  const consumers = power.consumers;
+  for (let i = 0; i < consumers.length; i++) {
+    const consumer = consumers[i]!;
+    const need = consumer.draw * dt;
+    const supply = need > 0 ? Math.min(1, Math.max(0, available) / need) : 1;
+    available -= need * supply;
+    demand += need;
+    auxNeed += need;
+    auxGot += need * supply;
+    const effect = consumer.effect;
+    if (effect.cooling !== undefined) cooling += effect.cooling * supply;
+    if (effect.stability !== undefined) stabilityAdd += effect.stability * supply;
+    if (effect.slipRecovery !== undefined) slipRecoveryAdd += effect.slipRecovery * supply;
+    if (effect.downforce !== undefined) downforce += effect.downforce * supply;
+    if (effect.surfaceGrip !== undefined || effect.wetGrip !== undefined)
+      gripSupply = Math.min(gripSupply, supply);
+  }
+  state.batteryEnergy = clamp(available, 0, power.capacity);
+
+  // --- Heat: thermal limit from the heat the core already has, then this step's balance ------
+  const heat = params.heat;
+  let penalty = 0;
+  if (state.thermalLimited) penalty = THERMAL_PENALTY_MAX;
+  else if (state.coreHeat > heat.performanceThreshold)
+    penalty =
+      THERMAL_PENALTY_MAX *
+      clamp(
+        (state.coreHeat - heat.performanceThreshold) /
+          Math.max(1, HEAT_PROTECTION - heat.performanceThreshold),
+        0,
+        1,
+      );
+  output *= 1 - penalty;
+
+  const work = heat.idleFraction + (1 - heat.idleFraction) * throttle * output;
+  const production =
+    heat.enginePerSecond * work * (throttle < PARTIAL_LOAD_THROTTLE ? heat.partialLoadFactor : 1) +
+    heat.constantPerSecond;
+  const airflow = AIRFLOW_STILL + (1 - AIRFLOW_STILL) * Math.min(1, speed / AIRFLOW_FULL_SPEED);
+  const shed =
+    cooling *
+    COOLING_MULTIPLIER[env.weather] *
+    airflow *
+    (HEAT_SHED_BASE + state.coreHeat / HEAT_SHED_SCALE);
+  state.coreHeat = Math.max(0, state.coreHeat + (production - shed) * dt);
+  if (state.coreHeat >= HEAT_PROTECTION) state.thermalLimited = true;
+  else if (state.coreHeat < HEAT_RECOVERY) state.thermalLimited = false;
+
+  out.output = output;
+  out.revScale = revScale;
+  out.gripSupply = gripSupply;
+  out.stabilityAdd = stabilityAdd;
+  out.slipRecoveryAdd = slipRecoveryAdd;
+  out.downforce = downforce;
+
+  telemetry.powerFraction = output;
+  telemetry.drivetrainSupply = driveSupply;
+  telemetry.auxSupply = auxNeed > 0 ? auxGot / auxNeed : 1;
+  telemetry.generation = generation;
+  telemetry.powerDemand = demand / dt;
+  telemetry.heatProduction = production;
+  telemetry.heatCooling = shed;
+  telemetry.heatLevel = state.thermalLimited
+    ? 3
+    : state.coreHeat >= heat.performanceThreshold
+      ? 2
+      : state.coreHeat >= HEAT_WARNING
+        ? 1
+        : 0;
+  telemetry.lowPower = driveSupply < 1 || auxGot < auxNeed - 1e-9;
+}
+
+/**
+ * Share of handling lost to instability: 0 at or above the chassis threshold, 1 at the
+ * bottom of the scale. Powered stabilisers count only as far as they are supplied.
+ */
+export function instability(params: VehicleParams, stabilityAdd: number): number {
+  const score = clamp(params.stability + stabilityAdd, STABILITY_MIN, STABILITY_MAX);
+  const span = Math.max(1, params.stabilityThreshold - STABILITY_MIN);
+  return clamp((params.stabilityThreshold - score) / span, 0, 1);
+}
+
+/**
+ * One step of a car driving flat out in a straight line on a single surface: the same
+ * powertrain, grip, traction, drag and rolling terms `stepVehicle` uses, without steering or
+ * a track. The garage uses it to predict acceleration and top speed for the Speed score, and
+ * a test holds it to the full integrator. Returns the new forward speed.
+ */
+export function stepStraight(
+  state: VehicleMotionState,
+  speed: number,
+  params: VehicleParams,
+  env: RaceEnvironment,
+  surface: SurfaceId,
+  dt: number,
+  out: PowertrainOutput,
+  telemetry: VehicleTelemetry,
+): number {
+  stepPowertrain(state, 1, speed, params, env, dt, out, telemetry);
+  let gripRaw = rawSurfaceGrip(params, env, surface, false, out.gripSupply);
+  if (params.wearRampSeconds > 0) {
+    if (speed > 20) state.tireWearSeconds += dt;
+    gripRaw *= lerp(
+      1,
+      params.wornGrip,
+      clamp((state.tireWearSeconds - params.wearStartSeconds) / params.wearRampSeconds, 0, 1),
+    );
+  }
+  if (out.downforce > 0) {
+    const q = Math.min(1, speed / DOWNFORCE_REF_SPEED);
+    gripRaw *= 1 + out.downforce * q * q;
+  }
+  const grip = Math.min(MAX_COMBINED_GRIP, gripRaw);
+  const speedScale = isRoad(surface) ? params.roadSpeedFactor : 1;
+  const tractionLimit =
+    params.tractionAccel * grip * (isLoose(surface) ? params.looseTractionFactor : 1);
+  const drive = Math.min(
+    tractionLimit,
+    (out.output * driveForceAt(params, speed / (speedScale * out.revScale))) / params.massKg,
+  );
+  const drag =
+    ((params.dragLinear * speed) / speedScale +
+      (params.dragQuadratic * speed * speed) / (speedScale * speedScale)) /
+    params.massKg;
+  let v = speed + (drive - drag) * dt;
+  v = Math.max(0, v - rollingDecel(params, surface, false) * dt);
+  telemetry.grip = grip;
+  return v;
+}
+
+export type StepScratch = { loc: TrackLocation; probe: TrackLocation; power: PowertrainOutput };
 export function createStepScratch(): StepScratch {
-  return { loc: createLocation(), probe: createLocation() };
+  return { loc: createLocation(), probe: createLocation(), power: createPowertrainOutput() };
 }
 
 export function stepVehicle(
@@ -211,7 +565,6 @@ export function stepVehicle(
   const loc = scratch.loc;
   locate(track, state.x, state.y, loc);
   const ground = surfaceAt(track, loc);
-  const grip = surfaceGrip(params, env, ground.surface, ground.onShoulder);
 
   // --- 3. Velocity in the car frame -----------------------------------------------------------
   let fx = Math.sin(state.headingRad);
@@ -243,13 +596,43 @@ export function stepVehicle(
   if (state.reversing) throttle = 0;
   state.throttleFraction = throttle;
 
+  // --- 4b. Power, heat and the engine's own state (Section 11.8 steps 2 and 3) ----------------
+  const power = scratch.power;
+  const speedNow = Math.hypot(vf, vl);
+  stepPowertrain(state, throttle, speedNow, params, env, dt, power, telemetry);
+
+  // --- 4c. Coefficients for this step (Section 11.8 step 4) ---------------------------------
+  let gripRaw = rawSurfaceGrip(params, env, ground.surface, ground.onShoulder, power.gripSupply);
+  if (params.wearRampSeconds > 0) {
+    if (speedNow > 20) state.tireWearSeconds += dt;
+    gripRaw *= lerp(
+      1,
+      params.wornGrip,
+      clamp((state.tireWearSeconds - params.wearStartSeconds) / params.wearRampSeconds, 0, 1),
+    );
+  }
+  if (power.downforce > 0) {
+    const q = Math.min(1, speedNow / DOWNFORCE_REF_SPEED);
+    gripRaw *= 1 + power.downforce * q * q;
+  }
+  const grip = Math.min(MAX_COMBINED_GRIP, gripRaw);
+  const unstable = instability(params, power.stabilityAdd);
+  const road = isRoad(ground.surface);
+  const speedScale = road ? params.roadSpeedFactor : 1;
+
   // --- 5. Forward speed ----------------------------------------------------------------------
-  const tractionLimit = params.tractionAccel * grip;
-  const drive = Math.min(tractionLimit, (throttle * driveForceAt(params, vf)) / params.massKg);
-  const drag = (params.dragLinear * vf + params.dragQuadratic * vf * Math.abs(vf)) / params.massKg;
-  const rolling = ground.onShoulder
-    ? Math.max(SHOULDER_ROLLING_DECEL, SURFACE_ROLLING_DECEL[ground.surface])
-    : SURFACE_ROLLING_DECEL[ground.surface];
+  const tractionLimit =
+    params.tractionAccel * grip * (isLoose(ground.surface) ? params.looseTractionFactor : 1);
+  const drive = Math.min(
+    tractionLimit,
+    (throttle * power.output * driveForceAt(params, vf / (speedScale * power.revScale))) /
+      params.massKg,
+  );
+  const drag =
+    ((params.dragLinear * vf) / speedScale +
+      (params.dragQuadratic * vf * Math.abs(vf)) / (speedScale * speedScale)) /
+    params.massKg;
+  const rolling = rollingDecel(params, ground.surface, ground.onShoulder);
 
   if (state.reversing) {
     vf = approach(vf, -params.reverseSpeed, REVERSE_ACCEL * grip * dt);
@@ -263,13 +646,23 @@ export function stepVehicle(
   }
 
   // --- 6. Yaw --------------------------------------------------------------------------------
-  const lateralLimit = params.lateralGripAccel * grip;
-  const curvature = state.steeringInput * lockCurvature(params, vf, grip);
+  // An unstable car has less grip to corner with. The steering request is made against that
+  // reduced grip too, so the car runs wide progressively instead of snapping into a slide.
+  const cornerGrip = grip * (1 - UNSTABLE_GRIP_LOSS * unstable);
+  const lateralLimit =
+    params.lateralGripAccel *
+    cornerGrip *
+    params.peakGripFactor *
+    (1 + params.corneringGrip * Math.abs(state.steeringInput));
+  const curvature = state.steeringInput * lockCurvature(params, vf, cornerGrip);
   // Self-aligning: the nose is drawn toward the direction of travel in proportion to slip. In
   // reverse the same expression draws the tail toward it.
   const alignSpeed = vf < 0 ? Math.min(vf, -ALIGN_FLOOR_SPEED) : Math.max(vf, ALIGN_FLOOR_SPEED);
   const align =
-    params.yawAlign * (vl / alignSpeed) * smoothstep(8, 48, Math.abs(vf) + Math.abs(vl));
+    params.yawAlign *
+    (1 - UNSTABLE_ALIGN_LOSS * unstable) *
+    (vl / alignSpeed) *
+    smoothstep(8, 48, Math.abs(vf) + Math.abs(vl));
   const yawTarget = vf * curvature + clamp(align, -ALIGN_LIMIT, ALIGN_LIMIT);
   state.yawRate += (yawTarget - state.yawRate) * expBlend(dt, params.yawResponseTime);
   state.headingRad = wrapAngle(state.headingRad + state.yawRate * dt);
@@ -289,7 +682,13 @@ export function stepVehicle(
   const wanted = -vl * Math.min(1, params.slipStiffness * dt);
   const maxDv = lateralLimit * dt;
   const demand = Math.abs(wanted) / maxDv;
-  const kinetic = Math.min(1, KINETIC_GRIP_FACTOR * params.slipRecovery);
+  const kinetic = Math.min(
+    1,
+    KINETIC_GRIP_FACTOR *
+      params.slipRecovery *
+      (1 + power.slipRecoveryAdd) *
+      (1 - UNSTABLE_RECOVERY_LOSS * unstable),
+  );
   // The tire curve can never deliver more than was asked for, so the car cannot be pushed
   // through zero slip and out the other side.
   const dv = Math.sign(wanted) * Math.min(Math.abs(wanted), maxDv * tireResponse(demand, kinetic));
@@ -401,8 +800,9 @@ export function stepVehicle(
     telemetry.wallNormalX = nx;
     telemetry.wallNormalY = ny;
     if (closing > 0) {
-      vx -= (1 + WALL_RESTITUTION) * closing * nx;
-      vy -= (1 + WALL_RESTITUTION) * closing * ny;
+      const bounce = Math.min(0.6, WALL_RESTITUTION * params.obstacleImpulse);
+      vx -= (1 + bounce) * closing * nx;
+      vy -= (1 + bounce) * closing * ny;
       let tangent = vx * -ny + vy * nx;
       const along = Math.abs(tangent);
       if (closing > WALL_FORGIVE_SPEED && state.wallGrace <= 0) {
@@ -411,7 +811,12 @@ export function stepVehicle(
           0,
           1,
         );
-        tangent *= 1 - lerp(WALL_SCRAPE_LOSS_MIN, WALL_SCRAPE_LOSS_MAX, severity);
+        tangent *=
+          1 -
+          Math.min(
+            0.5,
+            lerp(WALL_SCRAPE_LOSS_MIN, WALL_SCRAPE_LOSS_MAX, severity) * params.obstacleImpulse,
+          );
         state.wallGrace = WALL_GRACE_SECONDS;
         telemetry.wallImpactSpeed = closing;
       } else {

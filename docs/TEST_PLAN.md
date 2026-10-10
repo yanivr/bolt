@@ -15,6 +15,8 @@ the specification is the requirement list; rows are added here as milestones lan
 | `npx tsx tests/visual/capture.ts` | Screenshots and a recording for visual review                           |
 | `npx tsx tests/feel/report.ts`    | Handling tables for every chassis (yaw, slip, radius, direction steps)  |
 | `npx tsx tests/feel/pacingReport.ts` | Frame pacing of the shipped render pipeline at 60, 90 and 120 Hz     |
+| `npx tsx tests/feel/buildsReport.ts` | Race time, top speed, launch, heat and stability of every shipped build |
+| `npx tsx tests/tools/syncGarageDoc.ts` | Regenerates the part and chassis tables in `docs/GARAGE_API.md` |
 | `npx tsx tests/feel/netcodeReport.ts` | Prediction corrections under latency, jitter and frame hitches      |
 
 ## Automated coverage in Milestone A
@@ -103,6 +105,55 @@ Before and after output from the October 10 rework is kept in `docs/evidence/fee
 - Leaving a race asks first.
 - Every shipped chassis can be picked and driven.
 
+## Automated coverage added in Milestone B (data and rules)
+
+**Unit (`tests/unit`)**
+
+- `sha256.test.ts`: published vectors, block boundaries, agreement with Node.
+- `catalog.test.ts`: exactly 120 parts, 20 per category; every id, name, price and mass
+  against the Section 11 tables; card copy free of em dashes, double hyphens and filler;
+  every chassis layout (mirrored mounts, clear of wheels and of each other, inside the body);
+  every part fits at least one mount on some chassis; templates legal and at their stated
+  costs (baseline 370, Rookie 480).
+- `blueprint.test.ts`: schema bounds, canonical form, hash stable across purchase order and
+  cosmetic changes and sensitive to every mechanical field, every validation code reached,
+  approved copy on every issue.
+- `edit.test.ts`: install, remove, move, rotate, chassis, engine and tire swaps, fire
+  buttons, mount suggestion, repair, spend and refund arithmetic, undo and redo to 20 steps,
+  inputs never mutated.
+- `engines.test.ts`, `tires.test.ts`, `parts.test.ts`: the stated character of each engine
+  and tire kit measured on a bench, and the passive modifiers and declared actions of each
+  accessory.
+- `powertrain.test.ts`: heat thresholds and recovery, cooling by weather and airflow, energy
+  priority and the protected drivetrain minimum, overload, instability.
+- `stats.test.ts`: the five indicators and five scores, warnings, comparisons, and that the
+  numbers shown are the numbers the race uses.
+- `fuzz.test.ts`: random and hostile blueprints never throw and are never accepted while
+  illegal; random edit sequences never produce an over-budget or over-weight car; legal
+  random builds simulate with finite state.
+- `client.test.ts`: saved blueprint restore and legacy loadout migration, sprite fallback.
+- `assets.test.ts`: `SPRITES_PENDING` equals exactly the catalog ids missing from the atlas.
+- `docs.test.ts`: `docs/GARAGE_API.md` tables and copy match the catalog; the measured table
+  in `docs/BALANCE_CHANGELOG.md` matches the simulator.
+
+**Feel (`tests/feel`)**
+
+- `builds.test.ts`: every shipped blueprint finishes Neon Cut dry and wet without a wall
+  strike; the baseline stays in the Section 9.3 window; the six example builds differ the way
+  Section 11.9 says.
+- `handling.test.ts` now runs all 20 chassis (two with loose limits, see Decisions 59).
+
+**Integration and end to end**
+
+- Drive room: join with a blueprint; refusal of illegal, unknown-part, stale-catalog and
+  malformed builds; the snapshot carries heat, battery and build hash.
+- `GET /api/v1/catalog` returns all 120 parts and the templates.
+- Playwright: a pick saved by the Milestone A build is migrated to a blueprint and survives a
+  reload; a build with parts that have no art yet races online with stand-in sprites.
+
+Not covered yet: nothing fires, takes damage or repairs (Milestone C), so Defense, Firepower
+and Utility scores are checked for arithmetic and ordering, not against combat outcomes.
+
 ## Cannot be verified from this repository
 
 These are requirements, not optional extras, and they stay open in the release checklist
@@ -126,7 +177,6 @@ runs say nothing about frame rate on a phone.
 
 ## Later milestones
 
-Section 19.1 rows for parts, hardpoints, blueprint hashing, energy, heat, damage, armor,
-weapons, repairs and AI; the fourteen-step two-client match in 19.2; the stress test in 19.5;
+Section 19.1 rows for damage, armor in combat, weapons, repairs and AI; the fourteen-step two-client match in 19.2; the stress test in 19.5;
 the security list in 19.6 beyond what the drive room already covers; and the 100-room load
 exercise arrive with the features they test.

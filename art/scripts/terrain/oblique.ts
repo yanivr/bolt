@@ -1,13 +1,20 @@
 import type { OverlayArt } from './biome.js';
-import { Canvas, F_EMISSIVE } from './canvas.js';
+import { Canvas, F_EMISSIVE, F_WASH, KEY_NONE } from './canvas.js';
 import type { Color } from './canvas.js';
 import type { CorridorField } from './field.js';
+import { shadowVolume } from './lighting.js';
 import type { LightPlanes } from './lighting.js';
 
 /**
  * Top-down oblique projection shared with the car sprites. The ground plane is drawn as a plain
  * north-up map; a point `z` above the ground is drawn `TILT * z` pixels further up the screen,
  * so everything with height shows its top and its south face, and leans up the screen.
+ *
+ * Large masses (buildings, landmarks, stacked cargo) also lean a little to the east as they
+ * rise, one pixel for every `LEAN_RUN` pixels of rise, the way classic oblique games draw
+ * scenery. That turns their west walls toward the viewer, so a box shows three planes: the
+ * roof, the west wall that faces the light, and the south wall in shade. Cars and small street
+ * furniture stay upright.
  *
  * Two mechanisms put raised geometry into the picture:
  *
@@ -24,6 +31,17 @@ export const TILT = 0.62;
 
 /** Screen rise of a world height. */
 export const riseOf = (z: number): number => Math.round(z * TILT);
+
+/** Rows of screen rise per pixel of eastward lean on a solid mass. */
+export const LEAN_RUN = 3;
+/** Eastward shift of a point `rise` screen pixels above the ground. */
+export const leanOf = (rise: number): number => Math.floor(rise / LEAN_RUN);
+
+/** Rows north of raised mass that must stay free of drivable ground, and columns east of it. */
+export const CLEAR_NORTH = 24;
+export const CLEAR_EAST = 14;
+/** Half units of rise a cast shadow loses per pixel it travels to the south-east. */
+export const SHADOW_DROP = 5;
 
 export type OverlayTag = { id: string; kind: string; fade: boolean };
 
@@ -77,9 +95,17 @@ export class Scene {
   readonly shadowH: Uint8Array;
   /** Ground pixels shadowed by something that is not in `shadowH` (canopies, overlays). */
   readonly forced: Uint8Array;
+  /** Screen rise of the solid mass standing on each ground pixel. */
+  readonly height: Uint8Array;
+  /**
+   * Rise below which a point above each ground pixel lies in the shadow of some solid mass.
+   * Available once `resolve` has run.
+   */
+  shade: Uint8Array;
   private readonly sat: Int32Array;
   private readonly items: Standing[] = [];
   private readonly extrusions: Extrusion[] = [];
+  private readonly deferred: Array<() => void> = [];
 
   /**
    * `solids` are round obstacles standing on the roadway. Their own collision footprint is not
@@ -97,6 +123,8 @@ export class Scene {
     this.raised = new Uint8Array(w * h);
     this.shadowH = new Uint8Array(w * h);
     this.forced = new Uint8Array(w * h);
+    this.height = new Uint8Array(w * h);
+    this.shade = new Uint8Array(0);
     this.sat = new Int32Array((w + 1) * (h + 1));
     for (let i = 0; i < w * h; i++) this.drive[i] = field.edge[i]! <= 0 ? 1 : 0;
     for (const o of solids) {
@@ -217,6 +245,50 @@ export class Scene {
     return true;
   }
 
+  /** Registers a solid mass `rise` pixels tall on a rectangular footprint. */
+  solid(x: number, y: number, w: number, d: number, rise: number): void {
+    const r = Math.min(255, rise);
+    const x1 = Math.min(this.w, x + w);
+    const y1 = Math.min(this.h, y + d);
+    for (let yy = Math.max(0, y); yy < y1; yy++) {
+      for (let xx = Math.max(0, x); xx < x1; xx++) {
+        const p = yy * this.w + xx;
+        if (this.height[p]! < r) this.height[p] = r;
+      }
+    }
+  }
+
+  /**
+   * Tallest a mass on this footprint may be without its leaning body reaching over drivable
+   * ground, or into the strip a car beside the road is drawn across.
+   */
+  maxRise(x: number, y: number, w: number, d: number, limit: number): number {
+    for (let v = 0; v <= limit; v++) {
+      const lean = leanOf(v);
+      if (this.driveCount(x + lean, y - v - CLEAR_NORTH, w + CLEAR_EAST, d + CLEAR_NORTH) > 0)
+        return v - 1;
+    }
+    return limit;
+  }
+
+  /** Queues work that needs the shadow volume: it runs inside `resolve`, in order. */
+  later(fn: () => void): void {
+    this.deferred.push(fn);
+  }
+
+  /** Casts the shadow volume of every registered mass, then runs the queued painters. */
+  resolve(): void {
+    this.shade = shadowVolume(this.w, this.h, this.height, SHADOW_DROP);
+    for (const fn of this.deferred) fn();
+    this.deferred.length = 0;
+  }
+
+  /** True when the point `rise` above ground pixel (x, y) is in the shadow of a solid mass. */
+  shaded(x: number, y: number, rise: number): boolean {
+    if (x < 0 || y < 0 || x >= this.w || y >= this.h) return false;
+    return this.shade[y * this.w + x]! > rise;
+  }
+
   /** Registers a ground footprint that casts a shadow `len` pixels long. */
   footprint(x: number, y: number, w: number, h: number, len: number): void {
     const x1 = Math.min(this.w, x + w);
@@ -258,7 +330,7 @@ export class Scene {
     this.extrusions.push(ex);
   }
 
-  private raise(world: Canvas, ex: Extrusion): void {
+  private raise(world: Canvas, ex: Extrusion, zkey: Int16Array): void {
     const { w } = this;
     const x0 = Math.max(0, ex.x0);
     const x1 = Math.min(this.w, ex.x1);
@@ -273,11 +345,13 @@ export class Scene {
           if (ex.shadow > this.shadowH[p]!) this.shadowH[p] = ex.shadow;
           world.set(x, y - r, ex.top(x, y));
           this.raised[(y - r) * w + x] = 1;
+          zkey[(y - r) * w + x] = y;
           for (let v = r - 1; v >= next; v--) {
             const c = ex.side(x, y, v);
             if (c === null) continue;
             world.set(x, y - v, c);
             this.raised[(y - v) * w + x] = 1;
+            zkey[(y - v) * w + x] = y;
           }
         }
         r = next;
@@ -285,23 +359,29 @@ export class Scene {
     }
   }
 
-  /** Paints every ground-layer sprite, north to south. */
+  /**
+   * Paints every ground-layer sprite, north to south, through a depth plane. A flat sprite
+   * stands on its base row; a solid carries a key per pixel, so a mass that leans over its
+   * eastern neighbor or rises behind a lower one is cut exactly where it should be.
+   */
   paint(
     world: Canvas,
     light: LightPlanes | null,
     lit: (c: Color, s: number, t: number) => Color,
   ): void {
     world.curFlags = 0;
-    for (const ex of this.extrusions) this.raise(world, ex);
+    const { w, h } = this;
+    const zkey = new Int16Array(w * h).fill(KEY_NONE);
+    for (const ex of this.extrusions) this.raise(world, ex, zkey);
     const order = this.items
       .map((item, k) => ({ item, k }))
       .filter((e) => !e.item.overlay)
       .sort((a, b) => a.item.baseY - b.item.baseY || a.item.x - b.item.x || a.k - b.k);
-    const { w, h } = this;
     const data = world.data;
     const flags = world.flags;
     for (const { item } of order) {
       const { art } = item;
+      const keys = art.keys;
       const faceFrom = item.faceFrom ?? art.h;
       const footY = Math.min(h - 1, item.baseY + 1);
       for (let yy = 0; yy < art.h; yy++) {
@@ -311,25 +391,40 @@ export class Scene {
         const above = art.h - 1 - yy;
         const face = light !== null && yy >= faceFrom && above < FACE_WASH;
         for (let xx = 0; xx < art.w; xx++) {
-          const i = (yy * art.w + xx) * 4;
+          const q = yy * art.w + xx;
+          const i = q * 4;
           const a = art.data[i + 3]!;
           if (a === 0) continue;
           const wx = item.x + xx;
           if (wx < 0 || wx >= w) continue;
           const p = wy * w + wx;
+          let key = item.baseY;
+          if (keys && keys[q] !== KEY_NONE) key = keys[q]!;
+          if (key < zkey[p]!) continue;
           const o = p * 4;
-          const emissive = art.flags ? (art.flags[yy * art.w + xx]! & F_EMISSIVE) !== 0 : false;
+          const fl = art.flags ? art.flags[q]! : 0;
+          const emissive = (fl & F_EMISSIVE) !== 0;
           if (a === 255) {
             let c = (art.data[i]! << 16) | (art.data[i + 1]! << 8) | art.data[i + 2]!;
-            if (face && !emissive) {
-              const g = footY * w + wx;
-              const s = light.step[g]! - 1;
-              if (s > 0) c = lit(c, s, light.tint[g]!);
+            if (light !== null && !emissive) {
+              if (face) {
+                const g = footY * w + wx;
+                const s = light.step[g]! - 1;
+                if (s > 0) c = lit(c, s, light.tint[g]!);
+              } else if (fl & F_WASH) {
+                // A solid's wall: the light is the one on the ground at the wall's own foot.
+                const gy = Math.min(h - 1, key + 1);
+                const gx = Math.max(0, wx - leanOf(Math.max(0, key - wy)));
+                const g = gy * w + gx;
+                const s = light.step[g]! - 1;
+                if (s > 0) c = lit(c, s, light.tint[g]!);
+              }
             }
             data[o] = (c >> 16) & 255;
             data[o + 1] = (c >> 8) & 255;
             data[o + 2] = c & 255;
             data[o + 3] = 255;
+            zkey[p] = key;
           } else {
             // Hard-edged glow: a flat mix, quantized so it adds few colors.
             const t = a / 255;
@@ -413,25 +508,4 @@ export class Scene {
     for (let i = 0; i < this.raised.length; i++) if (this.raised[i] && this.drive[i]) n++;
     return n;
   }
-}
-
-/**
- * Sprite surface for a box standing on a `w` by `d` footprint, `r` pixels tall on screen, with
- * `head` rows of headroom above the roof for things that stand on it. The roof occupies rows
- * `head` to `head + d`, the south face the `r` rows below it.
- */
-export function boxCanvas(w: number, d: number, r: number, head = 0): Canvas {
-  return Canvas.sprite(w, head + d + r);
-}
-
-/** Wraps a box canvas as a standing item for a footprint whose north-west corner is (gx, gy). */
-export function standBox(
-  art: Canvas,
-  gx: number,
-  gy: number,
-  d: number,
-  r: number,
-  head = 0,
-): Standing {
-  return { art, x: gx, y: gy - r - head, baseY: gy + d - 1, faceFrom: head + d };
 }

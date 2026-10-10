@@ -1,4 +1,12 @@
-import { CHASSIS, CITY_01, PAINTS, STRINGS, WEATHER_PRESETS } from '@bolt/content';
+import {
+  CATALOG,
+  CITY_01,
+  PAINTS,
+  STRINGS,
+  WEATHER_PRESETS,
+  baselineBlueprint,
+} from '@bolt/content';
+import { drawableChassisIds, resolveCarSprites } from '@bolt/shared';
 import { useEffect, useState } from 'react';
 import { WEATHER_PRESET_ID, getManifests } from '../app/App.js';
 import { useApp } from '../app/store.js';
@@ -38,21 +46,40 @@ function useCompact(): boolean {
  */
 export function HomeScreen() {
   const setScreen = useApp((s) => s.setScreen);
-  const loadout = useApp((s) => s.loadout);
-  const setLoadout = useApp((s) => s.setLoadout);
+  const blueprint = useApp((s) => s.blueprint);
+  const setBlueprint = useApp((s) => s.setBlueprint);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const manifests = getManifests();
   const weather = WEATHER_PRESETS[WEATHER_PRESET_ID];
 
   const compact = useCompact();
-  const chassisIds = Object.keys(CHASSIS);
-  const chassis = CHASSIS[loadout.chassisId] ?? CHASSIS[chassisIds[0]!]!;
+  // The picker offers only chassis the artists have finished. The catalog and the server
+  // already know all twenty; the rest appear here as their sprites land in the car atlas.
+  const chassisIds = manifests ? drawableChassisIds(manifests.cars, CATALOG) : [];
+  const drawable = chassisIds.includes(blueprint.chassisId);
+  const chassis = CATALOG.chassis[drawable ? blueprint.chassisId : (chassisIds[0] ?? '')];
+  const sprites =
+    manifests && drawable ? resolveCarSprites(manifests.cars, blueprint).loadout : null;
+
+  // A stored car on a chassis without art cannot be shown or raced yet: fall back to the
+  // first one that can, on the same paint.
+  const firstDrawable = chassisIds[0];
+  useEffect(() => {
+    if (!drawable && firstDrawable)
+      setBlueprint(baselineBlueprint({ chassisId: firstDrawable, paintId: blueprint.paintId }));
+  }, [drawable, firstDrawable, blueprint.paintId, setBlueprint]);
+
+  // Until the garage arrives this picks a bare car: the chosen chassis with its default
+  // engine and Street Tires, as a real blueprint the server validates like any other.
   const cycle = (step: number) => {
+    if (!chassis || chassisIds.length === 0) return;
     const at = chassisIds.indexOf(chassis.id);
-    setLoadout({ chassisId: chassisIds[(at + step + chassisIds.length) % chassisIds.length]! });
+    const next = chassisIds[(at + step + chassisIds.length) % chassisIds.length]!;
+    setBlueprint(baselineBlueprint({ chassisId: next, paintId: blueprint.paintId }));
   };
 
   const start = () => {
+    if (!sprites) return;
     void enterImmersive();
     setScreen('race');
   };
@@ -62,13 +89,13 @@ export function HomeScreen() {
       <section className="home-stage">
         <div className="turntable" aria-hidden="true">
           <div className="turntable-disc" />
-          {manifests && (
+          {manifests && sprites && (
             <CarTurntable
               manifests={manifests}
-              chassisId={chassis.id}
-              engineId={loadout.engineId}
-              tireKitId={loadout.tireKitId}
-              paintId={loadout.paintId}
+              chassisId={sprites.chassisId}
+              engineId={sprites.engineId}
+              tireKitId={sprites.tireKitId}
+              paintId={sprites.paintId}
               scale={compact ? 2 : 3}
             />
           )}
@@ -83,8 +110,8 @@ export function HomeScreen() {
               <span className="icon-arrow icon-arrow-left" aria-hidden="true" />
             </button>
             <div className="car-pick-name" aria-live="polite">
-              <strong>{chassis.displayName}</strong>
-              <span>{chassis.description}</span>
+              <strong>{chassis?.displayName}</strong>
+              <span>{chassis?.description}</span>
             </div>
             <button
               className="btn btn-small"
@@ -99,10 +126,10 @@ export function HomeScreen() {
               <button
                 key={paint.id}
                 role="radio"
-                aria-checked={loadout.paintId === paint.id}
+                aria-checked={blueprint.paintId === paint.id}
                 aria-label={paint.displayName}
-                className={`swatch swatch-${paint.id}${loadout.paintId === paint.id ? ' is-selected' : ''}`}
-                onClick={() => setLoadout({ paintId: paint.id })}
+                className={`swatch swatch-${paint.id}${blueprint.paintId === paint.id ? ' is-selected' : ''}`}
+                onClick={() => setBlueprint({ ...blueprint, paintId: paint.id })}
               />
             ))}
           </div>

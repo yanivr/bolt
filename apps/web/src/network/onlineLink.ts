@@ -34,6 +34,16 @@ type DriveStateView = {
   reverseHold: number;
   reversing: boolean;
   wallGrace: number;
+  coreHeat: number;
+  batteryEnergy: number;
+  thermalLimited: boolean;
+  engineSpool: number;
+  engineCharge: number;
+  engineClock: number;
+  engineBurst: number;
+  tireWearSeconds: number;
+  wheelIntegrity: Iterable<number>;
+  buildHash: string;
   checkpointIndex: number;
   lap: number;
   courseProgress: number;
@@ -42,7 +52,7 @@ type DriveStateView = {
   finishedAtMs: number;
 };
 
-export type JoinFailure = 'version' | 'unauthorized' | 'unavailable';
+export type JoinFailure = 'version' | 'unauthorized' | 'build' | 'unavailable';
 
 export class JoinError extends Error {
   constructor(readonly reason: JoinFailure) {
@@ -73,6 +83,14 @@ function toSnapshot(state: DriveStateView): CarSnapshot {
       reverseHold: state.reverseHold,
       reversing: state.reversing,
       wallGrace: state.wallGrace,
+      coreHeat: state.coreHeat,
+      batteryEnergy: state.batteryEnergy,
+      thermalLimited: state.thermalLimited,
+      engineSpool: state.engineSpool,
+      engineCharge: state.engineCharge,
+      engineClock: state.engineClock,
+      engineBurst: state.engineBurst,
+      tireWearSeconds: state.tireWearSeconds,
     },
     progress: {
       checkpointIndex: state.checkpointIndex,
@@ -84,6 +102,8 @@ function toSnapshot(state: DriveStateView): CarSnapshot {
     },
     bestLapMs: state.bestLapMs,
     lastLapMs: state.lastLapMs,
+    wheelIntegrity: state.wheelIntegrity ? Array.from(state.wheelIntegrity) : [],
+    buildHash: state.buildHash ?? '',
   };
 }
 
@@ -114,7 +134,11 @@ export class OnlineLink implements DriveLink {
       return new OnlineLink(client, room);
     } catch (error) {
       const code = (error as { code?: number }).code;
-      if (code === JOIN_ERROR_CODES.VERSION_MISMATCH) throw new JoinError('version');
+      // A catalog mismatch means this page was built against other part values: reload.
+      if (code === JOIN_ERROR_CODES.VERSION_MISMATCH || code === JOIN_ERROR_CODES.CATALOG_MISMATCH)
+        throw new JoinError('version');
+      if (code === JOIN_ERROR_CODES.ILLEGAL_BUILD || code === JOIN_ERROR_CODES.UNKNOWN_PART)
+        throw new JoinError('build');
       if (code === JOIN_ERROR_CODES.UNAUTHORIZED) throw new JoinError('unauthorized');
       throw new JoinError('unavailable');
     }

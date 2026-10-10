@@ -4,8 +4,9 @@ import { F_EMISSIVE, F_NOSHADOW } from './canvas.js';
 
 /**
  * Baked ground lighting shared by every biome: hard-edged cast shadows and posterized light
- * pools. Nothing here blurs. Both passes work on the flat ground plane only; raised geometry is
- * painted afterwards, already lit by its own painter.
+ * pools. Nothing here blurs. The ground passes work on the flat ground plane only; raised
+ * geometry is painted afterwards, already lit by its own painter, which asks the shadow volume
+ * built here whether a point on a roof or a wall lies in the shade of something taller.
  */
 
 export type LightPool = {
@@ -51,18 +52,52 @@ export function castShadows(
   return out;
 }
 
-export function applyShadows(world: Canvas, shadow: Uint8Array, shade: (c: Color) => Color): void {
+/**
+ * Shadow volume of a field of solid masses under a light from the upper left. `height` is the
+ * rise of the mass on each ground pixel; the result is, per ground pixel, the rise below which
+ * a point is in shadow. A shadow travels one pixel east and one south at a time and sinks by
+ * `drop` half-units of rise per step, so edges are hard and run at exactly 45 degrees.
+ */
+export function shadowVolume(w: number, h: number, height: Uint8Array, drop: number): Uint8Array {
+  const twice = new Uint16Array(w * h);
+  const out = new Uint8Array(w * h);
+  for (let y = 1; y < h; y++) {
+    for (let x = 1; x < w; x++) {
+      const p = y * w + x;
+      const q = p - w - 1;
+      const v = Math.max(height[q]! * 2, twice[q]!) - drop;
+      if (v > 0) {
+        twice[p] = v;
+        out[p] = Math.min(255, (v + 1) >> 1);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Darkens shadowed ground. `shadow` holds a level per pixel, 0 for none; level `k` goes through
+ * `shades[k - 1]`, so a biome can keep the shadows that cross drivable ground gentler than the
+ * ones that fall behind the barriers.
+ */
+export function applyShadows(
+  world: Canvas,
+  shadow: Uint8Array,
+  shades: ReadonlyArray<(c: Color) => Color>,
+): void {
   const { w, h, data } = world;
   const flags = world.flags!;
   const cache = new Map<number, number>();
   for (let p = 0; p < w * h; p++) {
-    if (!shadow[p] || flags[p]! & (F_EMISSIVE | F_NOSHADOW)) continue;
+    const level = shadow[p]!;
+    if (level === 0 || flags[p]! & (F_EMISSIVE | F_NOSHADOW)) continue;
     const i = p * 4;
     const c = (data[i]! << 16) | (data[i + 1]! << 8) | data[i + 2]!;
-    let o = cache.get(c);
+    const ck = c + level * 0x1000000;
+    let o = cache.get(ck);
     if (o === undefined) {
-      o = shade(c);
-      cache.set(c, o);
+      o = (shades[level - 1] ?? shades[0]!)(c);
+      cache.set(ck, o);
     }
     data[i] = (o >> 16) & 255;
     data[i + 1] = (o >> 8) & 255;

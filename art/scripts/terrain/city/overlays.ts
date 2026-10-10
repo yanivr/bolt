@@ -3,6 +3,7 @@ import type { BakeContext } from '../biome.js';
 import { Canvas, col, stencil } from '../canvas.js';
 import type { Color, Stencil } from '../canvas.js';
 import { drawText, textWidth } from '../font.js';
+import { leanOf } from '../oblique.js';
 import type { Scene } from '../oblique.js';
 import { VIADUCT_HALF, VIADUCT_RISE, drawViaductDeck } from './landmarks.js';
 import type { LandmarkSites } from './landmarks.js';
@@ -32,83 +33,157 @@ function glowDot(cv: Canvas, x: number, y: number, core: Color, glow: Color): vo
   cv.setA(x, y, core, 255);
 }
 
-/** Lattice column `r` pixels tall whose foot is at (x, y). */
+/** Lattice column `r` pixels tall whose foot is at (x, y). It leans east as it rises. */
 function pylon(cv: Canvas, x: number, y: number, wide: number, r: number): void {
   for (let v = 0; v <= r; v++) {
-    cv.set(x, y - v, PAL.steelHi);
-    cv.set(x + wide - 1, y - v, PAL.steelDark);
+    const px = x + leanOf(v);
+    cv.set(px, y - v, PAL.steelHi);
+    cv.set(px + wide - 1, y - v, PAL.steelDark);
     const m = v % ((wide - 2) * 2);
     const zig = m < wide - 2 ? m : (wide - 2) * 2 - m;
-    cv.set(x + 1 + Math.min(wide - 3, zig), y - v, PAL.steel);
-    if (v % 8 === 0) cv.hline(x, y - v, wide, PAL.steelLight);
+    cv.set(px + 1 + Math.min(wide - 3, zig), y - v, PAL.steel);
+    if (v % 8 === 0) cv.hline(px, y - v, wide, PAL.steelLight);
   }
   cv.rect(x - 1, y - 1, wide + 2, 3, PAL.steelDark);
   cv.hline(x - 1, y - 1, wide + 2, PAL.steel);
 }
 
-const GANTRY_RISE = 30;
+const GANTRY_RISE = 46;
+/** Depth of the box truss that carries the banner, and the width of its deck. */
+const GANTRY_BEAM = 20;
+const GANTRY_DECK = 24;
+/** How far the feet of each portal stand out beyond the deck on either side. */
+const GANTRY_SPLAY = 11;
 
 /**
- * Start gantry. The road runs east-west here, so the span runs up the screen: a deck carrying
- * the banner on its top, start lights on its south end, a pylon on each bank.
+ * Start gantry. The road runs east-west here, so the span runs up the screen. It is a real
+ * structure: a portal frame on each bank with splayed legs and a tie, a box truss between them
+ * whose lit west side shows under the banner deck, and the start lights hung on its south end.
  */
 function startGantry(ctx: BakeContext, scene: Scene, sites: LandmarkSites): void {
   const p = sampleBranch(ctx.track.main, ctx.track.startS);
-  const x = Math.round(sites.start.x) - 44;
-  const col0 = x + 10;
-  // Feet: on the far bank right behind the edge, on the near bank a pylon's height back.
+  const lean = leanOf(GANTRY_RISE);
+  const x = Math.round(sites.start.x) - 44 - GANTRY_SPLAY - lean + 1;
+  const col0 = x + GANTRY_SPLAY + 10;
+  // Feet: on the far bank right behind the edge, on the near bank a few pixels back.
   let yN = Math.round(p.y);
   while (yN > 0 && scene.drive[yN * scene.w + col0]) yN--;
   let yS = Math.round(p.y);
   while (yS < scene.h - 1 && scene.drive[yS * scene.w + col0]) yS++;
   yN -= 3;
   yS += 5;
-  const W = 28;
-  const top = yN - GANTRY_RISE - 4;
-  const H = yS + 3 - top;
+  const W = GANTRY_SPLAY * 2 + GANTRY_DECK + lean + 3;
+  const top = yN - GANTRY_RISE - 6;
+  const H = yS + 4 - top;
   const cv = Canvas.sprite(W, H);
   const Y = (wy: number): number => wy - top;
-  pylon(cv, 3, Y(yN), 7, GANTRY_RISE);
-  pylon(cv, 3, Y(yS), 7, GANTRY_RISE);
-  pylon(cv, 18, Y(yN), 7, GANTRY_RISE);
-  pylon(cv, 18, Y(yS), 7, GANTRY_RISE);
+  const bx = GANTRY_SPLAY;
+  const under = GANTRY_RISE - GANTRY_BEAM;
+  /** One leg of a portal: a box section from a foot on the ground up to the truss. */
+  const leg = (footX: number, headX: number, gy: number, lit: boolean): void => {
+    for (let v = 0; v <= under; v++) {
+      const px = Math.round(footX + ((headX - footX) * v) / under) + leanOf(v);
+      const band = Math.floor(v / 6) % 2 === 0;
+      cv.set(px, Y(gy) - v, lit ? PAL.steelHi : PAL.steelLight);
+      cv.set(px + 1, Y(gy) - v, band ? PAL.coral : PAL.ivory);
+      cv.set(px + 2, Y(gy) - v, band ? PAL.coral : PAL.kerbIvory);
+      cv.set(px + 3, Y(gy) - v, band ? PAL.coralDim : PAL.kerbIvoryDark);
+      cv.set(px + 4, Y(gy) - v, PAL.steelDark);
+    }
+    // Footing block.
+    cv.rect(footX - 2, Y(gy) - 2, 9, 4, PAL.kerbShade);
+    cv.hline(footX - 2, Y(gy) - 2, 9, PAL.kerbHi);
+    cv.hline(footX - 2, Y(gy) + 1, 9, PAL.ink);
+  };
+  const portal = (gy: number): void => {
+    const westFoot = 1;
+    const eastFoot = bx + GANTRY_DECK + GANTRY_SPLAY - 6;
+    // Tie between the legs, a third of the way up.
+    const tv = 14;
+    const x0 = Math.round(westFoot + ((bx + 1 - westFoot) * tv) / under) + leanOf(tv);
+    const x1 = Math.round(eastFoot + ((bx + GANTRY_DECK - 5 - eastFoot) * tv) / under) + leanOf(tv);
+    cv.hline(x0, Y(gy) - tv, x1 - x0 + 3, PAL.steelLight);
+    cv.hline(x0, Y(gy) - tv + 1, x1 - x0 + 3, PAL.steelDark);
+    leg(westFoot, bx + 1, gy, true);
+    leg(eastFoot, bx + GANTRY_DECK - 5, gy, false);
+  };
+  portal(yN);
+  // Box truss: its west side faces the light and shows as a slanted strip under the deck,
+  // bright chords top and bottom with lacing zigzagging between them.
+  for (let v = under; v < GANTRY_RISE; v++) {
+    const px = bx + leanOf(v);
+    for (let gy = yN - 3; gy <= yS; gy++) {
+      const along = gy - yN + 400;
+      const k = v - under;
+      let c: Color = PAL.inkSoft;
+      if (v >= GANTRY_RISE - 3) c = PAL.steelHi;
+      else if (k <= 2) c = PAL.steelLight;
+      else {
+        const m = (along + k) % 16;
+        const n = (along - k + 160) % 16;
+        if (m < 2 || n < 2) c = PAL.steel;
+      }
+      cv.set(px, Y(gy) - v, c);
+      cv.set(px + 1, Y(gy) - v, c);
+    }
+  }
   // Deck with the banner on top.
+  const dx = bx + lean;
   const d0 = Y(yN) - GANTRY_RISE - 3;
   const d1 = Y(yS) - GANTRY_RISE;
-  cv.rect(2, d0, W - 4, d1 - d0, BOARD);
-  cv.frame(2, d0, W - 4, d1 - d0, PAL.coral);
-  cv.vline(2, d0, d1 - d0, PAL.coralHi);
-  cv.hline(2, d0, W - 4, PAL.coralHi);
-  cv.vline(W - 3, d0, d1 - d0, PAL.coralDim);
+  cv.rect(dx, d0, GANTRY_DECK, d1 - d0, BOARD);
+  cv.frame(dx, d0, GANTRY_DECK, d1 - d0, PAL.coral);
+  cv.vline(dx, d0, d1 - d0, PAL.coralHi);
+  cv.hline(dx, d0, GANTRY_DECK, PAL.coralHi);
+  cv.vline(dx + GANTRY_DECK - 1, d0, d1 - d0, PAL.coralDim);
   for (const cy of [d0 + 3, d1 - 13]) {
     for (let yy = 0; yy < 10; yy++)
       for (let xx = 0; xx < 20; xx++)
-        cv.set(4 + xx, cy + yy, (((xx / 5) | 0) + ((yy / 5) | 0)) & 1 ? PAL.ivory : PAL.ink);
+        cv.set(dx + 2 + xx, cy + yy, (((xx / 5) | 0) + ((yy / 5) | 0)) & 1 ? PAL.ivory : PAL.ink);
   }
   const text = 'BOLT RIVALS';
   const tw = textWidth(text, 'chunky', 2);
-  drawText(cv, 7, d0 + ((d1 - d0 + tw) >> 1), text, PAL.ivory, 'chunky', 2, 1);
-  // The truss the banner rides on shows as a chord along either edge.
+  drawText(cv, dx + 5, d0 + ((d1 - d0 + tw) >> 1), text, PAL.ivory, 'chunky', 2, 1);
+  // The east chord of the truss, in shade, along the far edge of the deck.
   for (let y = d0; y < d1; y++) {
-    cv.set(0, y, PAL.steelHi);
-    cv.set(1, y, (y - d0) % 6 === 0 ? PAL.steelHi : PAL.steel);
-    cv.set(W - 2, y, (y - d0) % 6 === 0 ? PAL.steelLight : PAL.steelDark);
-    cv.set(W - 1, y, PAL.ink);
+    cv.set(dx + GANTRY_DECK, y, (y - d0) % 6 === 0 ? PAL.steelLight : PAL.steelDark);
+    cv.set(dx + GANTRY_DECK + 1, y, PAL.ink);
   }
-  // South end of the deck faces the camera: the start lights.
-  cv.rect(1, d1, W - 2, 7, PAL.ink);
-  cv.hline(1, d1, W - 2, PAL.coralDim);
-  for (let k = 0; k < 5; k++) {
-    cv.rect(4 + k * 4, d1 + 2, 3, 3, PAL.mint);
-    cv.set(4 + k * 4, d1 + 2, col('#D4FFE9'));
+  // South end of the truss faces the camera: the start lights in their housing.
+  for (let k = 0; k < GANTRY_BEAM; k++) {
+    const v = GANTRY_RISE - 1 - k;
+    const px = bx + leanOf(v);
+    for (let i = 0; i < GANTRY_DECK + 2; i++) {
+      let c: Color = PAL.ink;
+      if (k === 0) c = PAL.coralDim;
+      else if (i === 0) c = PAL.steelLight;
+      else if (k === GANTRY_BEAM - 1) c = PAL.inkSoft;
+      cv.set(px + i, d1 + k, c);
+    }
   }
-  for (let y = d0 + 16; y < d1 - 10; y += 34) glowDot(cv, 1, y, PAL.ivory, PAL.lamp);
+  for (let row = 0; row < 2; row++) {
+    const ly = d1 + 4 + row * 7;
+    const lx0 = bx + leanOf(GANTRY_RISE - 7 - row * 7) + 3;
+    for (let k = 0; k < 5; k++) {
+      const lx = lx0 + k * 4;
+      cv.rect(lx, ly, 3, 4, row === 0 ? PAL.mintDim : PAL.redDim);
+      if (row === 0) {
+        cv.rect(lx, ly, 3, 3, PAL.mint);
+        cv.set(lx, ly, col('#D4FFE9'));
+      }
+    }
+  }
+  portal(yS);
+  for (let y = d0 + 16; y < d1 - 10; y += 34) glowDot(cv, dx - 1, y, PAL.ivory, PAL.lamp);
   scene.addSplit(
     { art: cv, x, y: top, baseY: yS },
     { id: 'start_gantry', kind: 'start_gantry', fade: true },
   );
-  scene.shadeRect(x + 16, yN + 10, W - 4, yS - yN - 14);
-  scene.footprint(x + 3, yN - 2, 22, 3, 6);
+  // The span's shadow lies on the road beside it, clear of the deck that would hide it.
+  scene.shadeRect(x + dx + GANTRY_DECK + 2, yN + 16, 26, yS - yN - 14);
+  for (const fx of [x + 1, x + bx + GANTRY_DECK + GANTRY_SPLAY - 6]) {
+    scene.footprint(fx, yN - 2, 5, 3, 7);
+  }
 }
 
 function tramViaduct(scene: Scene, sites: LandmarkSites): void {
@@ -120,7 +195,7 @@ function tramViaduct(scene: Scene, sites: LandmarkSites): void {
   for (let x = 24; x < w - 16; x += 44) glowDot(cv, x, VIADUCT_HALF * 2 + 8, PAL.ivory, PAL.lamp);
   scene.add({
     art: cv,
-    x: v.roadX0,
+    x: v.roadX0 + leanOf(VIADUCT_RISE),
     y: v.y - VIADUCT_HALF - VIADUCT_RISE,
     baseY: v.y + VIADUCT_HALF,
     overlay: { id: 'tram_viaduct', kind: 'tram_viaduct', fade: true },
@@ -344,15 +419,17 @@ function signBridge(
   panels: Array<Panel | null>,
 ): void {
   const span = crossSpan(ctx, scene, s, 5);
-  const W = span.x1 - span.x0 + 8;
+  const lean = leanOf(BRIDGE_RISE);
+  const W0 = span.x1 - span.x0 + 8;
+  const W = W0 + lean;
   const H = BRIDGE_RISE + 26;
   const cv = Canvas.sprite(W, H);
   const foot = H - 2;
   pylon(cv, 1, foot, 6, BRIDGE_RISE);
-  pylon(cv, W - 7, foot, 6, BRIDGE_RISE);
+  pylon(cv, W0 - 7, foot, 6, BRIDGE_RISE);
   const by = foot - BRIDGE_RISE - 4;
-  // Truss beam, seen from the front.
-  for (let x = 0; x < W; x++) {
+  // Truss beam, seen from the front, up where the pylons have leaned to.
+  for (let x = lean; x < W; x++) {
     cv.set(x, by, PAL.steelHi);
     cv.set(x, by + 1, PAL.steelLight);
     cv.set(x, by + 6, PAL.steel);
@@ -360,11 +437,11 @@ function signBridge(
     const m = x % 10;
     cv.set(x, by + 2 + (m < 5 ? m : 9 - m), PAL.steel);
   }
-  const mid = W / 2;
+  const mid = W0 / 2 + lean;
   panels.forEach((panel, k) => {
     if (!panel) return;
     const face = panelFace(panel);
-    const cx = Math.round(mid + (k === 0 ? -1 : 1) * (mid * 0.46));
+    const cx = Math.round(mid + (k === 0 ? -1 : 1) * (W0 * 0.23));
     cv.blit(face, cx - (face.w >> 1), by - 6);
     glowDot(cv, cx, by + face.h - 4, PAL.ivory, PAL.lamp);
   });
@@ -410,7 +487,7 @@ function skyBridge(ctx: BakeContext, scene: Scene, id: string, s: number): void 
       cv.set(u, v, u === 0 || u === W - 2 ? PAL.kerb : PAL.kerbShade);
   scene.add({
     art: cv,
-    x: span.x0,
+    x: span.x0 + leanOf(VIADUCT_RISE),
     y: span.y - (depth >> 1) - VIADUCT_RISE,
     baseY: span.y + (depth >> 1),
     overlay: { id, kind: 'sign_bridge', fade: true },
