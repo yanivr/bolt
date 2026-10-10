@@ -498,23 +498,34 @@ describe('driving', () => {
     await waitFor(() => phases.length > phasesBefore, 2000, 'the COUNTDOWN announcement');
     expect(phases[phases.length - 1]!.phase).toBe('COUNTDOWN');
 
-    // A second reset right away is dropped, so the countdown is not restarted.
+    // The grid waits for its driver: with no samples arriving, the countdown does not run.
     await sleep(400);
+    expect(room.state.tick).toBe(phases[phases.length - 1]!.tick);
+
+    // A second reset right away is dropped, so the countdown is not restarted. The client
+    // keeps sending samples through the countdown, as the real one does.
     const countdownTick = phases[phases.length - 1]!.tick;
     room.send(ClientMessage.RESET_CAR);
+    const deadline = Date.now() + (COUNTDOWN_SECONDS + 3) * 1000;
+    while (room.state.phase !== 'RACING' && Date.now() < deadline) {
+      drive();
+      await sleep(33);
+    }
+    expect(room.state.phase).toBe('RACING');
     await waitFor(
-      () => room.state.phase === 'RACING',
-      (COUNTDOWN_SECONDS + 2) * 1000,
-      'racing after the reset',
+      () => phases[phases.length - 1]!.phase === 'RACING',
+      2000,
+      'the RACING announcement after the reset',
     );
     const racing = phases[phases.length - 1]!;
-    expect(racing.phase).toBe('RACING');
     expect(racing.tick - countdownTick).toBe(COUNTDOWN_SECONDS * 30);
 
     // Samples from before the reset cannot be replayed into the new run.
+    await settle();
+    const latest = room.state.ackSequence;
     room.send(ClientMessage.PLAYER_INPUT, { inputs: [sample(ack, -1)] });
     await sleep(200);
-    expect(room.state.ackSequence).toBe(ack);
+    expect(room.state.ackSequence).toBe(latest);
   });
 
   it('disposes the room when the player leaves on purpose', async () => {

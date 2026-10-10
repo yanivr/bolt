@@ -133,10 +133,15 @@ export function SettingsPanel({ onClose, notice, actions, closeLabel }: Props) {
             ]}
             onChange={(v) => update({ drivingHand: v })}
           />
-          <Toggle
-            label={STRINGS.settings.reducedCamera}
-            checked={settings.reducedCamera}
-            onChange={(v) => update({ reducedCamera: v })}
+          <Choice
+            label={STRINGS.settings.steering}
+            name="steering"
+            value={settings.steering}
+            options={[
+              ['direction', STRINGS.settings.steerDirection],
+              ['wheel', STRINGS.settings.steerWheel],
+            ]}
+            onChange={(v) => update({ steering: v })}
           />
           <Toggle
             label={STRINGS.settings.reduceFlashes}

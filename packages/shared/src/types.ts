@@ -318,11 +318,13 @@ export type VehicleParams = {
   tireGrip: number;
   tireSurfaceGrip: Partial<Record<SurfaceId, number>>;
   tireWetGripFactor: number;
-  /** Curvature (1 / turn radius) at full lock and walking pace. */
+  /** Curvature (1 / turn radius) that full lock asks for at walking pace. */
   maxSteerCurvature: number;
-  /** Speed at which steering authority has dropped to half. */
-  steerHalfSpeed: number;
+  /** Lateral acceleration, as a multiple of dry-asphalt grip, that full lock asks for at speed. */
+  steerGripDemand: number;
   yawResponseTime: number;
+  /** Self-aligning yaw per second per radian of slip. */
+  yawAlign: number;
   slipStiffness: number;
   slipRecovery: number;
   reverseSpeed: number;

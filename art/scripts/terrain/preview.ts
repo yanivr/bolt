@@ -1,8 +1,7 @@
 import { join } from 'node:path';
-import { PixelBuffer, writePng } from '../lib/pixels.js';
+import { PixelBuffer, readPng, writePng } from '../lib/pixels.js';
 import type { PreviewSpot } from './biome.js';
 import type { Canvas } from './canvas.js';
-import { col } from './canvas.js';
 
 /** Review sheets. Never shipped; they exist so the art can be inspected crop by crop. */
 
@@ -49,19 +48,6 @@ export function cropView(
   return view.scaled(scale);
 }
 
-/** A stand-in racer, used in exactly one preview to judge scale and contrast. */
-export function drawStandInCar(cv: Canvas, cx: number, cy: number, horizontal: boolean): void {
-  const w = horizontal ? 58 : 34;
-  const h = horizontal ? 34 : 58;
-  const x = Math.round(cx - w / 2);
-  const y = Math.round(cy - h / 2);
-  cv.rect(x - 1, y - 1, w + 2, h + 2, col('#10131F'));
-  cv.rect(x, y, w, h, col('#46D5E6'));
-  cv.rect(x + 2, y + 2, w - 4, h - 4, col('#2A9FB4'));
-  if (horizontal) cv.rect(x + 12, y + 6, 14, h - 12, col('#151C2C'));
-  else cv.rect(x + 6, y + 12, w - 12, 14, col('#151C2C'));
-}
-
 /** Lays loose sprites out on one sheet, upscaled, over a neutral night backing. */
 export function writeSheet(path: string, items: readonly PixelBuffer[], scale: number): void {
   const gap = 6;
@@ -81,13 +67,28 @@ export function writeSheet(path: string, items: readonly PixelBuffer[], scale: n
   writePng(path, sheet);
 }
 
+export type GameSpot = {
+  name: string;
+  x: number;
+  y: number;
+  /** World position and heading frame (0 to 63, clockwise from north) of a car to drop in. */
+  car?: { x: number; y: number; heading: number };
+};
+
+/** The window the game shows at once, in world pixels. */
+const GAME_W = 900;
+const GAME_H = 420;
+const CAR_CELL = 96;
+const CAR_COLUMNS = 8;
+
 export function writePreviews(
   dir: string,
   ground: Canvas,
   composite: Canvas,
   spots: readonly PreviewSpot[],
   plainNames: readonly string[],
-  carSpot: { x: number; y: number; horizontal: boolean } | null,
+  gameSpots: readonly GameSpot[],
+  carSheet: string | null,
 ): string[] {
   const written: string[] = [];
   writePng(join(dir, 'overview.png'), downscale(composite, 4));
@@ -102,19 +103,55 @@ export function writePreviews(
       written.push(plain);
     }
   }
-  if (carSpot) {
-    const x = Math.round(carSpot.x - 320);
-    const y = Math.round(carSpot.y - 180);
-    const view = ground.crop(x, y, 640, 360);
-    drawStandInCar(view, 320, 180, carSpot.horizontal);
-    drawStandInCar(
-      view,
-      320 + (carSpot.horizontal ? 90 : 60),
-      180 + (carSpot.horizontal ? 60 : 90),
-      carSpot.horizontal,
-    );
-    writePng(join(dir, 'scale_check_car.png'), view.buf.scaled(2));
-    written.push('scale_check_car.png');
+  // Crops the size of the real game view. A car goes between the ground and the overlays,
+  // exactly where the client draws it, so scale and occlusion can be judged.
+  const sheet = carSheet ? readPng(carSheet) : null;
+  for (const spot of gameSpots) {
+    const x0 = Math.max(0, Math.min(ground.w - GAME_W, Math.round(spot.x - GAME_W / 2)));
+    const y0 = Math.max(0, Math.min(ground.h - GAME_H, Math.round(spot.y - GAME_H / 2)));
+    const view = new PixelBuffer(GAME_W, GAME_H);
+    if (spot.car && sheet) {
+      view.copyFrom(ground.buf, x0, y0, GAME_W, GAME_H, 0, 0);
+      const { x, y, heading } = spot.car;
+      const cx = Math.round(x - x0);
+      const cy = Math.round(y - y0);
+      // Ground shadow first, offset like the client's.
+      const cell = new PixelBuffer(CAR_CELL, CAR_CELL);
+      cell.copyFrom(
+        sheet,
+        (heading % CAR_COLUMNS) * CAR_CELL,
+        Math.floor(heading / CAR_COLUMNS) * CAR_CELL,
+        CAR_CELL,
+        CAR_CELL,
+        0,
+        0,
+      );
+      for (let yy = 0; yy < CAR_CELL; yy++)
+        for (let xx = 0; xx < CAR_CELL; xx++)
+          if (cell.alphaAt(xx, yy) !== 0)
+            view.blend(cx - CAR_CELL / 2 + xx + 2, cy - CAR_CELL / 2 + yy + 3, [10, 12, 26, 110]);
+      view.blit(cell, cx - CAR_CELL / 2, cy - CAR_CELL / 2);
+      // Then whatever the composite adds on top of the ground: overlays and upper loops.
+      for (let yy = 0; yy < GAME_H; yy++) {
+        for (let xx = 0; xx < GAME_W; xx++) {
+          const g = ((y0 + yy) * ground.w + x0 + xx) * 4;
+          if (
+            composite.data[g] !== ground.data[g] ||
+            composite.data[g + 1] !== ground.data[g + 1] ||
+            composite.data[g + 2] !== ground.data[g + 2]
+          )
+            view.set(xx, yy, [
+              composite.data[g]!,
+              composite.data[g + 1]!,
+              composite.data[g + 2]!,
+              255,
+            ]);
+        }
+      }
+    } else view.copyFrom(composite.buf, x0, y0, GAME_W, GAME_H, 0, 0);
+    const file = `game_${spot.name}${spot.car && sheet ? '_car' : ''}.png`;
+    writePng(join(dir, file), view.scaled(2));
+    written.push(file);
   }
   return written;
 }

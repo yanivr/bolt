@@ -2,6 +2,7 @@ import { DEFAULT_LOADOUT, resolveLoadout } from '@bolt/content';
 import type { ControlInput, RaceEnvironment, TrackRuntime, VehicleParams } from '@bolt/shared';
 import {
   BRAKE_LIFT_THRESHOLD,
+  KINETIC_GRIP_FACTOR,
   MAX_COMBINED_GRIP,
   MPH_PER_WORLD_SPEED,
   SIM_DT,
@@ -15,9 +16,12 @@ import {
   createTelemetry,
   headingFromVector,
   locate,
+  lockCurvature,
   mulberry32,
+  steerYawGain,
   stepVehicle,
   surfaceGrip,
+  tireResponse,
 } from '@bolt/shared';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { makeProvingGround } from '../helpers/tracks.js';
@@ -66,6 +70,8 @@ describe('default Beetle feel targets (Section 6.5)', () => {
     expect(mph).toBeLessThan(95);
   });
 
+  // Section 6.5's "steering settle time 0.18 second" is read as the wheel filter: most of the
+  // lock inside 0.18 s, and back near centre soon after release. See docs/DECISIONS.md.
   it('settles steering in roughly 0.18 seconds', () => {
     const { state, step } = rig();
     step(FULL, 3);
@@ -100,6 +106,103 @@ describe('default Beetle feel targets (Section 6.5)', () => {
     left.step(FULL, 2);
     left.step({ steer: -1, brake: 0, coast: false }, 0.5);
     expect(left.state.yawRate).toBeLessThan(0);
+  });
+});
+
+describe('steering and tire model', () => {
+  it('keeps the low-speed turning circle fixed and then asks for constant lateral acceleration', () => {
+    expect(lockCurvature(params, 5, 1)).toBeCloseTo(params.maxSteerCurvature, 4);
+    expect(lockCurvature(params, 40, 1)).toBeGreaterThan(params.maxSteerCurvature * 0.99);
+    const a = lockCurvature(params, 240, 1) * 240 * 240;
+    const b = lockCurvature(params, 300, 1) * 300 * 300;
+    expect(b / a).toBeGreaterThan(0.97);
+    expect(b / a).toBeLessThan(1.06);
+    expect(b).toBeLessThanOrEqual(params.lateralGripAccel * params.steerGripDemand + 1e-6);
+    // Monotonic: more speed never asks for a tighter turn.
+    let last = Infinity;
+    for (let v = 0; v <= 400; v += 5) {
+      const k = lockCurvature(params, v, 1);
+      expect(k).toBeLessThanOrEqual(last + 1e-12);
+      last = k;
+    }
+  });
+
+  it('asks less of a slippery surface, but not in full proportion, so it slides more', () => {
+    const dry = lockCurvature(params, 250, 1);
+    const wet = lockCurvature(params, 250, 0.6);
+    expect(wet).toBeLessThan(dry);
+    expect(wet / dry).toBeGreaterThan(0.6);
+  });
+
+  it('reports a yaw gain that is positive forwards, negative in reverse and zero at rest', () => {
+    expect(steerYawGain(params, 150, 1)).toBeGreaterThan(1);
+    expect(steerYawGain(params, -40, 1)).toBeLessThan(0);
+    expect(steerYawGain(params, 0, 1)).toBe(0);
+  });
+
+  it('has a tire curve with no step: linear, a smooth knee, then a gentle fade', () => {
+    expect(tireResponse(0, KINETIC_GRIP_FACTOR)).toBe(0);
+    expect(tireResponse(0.2, KINETIC_GRIP_FACTOR)).toBeCloseTo(0.2, 2);
+    let peak = 0;
+    let last = 0;
+    for (let r = 0; r <= 6; r += 0.01) {
+      const g = tireResponse(r, KINETIC_GRIP_FACTOR);
+      expect(Math.abs(g - last)).toBeLessThan(0.011);
+      expect(g).toBeLessThanOrEqual(r + 1e-12);
+      peak = Math.max(peak, g);
+      last = g;
+    }
+    expect(peak).toBeGreaterThan(0.93);
+    expect(peak).toBeLessThanOrEqual(1);
+    expect(tireResponse(6, KINETIC_GRIP_FACTOR)).toBeCloseTo(KINETIC_GRIP_FACTOR, 2);
+  });
+
+  it('crosses the centre at the engage rate, with no kink in a left-right flick', () => {
+    const { state, step } = rig();
+    step(FULL, 2);
+    step({ steer: 1, brake: 0, coast: false }, 0.6);
+    const rates: number[] = [];
+    let last = state.steeringInput;
+    for (let i = 0; i < 12; i++) {
+      step({ steer: -1, brake: 0, coast: false }, SIM_DT);
+      rates.push(last - state.steeringInput);
+      last = state.steeringInput;
+    }
+    // A first-order approach slows steadily; any tick faster than the one before is a kink.
+    for (let i = 1; i < rates.length; i++) expect(rates[i]!).toBeLessThan(rates[i - 1]! + 1e-9);
+  });
+
+  it('holds full lock at top speed as a shallow, stable drift', () => {
+    const { state, telemetry, step } = rig();
+    step(FULL, 14);
+    const entry = telemetry.speed;
+    let worst = 0;
+    // One second: long enough to settle, short enough to stay inside the proving ground.
+    for (let i = 0; i < 30; i++) {
+      step({ steer: 1, brake: 0, coast: false }, SIM_DT);
+      worst = Math.max(worst, Math.abs(telemetry.slipAngle));
+    }
+    expect(worst).toBeLessThan((16 * Math.PI) / 180);
+    expect(telemetry.speed).toBeGreaterThan(entry * 0.9);
+    expect(state.yawRate).toBeGreaterThan(1);
+  });
+
+  it('straightens itself after being knocked sideways', () => {
+    const { state, telemetry, step } = rig();
+    step(FULL, 5);
+    // Kick the tail out by 35 degrees without changing where the car is going.
+    state.headingRad += (35 * Math.PI) / 180;
+    step(FULL, 1.5);
+    expect(Math.abs(telemetry.slipAngle)).toBeLessThan((3 * Math.PI) / 180);
+    expect(Math.abs(state.yawRate)).toBeLessThan(0.1);
+  });
+
+  it('corners without losing speed until the tires are really sliding', () => {
+    const { telemetry, step } = rig();
+    step(FULL, 14);
+    const entry = telemetry.speed;
+    step({ steer: 0.5, brake: 0, coast: false }, 1.5);
+    expect(telemetry.speed).toBeGreaterThan(entry * 0.99);
   });
 });
 

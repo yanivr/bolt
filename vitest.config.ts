@@ -12,7 +12,12 @@ export default defineConfig({
     },
   },
   test: {
-    include: ['tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts'],
+    include: [
+      'tests/unit/**/*.test.ts',
+      'tests/integration/**/*.test.ts',
+      // Handling, frame pacing and netcode benches with their acceptance thresholds.
+      'tests/feel/**/*.test.ts',
+    ],
     environment: 'node',
     // Colyseus loads @pm2/io, which writes its own messages to the parent IPC channel
     // whenever one exists. In the default forked pool that channel is Vitest's, and the

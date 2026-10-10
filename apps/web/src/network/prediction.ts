@@ -104,6 +104,11 @@ export class Predictor {
   /** Forget unacknowledged input, for example after the car is reset to the grid. */
   clearPending(): void {
     this.pending.length = 0;
+    this.clearError();
+  }
+
+  /** Drop the visual offset so the car is shown exactly where it is predicted to be. */
+  clearError(): void {
     this.errorX = 0;
     this.errorY = 0;
     this.errorHeading = 0;

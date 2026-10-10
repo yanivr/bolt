@@ -22,6 +22,7 @@ import {
   lapPosition,
   lerp,
   mulberry32,
+  wrapAngle,
 } from '@bolt/shared';
 import Phaser from 'phaser';
 import { useApp, useHud } from '../../app/store.js';
@@ -30,10 +31,11 @@ import type { DriveLink } from '../../network/link.js';
 import { Predictor } from '../../network/prediction.js';
 import type { GameManifests } from '../assets.js';
 import type { EngineAudio } from '../audio/EngineAudio.js';
-import { ChaseCamera } from '../cameras/ChaseCamera.js';
 import { CarView } from '../composition/CarView.js';
 import { createPaintedBody } from '../composition/paint.js';
 import { Effects } from '../particles/Effects.js';
+import type { SimPose } from '../rendering/frame.js';
+import { BodyMotion, RenderPipeline } from '../rendering/frame.js';
 
 export type RaceSceneConfig = {
   manifests: GameManifests;
@@ -44,14 +46,13 @@ export type RaceSceneConfig = {
   audio: EngineAudio;
   /** Development aid: a centerline driver replaces the controls for capture and soak runs. */
   autopilot: boolean;
+  /** Whole canvas pixels per world pixel. Owned by the game shell, which also sizes the canvas. */
+  view: { scale: number };
   onLoadProgress: (fraction: number) => void;
   onLoadError: () => void;
   onReady: () => void;
 };
 
-/** Camera anchor inside the view (Section 5.15): the local car sits low and near centre. */
-const ANCHOR_X = 0.52;
-const ANCHOR_Y = 0.62;
 const HUD_INTERVAL_MS = 80;
 const SURFACE_SMOKE: Record<string, number> = {
   asphalt: 0xdfe4ee,
@@ -64,21 +65,18 @@ const SURFACE_SMOKE: Record<string, number> = {
   metal: 0xc8d2e0,
 };
 
-type Pose = { x: number; y: number; heading: number };
+/** Draw order within the single world camera. Ground art sits at 0, foreground art at 70. */
+const DEPTH_CAR = 50;
 
 export class RaceScene extends Phaser.Scene {
   private cfg!: RaceSceneConfig;
   private predictor!: Predictor;
-  private chase = new ChaseCamera();
-  private carsCam!: Phaser.Cameras.Scene2D.Camera;
-  private overCam!: Phaser.Cameras.Scene2D.Camera;
+  private pipeline = new RenderPipeline();
+  private body = new BodyMotion();
   private car!: CarView;
   private cone!: Phaser.GameObjects.Image;
   private effects!: Effects;
   private overlays: Array<{ def: TerrainOverlay; image: Phaser.GameObjects.Image }> = [];
-  private accumulator = 0;
-  private prev: Pose = { x: 0, y: 0, heading: 0 };
-  private curr: Pose = { x: 0, y: 0, heading: 0 };
   private outbox: InputSample[] = [];
   private lastSendMs = 0;
   private lastHudMs = 0;
@@ -86,11 +84,13 @@ export class RaceScene extends Phaser.Scene {
   private exhaustTimer = 0;
   private tickCount = 0;
   private rng = mulberry32(90210);
-  private viewScale = 1;
   private lastCountdown = -1;
   private lastPhase = '';
-  private view = { x: 0, y: 0 };
   private fpsSmooth = 60;
+  private idleClock = 0;
+  /** Forward acceleration over the last simulated tick, for body squat and dive. */
+  private forwardAccel = 0;
+  private scratchPose: SimPose = { x: 0, y: 0, heading: 0, vx: 0, vy: 0 };
   private driverScratch = createDriverScratch();
 
   constructor() {
@@ -143,22 +143,15 @@ export class RaceScene extends Phaser.Scene {
 
   create(): void {
     const { manifests, loadout, session } = this.cfg;
-    const ground = this.cameras.main;
-    ground.setBackgroundColor('#151C2C');
-    this.carsCam = this.cameras.add(0, 0, this.scale.width, this.scale.height);
-    this.overCam = this.cameras.add(0, 0, this.scale.width, this.scale.height);
+    this.cameras.main.setBackgroundColor('#151C2C');
 
-    const groundObjects: Phaser.GameObjects.GameObject[] = [];
-    const overObjects: Phaser.GameObjects.GameObject[] = [];
-
+    // Nothing rotates and the scale is a whole number, so every chunk lands exactly on the
+    // device pixel grid at its authored size. No overlap is needed to hide seams.
     for (const chunk of manifests.terrain.ground) {
-      const image = this.add
+      this.add
         .image(chunk.x, chunk.y, `ground:${chunk.col}_${chunk.row}`)
         .setOrigin(0, 0)
         .setDepth(0);
-      // A hair of overlap hides the seams that rotation would otherwise open between chunks.
-      image.setDisplaySize(chunk.w + 0.6, chunk.h + 0.6);
-      groundObjects.push(image);
     }
 
     for (const anim of manifests.terrain.animated) {
@@ -177,7 +170,6 @@ export class RaceScene extends Phaser.Scene {
         .setDepth(anim.above ? 60 : 8);
       if (anim.blend === 'add') sprite.setBlendMode(Phaser.BlendModes.ADD);
       sprite.play(key);
-      (anim.above ? overObjects : groundObjects).push(sprite);
     }
 
     this.cone = this.add
@@ -185,15 +177,12 @@ export class RaceScene extends Phaser.Scene {
       .setOrigin(0.5, 1)
       .setDepth(20)
       .setBlendMode(Phaser.BlendModes.ADD);
-    groundObjects.push(this.cone);
 
     this.effects = new Effects(this, manifests.vfx);
-    groundObjects.push(...this.effects.objects());
 
     for (const def of manifests.terrain.overlays) {
       const image = this.add.image(def.x, def.y, `over:${def.id}`).setOrigin(0, 0).setDepth(70);
       this.overlays.push({ def, image });
-      overObjects.push(image);
     }
 
     const chassis = manifests.cars.chassis[loadout.chassisId]!;
@@ -201,6 +190,8 @@ export class RaceScene extends Phaser.Scene {
     const bodyKey = paint
       ? createPaintedBody(this, `car:${chassis.id}:body`, chassis, paint)
       : `car:${chassis.id}:body`;
+    // One world camera draws everything. The car is placed in world space on the same device
+    // pixel grid as the ground and is drawn from authored heading frames, never rotated.
     this.car = new CarView(
       this,
       chassis,
@@ -215,18 +206,9 @@ export class RaceScene extends Phaser.Scene {
         engine: `engine:${loadout.engineId}`,
       },
     );
-    const carObjects = this.car.objects();
+    this.car.container.setDepth(DEPTH_CAR);
 
-    // Three passes: ground and effects rotate with the world, cars are drawn upright in view
-    // space from authored heading frames, and foreground art goes on top of the cars.
-    ground.ignore([...carObjects, ...overObjects]);
-    this.carsCam.ignore([...groundObjects, ...overObjects]);
-    this.overCam.ignore([...groundObjects, ...carObjects]);
-
-    const m = session.motion;
-    this.prev = { x: m.x, y: m.y, heading: m.headingRad };
-    this.curr = { ...this.prev };
-    this.chase.snapTo(m.x, m.y, useApp.getState().settings.reducedCamera ? 0 : m.headingRad);
+    this.pipeline.place(this.readPose());
 
     this.cfg.link.onSnapshot = (snapshot) => this.onSnapshot(snapshot);
     this.cfg.link.onEvent = (event) => this.onRaceEvent(event);
@@ -252,32 +234,58 @@ export class RaceScene extends Phaser.Scene {
     this.cfg.onReady();
   }
 
-  /** Integer device pixels per world pixel at camera zoom 1.0, chosen for a 300 to 420 px tall view. */
+  /** The predicted car as the render pipeline wants it. The returned object is reused. */
+  private readPose(): SimPose {
+    const m = this.predictor.session.motion;
+    const pose = this.scratchPose;
+    pose.x = m.x;
+    pose.y = m.y;
+    pose.heading = m.headingRad;
+    pose.vx = m.velocityX;
+    pose.vy = m.velocityY;
+    return pose;
+  }
+
   private layout(): void {
-    const w = this.scale.width;
-    const h = this.scale.height;
-    this.viewScale = Math.max(1, Math.ceil(Math.min(w, h) / 420));
-    this.carsCam.setSize(w, h);
-    this.overCam.setSize(w, h);
+    const scale = Math.max(1, Math.round(this.cfg.view.scale));
+    const def = this.predictor.session.track.def;
+    this.pipeline.configure({
+      widthPx: this.scale.width,
+      heightPx: this.scale.height,
+      scale,
+      worldWidth: def.worldWidth,
+      worldHeight: def.worldHeight,
+    });
+    const cam = this.cameras.main;
+    // Origin at the corner makes the camera transform exactly (world - scroll) * scale.
+    cam.setOrigin(0, 0);
+    cam.setZoom(scale);
+    cam.setRotation(0);
   }
 
   private onSnapshot(snapshot: CarSnapshot): void {
-    const m = this.predictor.session.motion;
+    const session = this.predictor.session;
+    const m = session.motion;
     const bx = m.x;
     const by = m.y;
     const bh = m.headingRad;
+    const wasCountdown = session.phase === 'COUNTDOWN';
     this.predictor.reconcile(snapshot);
+    if (session.phase === 'COUNTDOWN' && !wasCountdown) {
+      // The car was put back on the grid: show it there, do not slide it across the map.
+      this.predictor.clearError();
+      this.pipeline.place(this.readPose());
+      this.body.reset();
+      return;
+    }
     // Carry the interpolation endpoints along with the correction; the predictor's decaying
     // error offset is what the player actually sees, so nothing pops.
-    const dx = m.x - bx;
-    const dy = m.y - by;
-    const dh = angleDelta(bh, m.headingRad);
-    this.prev.x += dx;
-    this.prev.y += dy;
-    this.prev.heading += dh;
-    this.curr.x = m.x;
-    this.curr.y = m.y;
-    this.curr.heading = m.headingRad;
+    this.pipeline.poses.rebase(
+      this.readPose(),
+      m.x - bx,
+      m.y - by,
+      angleDelta(bh, m.headingRad),
+    );
   }
 
   private onRaceEvent(event: RaceEvent): void {
@@ -290,114 +298,59 @@ export class RaceScene extends Phaser.Scene {
     this.outbox.length = 0;
     this.effects.clear();
     this.cfg.link.resetCar();
+    this.pipeline.camera.cut();
     useHud.setState({ finished: false });
   }
 
-  override update(_time: number, deltaMs: number): void {
-    const dt = Math.min(0.1, deltaMs / 1000);
+  override update(time: number): void {
     const app = useApp.getState();
     const settings = app.settings;
     const session = this.predictor.session;
     const input = this.cfg.input;
-    input.northUp = settings.reducedCamera;
+    input.mode = settings.steering;
     // Solo and offline sessions simply stop sampling while the menu is open. An online race
     // keeps running on the server, so the car receives neutral input instead.
     const frozen = app.paused && this.cfg.link.mode === 'offline';
     input.enabled = !app.paused;
 
-    if (!frozen) {
-      this.accumulator = Math.min(this.accumulator + dt, SIM_DT * 5);
-      while (this.accumulator >= SIM_DT) {
-        this.accumulator -= SIM_DT;
-        const screenHeading = angleDelta(this.chase.heading, session.motion.headingRad);
-        const control =
-          this.cfg.autopilot && !input.touching
-            ? driveCenterline(
-                session.track,
-                session.motion,
-                session.params,
-                session.env,
-                this.driverScratch,
-              )
-            : input.sample(screenHeading);
-        this.prev.x = this.curr.x;
-        this.prev.y = this.curr.y;
-        this.prev.heading = this.curr.heading;
-        const { sample } = this.predictor.step(control);
-        this.outbox.push(sample);
-        // An offline link answers synchronously inside sendInputs, so flush every tick there.
-        const now = performance.now();
-        if (
-          this.cfg.link.mode === 'offline' ||
-          this.outbox.length >= 2 ||
-          now - this.lastSendMs > 60
-        )
-          this.flush(now);
-        const m = session.motion;
-        this.curr.x = m.x;
-        this.curr.y = m.y;
-        this.curr.heading = m.headingRad;
-        this.emitEffects();
-        this.tickCount++;
-      }
-    }
+    const steps = this.pipeline.begin(time, frozen);
+    for (let i = 0; i < steps; i++) this.simulate();
 
-    const alpha = frozen ? 1 : this.accumulator / SIM_DT;
-    this.predictor.decayError(dt);
-    const x = lerp(this.prev.x, this.curr.x, alpha) + this.predictor.errorX;
-    const y = lerp(this.prev.y, this.curr.y, alpha) + this.predictor.errorY;
-    const heading =
-      this.prev.heading +
-      angleDelta(this.prev.heading, this.curr.heading) * alpha +
-      this.predictor.errorHeading;
     const m = session.motion;
     const t = session.telemetry;
-
-    this.chase.update(
-      dt,
-      x,
-      y,
-      heading,
-      m.velocityX,
-      m.velocityY,
-      settings.reducedCamera,
+    const dt = this.pipeline.frameDt;
+    this.predictor.decayError(dt);
+    const view = this.pipeline.finish(
+      this.predictor.errorX,
+      this.predictor.errorY,
+      this.predictor.errorHeading,
       settings.cameraShake,
     );
-    this.applyCameras();
+    this.cameras.main.setScroll(view.scrollX, view.scrollY);
     this.effects.update(dt);
 
     // --- Car pose ------------------------------------------------------------------------------
-    const racing = session.phase === 'RACING';
     const speed = t.speed;
     this.roll += dt * clamp(Math.abs(t.forwardSpeed) / 6, 0, 18) * Math.sign(t.forwardSpeed || 1);
-    let shiftX = 0;
-    let shiftY = 0;
-    if (speed > 90 && Math.abs(m.steeringInput) > 0.55)
-      shiftX = -Math.sign(m.steeringInput) * (t.slipRatio > 0.55 ? 2 : 1);
-    if (racing && m.throttleFraction > 0.8 && speed < 110 && speed > 3) shiftY = 1;
-    else if (m.brakeInput > 0.45 && speed > 40) shiftY = -1;
-    else if (speed < 8 && Math.floor(this.time.now / 90) % 3 === 0) shiftY = 1;
+    this.idleClock += dt;
+    this.body.update(dt, m.yawRate * t.forwardSpeed, this.forwardAccel, speed, this.idleClock);
     const pose: CarPose = {
-      headingRad: angleDelta(this.chase.heading, heading),
+      headingRad: view.frameHeading,
       steer: m.steeringInput,
       roll: this.roll,
       braking: m.brakeInput > 0.3 || m.reversing,
       headlights: true,
-      bodyShiftX: shiftX,
-      bodyShiftY: shiftY,
+      bodyShiftX: this.body.shiftX,
+      bodyShiftY: this.body.shiftY,
     };
     this.car.apply(pose);
-    this.chase.toView(x, y, this.view);
-    const zoom = this.viewScale * this.chase.zoom;
-    // Snap to device pixels so the upright sprite never shimmers while the world slides by.
-    this.car.setPosition(
-      Math.round(this.view.x * zoom) / zoom,
-      Math.round(this.view.y * zoom) / zoom,
-    );
+    this.car.setPosition(view.carX, view.carY);
 
-    const fx = Math.sin(heading);
-    const fy = -Math.cos(heading);
-    this.cone.setPosition(x + fx * 22, y + fy * 22);
+    // The light cone follows the drawn car, so it cannot wobble against the sprite.
+    const heading = view.pose.heading;
+    const x = view.pose.x;
+    const y = view.pose.y;
+    this.cone.setPosition(view.carX + Math.sin(heading) * 22, view.carY - Math.cos(heading) * 22);
     this.cone.setRotation(heading);
 
     for (const { def, image } of this.overlays) {
@@ -418,12 +371,42 @@ export class RaceScene extends Phaser.Scene {
     );
 
     this.watchPhase();
-    this.fpsSmooth = this.fpsSmooth * 0.95 + (1 / Math.max(dt, 1e-3)) * 0.05;
+    if (dt > 0) this.fpsSmooth = this.fpsSmooth * 0.95 + (1 / dt) * 0.05;
     const now = performance.now();
     if (now - this.lastHudMs >= HUD_INTERVAL_MS) {
       this.lastHudMs = now;
-      this.pushHud(x, y);
+      this.pushHud(x, y, heading);
     }
+  }
+
+  /** One fixed simulation step: sample the controls, predict, queue the sample for the server. */
+  private simulate(): void {
+    const session = this.predictor.session;
+    const input = this.cfg.input;
+    const control =
+      this.cfg.autopilot && !input.touching
+        ? driveCenterline(
+            session.track,
+            session.motion,
+            session.params,
+            session.env,
+            this.driverScratch,
+          )
+        : input.sample(session.motion, session.params, session.telemetry.grip);
+    const before = session.telemetry.forwardSpeed;
+    const { sample } = this.predictor.step(control);
+    this.forwardAccel =
+      session.phase === 'COUNTDOWN' ? 0 : (session.telemetry.forwardSpeed - before) / SIM_DT;
+    // Record the new state before anything can reconcile, so a correction that arrives inside
+    // the flush below moves both ends of the interpolation together.
+    this.pipeline.push(this.readPose());
+    this.outbox.push(sample);
+    // An offline link answers synchronously inside sendInputs, so flush every tick there.
+    const now = performance.now();
+    if (this.cfg.link.mode === 'offline' || this.outbox.length >= 2 || now - this.lastSendMs > 60)
+      this.flush(now);
+    this.emitEffects();
+    this.tickCount++;
   }
 
   private flush(now: number): void {
@@ -431,30 +414,6 @@ export class RaceScene extends Phaser.Scene {
     this.lastSendMs = now;
     const batch = this.outbox.splice(0, MAX_INPUTS_PER_PACKET);
     this.cfg.link.sendInputs(batch);
-  }
-
-  private applyCameras(): void {
-    const w = this.scale.width;
-    const h = this.scale.height;
-    const zoom = this.viewScale * this.chase.zoom;
-    const hand = useApp.getState().settings.drivingHand;
-    // Left-handed layouts mirror HUD furniture only; the anchor nudges toward the steering side.
-    const ax = hand === 'left' ? ANCHOR_X : 1 - ANCHOR_X;
-    const ox = w * ax;
-    const oy = h * ANCHOR_Y;
-    const sx = this.chase.shakeX * this.viewScale;
-    const sy = this.chase.shakeY * this.viewScale;
-    for (const cam of [this.cameras.main, this.overCam]) {
-      cam.setPosition(sx, sy);
-      cam.setOrigin(ax, ANCHOR_Y);
-      cam.setZoom(zoom);
-      cam.setRotation(-this.chase.heading);
-      cam.setScroll(this.chase.x - ox, this.chase.y - oy);
-    }
-    this.carsCam.setPosition(sx, sy);
-    this.carsCam.setOrigin(ax, ANCHOR_Y);
-    this.carsCam.setZoom(zoom);
-    this.carsCam.setScroll(-ox, -oy);
   }
 
   /** Cosmetic effects for the tick that was just simulated. Never affects gameplay. */
@@ -529,7 +488,7 @@ export class RaceScene extends Phaser.Scene {
             (t.wallNormalY * out + t.wallNormalX * along) * speed + m.velocityY * 0.3,
           );
         }
-        this.chase.kick(1 + severity * 1.6, 0.11);
+        this.pipeline.camera.kick(1 + severity * 1.6, 0.11);
         this.cfg.audio.thump(severity);
       } else if (t.speed > 50 && tick % 2 === 0) {
         this.effects.spark(
@@ -556,7 +515,7 @@ export class RaceScene extends Phaser.Scene {
     this.lastPhase = session.phase;
   }
 
-  private pushHud(x: number, y: number): void {
+  private pushHud(x: number, y: number, heading: number): void {
     const session = this.predictor.session;
     const track = session.track;
     const lapPos = lapPosition(track, session.scratch.loc);
@@ -581,6 +540,8 @@ export class RaceScene extends Phaser.Scene {
       finished: session.phase === 'FINISHED' || useHud.getState().finished,
       latencyMs: this.cfg.link.latencyMs,
       fps: Math.round(this.fpsSmooth),
+      headingDeg: Math.round((wrapAngle(heading) * 180) / Math.PI + 360) % 360,
+      reversing: session.motion.reversing,
       hasSteered: input.steered,
       hasBraked: input.braked,
       pendingInputs: this.predictor.pendingCount,

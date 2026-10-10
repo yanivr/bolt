@@ -9,7 +9,7 @@ import type {
 } from '@bolt/shared';
 import { writePng } from '../lib/pixels.js';
 import type { PixelBuffer } from '../lib/pixels.js';
-import type { BiomePainter } from './biome.js';
+import type { BiomeChecks, BiomePainter } from './biome.js';
 import { Canvas, col } from './canvas.js';
 import { reduceColors, writeChunks } from './chunks.js';
 import { paintCity } from './city/index.js';
@@ -34,6 +34,8 @@ export type BakeOptions = {
   presetId: string;
   outDir: string;
   previewDir?: string;
+  /** Heading sheet of a car body, composited into two previews for scale. Never shipped. */
+  previewCarSheet?: string;
 };
 
 export type BakeReport = {
@@ -42,6 +44,7 @@ export type BakeReport = {
   reducedChunks: number;
   truecolorChunks: number;
   maxChunkColors: number;
+  checks: BiomeChecks;
   previews: string[];
 };
 
@@ -76,6 +79,7 @@ export function bakeTerrainWithReport(opts: BakeOptions): BakeReport {
   const animSprites: PixelBuffer[] = [];
   let overlayBytes = 0;
   const composite = opts.previewDir ? world.crop(0, 0, world.w, world.h) : null;
+  const overlayPlaced: Array<{ buf: PixelBuffer; x: number; y: number }> = [];
   for (const art of out.overlays) {
     const b = art.canvas.buf.bounds();
     if (!b) continue;
@@ -94,7 +98,7 @@ export function bakeTerrainWithReport(opts: BakeOptions): BakeReport {
       h: b.h,
       fadeNearPlayer: art.fadeNearPlayer,
     });
-    composite?.buf.blit(cropped.buf, art.x + b.x, art.y + b.y);
+    overlayPlaced.push({ buf: cropped.buf, x: art.x + b.x, y: art.y + b.y });
   }
 
   const animated: TerrainAnimatedProp[] = [];
@@ -110,6 +114,8 @@ export function bakeTerrainWithReport(opts: BakeOptions): BakeReport {
     const file = `anim_${art.id}.png`;
     animatedBytes += writePng(join(outDir, file), strip.buf);
     animSprites.push(strip.buf);
+    // Loops above the cars are part of the picture only through their first frame.
+    if (art.above) composite?.buf.blit(first.buf, art.x, art.y);
     animated.push({
       id: art.id,
       kind: art.kind,
@@ -124,6 +130,9 @@ export function bakeTerrainWithReport(opts: BakeOptions): BakeReport {
       blend: art.blend,
     });
   }
+
+  // The client draws overlays over everything else in the world.
+  for (const o of overlayPlaced) composite?.buf.blit(o.buf, o.x, o.y);
 
   const mini = drawMinimap(track, 240, {
     road: col('#F5EED9'),
@@ -159,14 +168,19 @@ export function bakeTerrainWithReport(opts: BakeOptions): BakeReport {
   let previews: string[] = [];
   if (opts.previewDir && composite) {
     mkdirSync(opts.previewDir, { recursive: true });
-    const start = out.previewSpots[0];
     previews = writePreviews(
       opts.previewDir,
       world,
       composite,
       out.previewSpots,
-      out.previewSpots.slice(0, 2).map((s) => s.name),
-      start ? { x: start.x - 120, y: start.y, horizontal: true } : null,
+      ['start_line', 'tram_viaduct', 'alley_entrance'],
+      [
+        { name: 'start_line', x: 1930, y: 2341, car: { x: 1990, y: 2372, heading: 48 } },
+        { name: 'hairpin_one', x: 2180, y: 575, car: { x: 2290, y: 520, heading: 20 } },
+        { name: 'alley', x: 1790, y: 826 },
+        { name: 'west_avenue', x: 520, y: 1560 },
+      ],
+      opts.previewCarSheet ?? null,
     );
     writeSheet(join(opts.previewDir, 'sheet_overlays.png'), overlaySprites, 2);
     writeSheet(join(opts.previewDir, 'sheet_animated.png'), animSprites, 4);
@@ -186,6 +200,7 @@ export function bakeTerrainWithReport(opts: BakeOptions): BakeReport {
     reducedChunks: ground.reduced,
     truecolorChunks: ground.truecolor,
     maxChunkColors: ground.maxColors,
+    checks: out.checks,
     previews,
   };
 }

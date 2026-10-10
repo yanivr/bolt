@@ -1,19 +1,19 @@
 import { hash2, mulberry32 } from '@bolt/shared';
-import type { TerrainLight } from '@bolt/shared';
 import type { BakeContext } from '../biome.js';
-import type { Canvas, Color } from '../canvas.js';
-import { col } from '../canvas.js';
+import { Canvas, col, mixc } from '../canvas.js';
+import type { Color } from '../canvas.js';
 import { drawText, textWidth } from '../font.js';
-import type { LightPool } from '../lighting.js';
+import { standBox } from '../oblique.js';
+import type { Scene } from '../oblique.js';
+import { paintRoofSurface } from './buildings.js';
 import type { CityLayout, FixedLot, Lot, Reserve } from './layout.js';
-import { G_PLAZA, G_QUAY, G_WATER } from './layout.js';
+import { G_PLAZA, G_QUAY, G_STREET, G_WATER, NEAR_STRIP } from './layout.js';
 import { neonText } from './neon.js';
 import {
+  BUILDINGS,
   LIVERIES,
   PAL,
-  ROOFS,
   ROOF_CONCRETE,
-  ROOF_OLIVE,
   ROOF_PLUM,
   ROOF_SLATE,
   ROOF_TEAL,
@@ -23,31 +23,40 @@ import {
   TINT_HEX,
   TINT_PURPLE,
   TINT_WARM,
-  contactShade,
   darker,
   lighter,
 } from './palette.js';
-import { box, dropShadow, emissive, lampHead, tree } from './sprites.js';
+import { plantTree, stand, standLantern } from './props.js';
+import type { LightOut } from './props.js';
+import { CONTAINER_RISE, bollardSprite, containerSprite, drawBox, emissive } from './sprites.js';
 
 /**
- * The five landmarks plus start line dressing. Each one is built for a silhouette that reads
- * from across the screen: a round lit clock, a giant star, concentric rings, crane booms over
- * water, and a rail deck striding across the avenue.
+ * The five landmarks plus start line dressing, built as standing structures: a clock tower
+ * with its face toward the camera, an arcade with a marquee facade and a star on the roof, a
+ * lattice mast ringed with neon, portal cranes over the quay, and a rail deck on piers.
  */
-
-export type LandmarkOutput = { pools: LightPool[]; lights: TerrainLight[]; claimed: Set<number> };
 
 export type LandmarkSites = {
   clock: { x: number; y: number };
   arcade: { x: number; y: number; w: number; h: number };
+  /** Top-left corner of the arcade marquee on the facade. */
   marquee: { x: number; y: number };
   tower: { x: number; y: number };
-  viaduct: { y: number; roadX0: number; roadX1: number };
+  /** Top-left corner of the ring sprite and of the beacon sprite. */
+  rings: { x: number; y: number };
+  beacon: { x: number; y: number };
+  viaduct: { y: number; roadX0: number; roadX1: number; west: number };
   start: { x: number; y: number };
 };
 
 const HARBOR = { x0: 560, x1: 3060, y0: 2452, water: 2600 };
 export const VIADUCT_HALF = 17;
+export const VIADUCT_RISE = 26;
+const VIADUCT_GIRDER = 7;
+
+const ARCADE_RISE = 26;
+const MARQUEE_W = 88;
+const MARQUEE_H = 14;
 
 const propAt = (
   ctx: BakeContext,
@@ -59,7 +68,19 @@ const propAt = (
   return p ? { x: Math.round(p.x), y: Math.round(p.y) } : { x: fx, y: fy };
 };
 
-export function planLandmarks(ctx: BakeContext): {
+/** Vertical extent of the solid ground around a point: the island between two roads. */
+function island(scene: Scene, x: number, y: number): { top: number; bottom: number } {
+  let top = y;
+  let bottom = y;
+  while (top > 0 && !scene.drive[(top - 1) * scene.w + x]) top--;
+  while (bottom < scene.h - 1 && !scene.drive[(bottom + 1) * scene.w + x]) bottom++;
+  return { top, bottom };
+}
+
+export function planLandmarks(
+  ctx: BakeContext,
+  scene: Scene,
+): {
   reserves: Reserve[];
   fixed: FixedLot[];
   sites: LandmarkSites;
@@ -72,10 +93,24 @@ export function planLandmarks(ctx: BakeContext): {
   const h = ctx.def.worldHeight;
   const clockLot = { x: clock.x - 7, y: clock.y - 50, w: 100, h: 100 };
   const arcadeLot = { x: arcade.x - 110, y: arcade.y - 60, w: 230, h: 124 };
+  // The grandstand backs onto the far bank of the start straight.
+  const bank = island(scene, start.x, start.y - 140);
+  const standLot = { x: start.x - 114, y: bank.bottom - 1 - 76, w: 228, h: 76 };
+  // Where the viaduct crosses the corridor: found by scanning the field along its line.
+  let roadX0 = viaduct.x;
+  let roadX1 = viaduct.x;
+  const row = viaduct.y * ctx.field.w;
+  while (roadX0 > 0 && ctx.field.edge[row + roadX0]! <= 6) roadX0--;
+  while (roadX1 < ctx.field.w - 1 && ctx.field.edge[row + roadX1]! <= 6) roadX1++;
+  roadX0 -= 4;
+  roadX1 += 5;
+  const west = roadX0 - 440;
+  const stationLot = { x: west - 96, y: viaduct.y - 48, w: 112, h: 96 };
+  const isl = island(scene, tower.x, tower.y);
   const reserves: Reserve[] = [
     { x: clockLot.x - 10, y: clockLot.y - 28, w: 152, h: 156, ground: G_PLAZA },
-    { x: arcadeLot.x - 14, y: arcadeLot.y - 14, w: 258, h: 152, ground: G_PLAZA },
-    { x: tower.x - 62, y: tower.y - 40, w: 410, h: 82, ground: G_PLAZA },
+    { x: arcadeLot.x - 14, y: arcadeLot.y - 14, w: 258, h: 204, ground: G_PLAZA },
+    { x: tower.x - 40, y: isl.top, w: 80, h: isl.bottom - isl.top + 1, ground: G_PLAZA },
     {
       x: HARBOR.x0,
       y: HARBOR.y0,
@@ -90,75 +125,52 @@ export function planLandmarks(ctx: BakeContext): {
       h: h - HARBOR.water,
       ground: G_WATER,
     },
-    { x: start.x - 124, y: start.y - 200, w: 248, h: 92, ground: G_PLAZA },
-    { x: viaduct.x - 560, y: viaduct.y - 58, w: 132, h: 116, ground: G_PLAZA },
+    { x: standLot.x - 10, y: standLot.y - 30, w: 248, h: 112, ground: G_PLAZA },
+    { x: stationLot.x - 10, y: stationLot.y - 10, w: 132, h: 126, ground: G_PLAZA },
+    // Nothing is built under or right in front of the rail deck.
+    { x: west, y: viaduct.y - 24, w: roadX0 - west, h: 66, ground: G_STREET },
+    { x: roadX1, y: viaduct.y - 24, w: ctx.def.worldWidth - roadX1, h: 66, ground: G_STREET },
   ];
   const fixed: FixedLot[] = [
-    { ...clockLot, family: ROOF_CONCRETE, height: 20, tag: 'clock' },
-    { ...arcadeLot, family: ROOF_PLUM, height: 9, tag: 'arcade' },
-    {
-      x: tower.x - 32,
-      y: tower.y - 32,
-      w: 64,
-      h: 64,
-      family: ROOF_SLATE,
-      height: 16,
-      tag: 'tower',
-      round: true,
-    },
-    { x: tower.x + 196, y: tower.y - 24, w: 60, h: 46, family: ROOF_OLIVE, height: 5, tag: '' },
+    { ...clockLot, family: ROOF_CONCRETE, rise: 16, tag: 'clock' },
+    { ...arcadeLot, family: ROOF_PLUM, rise: ARCADE_RISE, tag: 'arcade' },
     {
       x: HARBOR.x0 + 24,
-      y: HARBOR.y0 + 14,
+      y: HARBOR.y0 + 40,
       w: 250,
-      h: 96,
+      h: 70,
       family: ROOF_TEAL,
-      height: 8,
+      rise: 22,
       tag: 'warehouse',
     },
     {
       x: HARBOR.x1 - 300,
-      y: HARBOR.y0 + 14,
+      y: HARBOR.y0 + 40,
       w: 276,
-      h: 96,
+      h: 70,
       family: ROOF_SLATE,
-      height: 8,
+      rise: 22,
       tag: 'warehouse',
     },
-    {
-      x: start.x - 114,
-      y: start.y - 190,
-      w: 228,
-      h: 76,
-      family: ROOF_SLATE,
-      height: 8,
-      tag: 'grandstand',
-    },
-    {
-      x: viaduct.x - 550,
-      y: viaduct.y - 48,
-      w: 112,
-      h: 96,
-      family: ROOF_CONCRETE,
-      height: 9,
-      tag: 'station',
-    },
+    { ...standLot, family: ROOF_SLATE, rise: 44, tag: 'grandstand' },
+    { ...stationLot, family: ROOF_CONCRETE, rise: VIADUCT_RISE, tag: 'station' },
   ];
-  // Where the viaduct crosses the corridor: found by scanning the field along its line.
-  let roadX0 = viaduct.x;
-  let roadX1 = viaduct.x;
-  const row = viaduct.y * ctx.field.w;
-  while (roadX0 > 0 && ctx.field.edge[row + roadX0]! <= 6) roadX0--;
-  while (roadX1 < ctx.field.w - 1 && ctx.field.edge[row + roadX1]! <= 6) roadX1++;
+  // The mast stands on a drum whose south face is the wall of the lower road.
+  const towerY = isl.bottom - 1 - 24;
   return {
     reserves,
     fixed,
     sites: {
       clock: { x: clockLot.x + 50, y: clockLot.y + 50 },
       arcade: arcadeLot,
-      marquee: { x: arcadeLot.x + 71, y: arcadeLot.y + 7 },
-      tower,
-      viaduct: { y: viaduct.y, roadX0: roadX0 - 4, roadX1: roadX1 + 5 },
+      marquee: {
+        x: arcadeLot.x + 71,
+        y: arcadeLot.y + arcadeLot.h - ARCADE_RISE + 2,
+      },
+      tower: { x: tower.x, y: towerY },
+      rings: { x: tower.x - RING_BOX_W / 2, y: 0 },
+      beacon: { x: tower.x - 7, y: 0 },
+      viaduct: { y: viaduct.y, roadX0, roadX1, west },
       start,
     },
   };
@@ -182,6 +194,32 @@ function thickLine(
     cv.line(x0 + nx * k, y0 + ny * k, x1 + nx * k, y1 + ny * k, c);
 }
 
+function triangle(
+  cv: Canvas,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  cx: number,
+  cy: number,
+  c: Color,
+): void {
+  const x0 = Math.floor(Math.min(ax, bx, cx));
+  const x1 = Math.ceil(Math.max(ax, bx, cx));
+  const y0 = Math.floor(Math.min(ay, by, cy));
+  const y1 = Math.ceil(Math.max(ay, by, cy));
+  const area = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+  if (area === 0) return;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const w0 = ((bx - ax) * (y - ay) - (by - ay) * (x - ax)) / area;
+      const w1 = ((cx - bx) * (y - by) - (cy - by) * (x - bx)) / area;
+      const w2 = ((ax - cx) * (y - cy) - (ay - cy) * (x - cx)) / area;
+      if (w0 >= -0.01 && w1 >= -0.01 && w2 >= -0.01) cv.set(x, y, c);
+    }
+  }
+}
+
 function inStar(
   px: number,
   py: number,
@@ -200,7 +238,6 @@ function inStar(
   const sector = (Math.PI * 2) / 5;
   a = ((a % sector) + sector) % sector;
   if (a > sector / 2) a = sector - a;
-  // Edge from the tip (angle 0, radius outer) to the notch (angle sector/2, radius inner).
   const tx = outer;
   const nx = inner * Math.cos(sector / 2);
   const ny = inner * Math.sin(sector / 2);
@@ -209,135 +246,179 @@ function inStar(
   return (nx - tx) * qy - ny * (qx - tx) >= 0;
 }
 
+/** Warns when a fixed lot would break the near-bank rule and returns the rise it may have. */
+function allowedRise(scene: Scene, lot: Lot): number {
+  let gap = 255;
+  for (let x = lot.x; x < lot.x + lot.w; x++)
+    gap = Math.min(gap, scene.clearN[lot.y * scene.w + x]!);
+  if (gap >= 200) return lot.rise;
+  const max = gap - NEAR_STRIP;
+  if (max < lot.rise)
+    console.warn(`landmark ${lot.tag}: rise ${lot.rise} capped to ${max} by the road to the north`);
+  return Math.min(lot.rise, max);
+}
+
 // --- Clock tower ---------------------------------------------------------------------------
 
-function paintClock(ctx: BakeContext, lot: Lot, out: LandmarkOutput): void {
-  const cv = ctx.world;
-  const r = ROOFS[lot.family]!;
-  const cx = lot.x + 50;
-  const cy = lot.y + 50;
-  // Stepped stone tiers.
-  box(cv, lot.x + 5, lot.y + 5, 90, 90, r.alt, r.hi, r.deep, 0);
-  cv.frame(lot.x + 6, lot.y + 6, 88, 88, r.par);
-  cv.hline(lot.x + 7, lot.y + 93, 87, r.dark);
-  cv.vline(lot.x + 93, lot.y + 7, 87, r.dark);
-  // Corner finials: small lit pyramids.
+function paintClock(scene: Scene, lot: Lot, out: LightOut): void {
+  const b = BUILDINGS[lot.family]!;
+  const r = allowedRise(scene, lot);
+  const w = lot.w;
+  const d = lot.h;
+  // The hall: a stone podium with a parapet and tall lit windows.
+  const hall = Canvas.sprite(w, d + r);
+  paintRoofSurface(hall, 0, 0, w, d, b, (lx, ly) =>
+    lx % 14 === 13 || ly % 14 === 13
+      ? b.roofLine
+      : hash2(lx >> 2, ly >> 1, 51) < 0.08
+        ? b.roofAlt
+        : b.roof,
+  );
+  hall.rect(0, d, w, r, b.wall);
+  hall.hline(0, d, w, b.trim);
+  hall.hline(0, d + 1, w, b.line);
+  hall.vline(w - 1, d, r, b.line);
+  hall.hline(0, d + r - 1, w, PAL.ink);
+  for (let x = 6; x + 6 < w - 4; x += 12) {
+    if (x > 26 && x < 66) continue;
+    hall.rect(x, d + 4, 6, r - 6, b.line);
+    emissive(hall, () => {
+      hall.rect(x + 1, d + 5, 4, r - 8, PAL.windowMid);
+      hall.hline(x + 2, d + 4, 2, PAL.windowWarm);
+      hall.vline(x + 1, d + 5, r - 8, PAL.windowWarm);
+    });
+  }
+  // Lit lay lights either side of the shaft, a gilded finial on each corner.
+  for (const lx of [10, w - 26]) {
+    hall.rect(lx, 22, 16, 44, b.inner);
+    hall.hline(lx, 22, 16, b.rimLow);
+    emissive(hall, () => {
+      for (let yy = 0; yy < 42; yy++)
+        for (let xx = 0; xx < 14; xx++)
+          if (xx % 5 !== 4 && yy % 11 !== 10)
+            hall.set(lx + 1 + xx, 23 + yy, yy % 11 === 0 ? PAL.windowWarm : PAL.windowMid);
+    });
+  }
   for (const [fx, fy] of [
-    [lot.x + 8, lot.y + 8],
-    [lot.x + 81, lot.y + 8],
-    [lot.x + 8, lot.y + 81],
-    [lot.x + 81, lot.y + 81],
+    [5, 9],
+    [w - 10, 9],
+    [5, d - 4],
+    [w - 10, d - 4],
   ] as const) {
-    dropShadow(cv, fx, fy, 11, 11, 3);
-    for (let yy = 0; yy < 11; yy++) {
-      for (let xx = 0; xx < 11; xx++) {
-        const upper = xx + yy < 10;
-        const left = xx < yy;
-        const c =
-          xx === yy || xx + yy === 10
-            ? r.par
-            : upper
-              ? left
-                ? r.par
-                : r.hi
-              : left
-                ? r.dark
-                : r.deep;
-        cv.set(fx + xx, fy + yy, c);
-      }
-    }
-    cv.frame(fx, fy, 11, 11, r.deep);
-    cv.set(fx + 5, fy + 5, PAL.goldHi);
+    hall.rect(fx, fy - 6, 5, 6, b.wall);
+    hall.vline(fx, fy - 6, 6, b.trim);
+    hall.hline(fx, fy - 7, 5, b.rim);
+    hall.set(fx + 2, fy - 8, PAL.gold);
+    hall.set(fx + 2, fy - 9, PAL.goldHi);
   }
-  // Bronze bezel.
-  cv.mapDisc(cx + 3, cy + 3, 40, contactShade);
-  cv.disc(cx, cy, 41, PAL.ink);
-  for (let yy = -40; yy <= 40; yy++) {
-    for (let xx = -40; xx <= 40; xx++) {
-      const d = Math.hypot(xx, yy);
-      if (d > 40.3 || d <= 35.3) continue;
-      const lit = xx + yy < -22;
-      const shade = xx + yy > 26;
-      cv.set(
-        cx + xx,
-        cy + yy,
-        d > 39.3 || d <= 36.3
-          ? lit
-            ? PAL.gold
-            : PAL.goldDim
-          : lit
-            ? PAL.goldHi
-            : shade
-              ? PAL.woodDark
-              : PAL.gold,
-      );
+  scene.add(standBox(hall, lot.x, lot.y, d, r));
+  scene.footprint(lot.x, lot.y, w, d, 5);
+
+  // The tower: a square shaft with the clock near the top and a copper spire.
+  const sw = 38;
+  const sd = 30;
+  const sr = 84;
+  const spire = 24;
+  const sx = lot.x + ((w - sw) >> 1);
+  const sy = lot.y + d - sd - 9;
+  const head = spire + 6;
+  const cv = Canvas.sprite(sw + 4, head + sd + sr);
+  const fx = 2;
+  const fy = head + sd;
+  // Shaft face.
+  for (let ly = 0; ly < sr; ly++) {
+    for (let lx = 0; lx < sw; lx++) {
+      const course = ly % 6 === 5;
+      const quoin = lx < 3 || lx >= sw - 3;
+      let c: Color = course ? b.wallAlt : b.wall;
+      if (quoin) c = (Math.floor(ly / 6) & 1) === 0 ? b.trim : mixc(b.wall, b.trim, 0.5);
+      if (lx === sw - 1) c = b.line;
+      cv.set(fx + lx, fy + ly, c);
     }
   }
+  for (const band of [34, 62]) {
+    cv.hline(fx - 1, fy + band, sw + 2, b.trim);
+    cv.hline(fx - 1, fy + band + 1, sw + 2, b.line);
+  }
+  // Slit windows and the door.
+  for (const [wx, wy, lit] of [
+    [10, 42, true],
+    [26, 42, false],
+    [10, 52, false],
+    [26, 52, true],
+  ] as const) {
+    cv.rect(fx + wx, fy + wy, 3, 7, b.line);
+    if (lit) emissive(cv, () => cv.rect(fx + wx + 1, fy + wy + 1, 1, 5, PAL.windowWarm));
+  }
+  cv.rect(fx + 13, fy + sr - 15, 12, 15, b.line);
+  cv.rect(fx + 14, fy + sr - 13, 10, 13, PAL.woodDark);
+  cv.vline(fx + 19, fy + sr - 13, 13, PAL.ink);
   emissive(cv, () => {
-    const faceEdge = col('#EBD9A4');
-    const face = col('#FFF3C6');
-    cv.disc(cx, cy, 35, faceEdge);
-    cv.disc(cx, cy, 30, face);
-    cv.ring(cx, cy, 35, PAL.windowMid);
-    // Hour marks.
+    cv.hline(fx + 15, fy + sr - 14, 8, PAL.gold);
+    cv.hline(fx + 16, fy + sr - 15, 6, PAL.goldDim);
+  });
+  cv.hline(fx, fy + sr - 1, sw, PAL.ink);
+  // The clock.
+  const cx = fx + sw / 2 - 0.5;
+  const cy = fy + 17;
+  cv.disc(cx, cy, 15, PAL.ink);
+  cv.disc(cx, cy, 14, PAL.goldDim);
+  cv.ring(cx - 0.4, cy - 0.4, 14, PAL.gold);
+  emissive(cv, () => {
+    cv.disc(cx, cy, 12, col('#EBD9A4'));
+    cv.disc(cx, cy, 10, col('#FFF3C6'));
     for (let hour = 0; hour < 12; hour++) {
       const a = (hour / 12) * Math.PI * 2 - Math.PI / 2;
-      const major = hour % 3 === 0;
-      thickLine(
-        cv,
-        cx + Math.cos(a) * (major ? 24 : 28),
-        cy + Math.sin(a) * (major ? 24 : 28),
-        cx + Math.cos(a) * 32,
-        cy + Math.sin(a) * 32,
-        PAL.ink,
-        major ? 3 : 1.5,
-      );
+      const px = Math.round(cx + Math.cos(a) * 10.5);
+      const py = Math.round(cy + Math.sin(a) * 10.5);
+      cv.set(px, py, PAL.ink);
+      if (hour % 3 === 0)
+        cv.set(Math.round(cx + Math.cos(a) * 9), Math.round(cy + Math.sin(a) * 9), PAL.ink);
     }
-    // Minute dots.
-    for (let m = 0; m < 60; m++) {
-      if (m % 5 === 0) continue;
-      const a = (m / 60) * Math.PI * 2;
-      cv.set(Math.round(cx + Math.cos(a) * 33), Math.round(cy + Math.sin(a) * 33), PAL.windowDim);
-    }
-    // Hands at ten past ten.
     const ha = ((10 + 10 / 60) / 12) * Math.PI * 2 - Math.PI / 2;
     const ma = (10 / 60) * Math.PI * 2 - Math.PI / 2;
-    thickLine(
-      cv,
-      cx - Math.cos(ha) * 4,
-      cy - Math.sin(ha) * 4,
-      cx + Math.cos(ha) * 17,
-      cy + Math.sin(ha) * 17,
-      PAL.ink,
-      3.5,
-    );
-    thickLine(
-      cv,
-      cx - Math.cos(ma) * 5,
-      cy - Math.sin(ma) * 5,
-      cx + Math.cos(ma) * 27,
-      cy + Math.sin(ma) * 27,
-      PAL.inkSoft,
-      2.5,
-    );
-    cv.disc(cx, cy, 4, PAL.ink);
-    cv.disc(cx, cy, 3, PAL.coral);
-    cv.set(cx - 1, cy - 1, PAL.coralHi);
+    thickLine(cv, cx, cy, cx + Math.cos(ha) * 5.5, cy + Math.sin(ha) * 5.5, PAL.ink, 2);
+    thickLine(cv, cx, cy, cx + Math.cos(ma) * 9, cy + Math.sin(ma) * 9, PAL.inkSoft, 1.5);
+    cv.disc(cx, cy, 1, PAL.coral);
   });
-  out.pools.push({ x: cx, y: cy, radii: [50, 58], tint: TINT_GOLD, level: lot.id });
-  out.pools.push({ x: cx, y: cy, radii: [68, 86], tint: TINT_GOLD, level: 0 });
-  out.lights.push({ x: cx, y: cy, radius: 86, color: TINT_HEX[TINT_GOLD]!, intensity: 0.7 });
+  // Cornice and the spire: west slope lit, south slope in half tone, east slope dark.
+  const ty = head;
+  cv.rect(fx - 2, ty + sd - 2, sw + 4, 3, b.trim);
+  cv.hline(fx - 2, ty + sd + 1, sw + 4, b.line);
+  const copper = BUILDINGS[ROOF_TEAL]!;
+  const ax = fx + sw / 2;
+  const ay = ty + sd / 2 - spire;
+  triangle(cv, fx - 1, ty, fx - 1, ty + sd - 2, ax, ay, copper.rim);
+  triangle(cv, fx + sw, ty, fx + sw, ty + sd - 2, ax, ay, copper.inner);
+  triangle(cv, fx - 1, ty + sd - 2, fx + sw, ty + sd - 2, ax, ay, copper.roof);
+  cv.line(fx - 1, ty + sd - 2, ax, ay, copper.rimLow);
+  cv.line(fx + sw, ty + sd - 2, ax, ay, copper.roofLine);
+  cv.vline(Math.round(ax), ay - 5, 6, PAL.gold);
+  cv.set(Math.round(ax), ay - 6, PAL.goldHi);
+  // The shaft rises through the hall, so it is painted after it.
+  scene.add({ art: cv, x: sx - fx, y: sy - sr - head, baseY: lot.y + d, faceFrom: head + sd });
+  scene.footprint(sx, sy, sw, sd, 12);
+  const gx = sx + sw / 2;
+  out.pools.push({ x: gx, y: lot.y + d + 16, radii: [30, 52], tint: TINT_GOLD, squashY: 1.3 });
+  out.lights.push({
+    x: Math.round(gx),
+    y: sy - sr + 17,
+    radius: 86,
+    color: TINT_HEX[TINT_GOLD]!,
+    intensity: 0.7,
+  });
 }
 
 // --- Starlight Arcade ----------------------------------------------------------------------
 
 /** Marquee board with chasing bulbs. Frame 0 is the baked state. */
 export function drawMarquee(cv: Canvas, x: number, y: number, frame: number): void {
-  const w = 88;
-  const h = 14;
-  cv.rect(x, y, w, h, PAL.ink);
-  cv.frame(x, y, w, h, PAL.steelDark);
+  const w = MARQUEE_W;
+  const h = MARQUEE_H;
+  // The whole board is self-lit, so street light never shifts it away from the loop's frames.
   emissive(cv, () => {
+    cv.rect(x, y, w, h, PAL.ink);
+    cv.frame(x, y, w, h, PAL.steelDark);
     let i = 0;
     const bulb = (bx: number, by: number): void => {
       const phase = (((i - frame) % 4) + 4) % 4;
@@ -358,31 +439,33 @@ export function drawMarquee(cv: Canvas, x: number, y: number, frame: number): vo
   });
 }
 
-function paintArcade(ctx: BakeContext, lot: Lot, sites: LandmarkSites, out: LandmarkOutput): void {
-  const cv = ctx.world;
-  const r = ROOFS[lot.family]!;
-  // Raised central hall.
-  box(cv, lot.x + 8, lot.y + 26, lot.w - 16, lot.h - 34, r.alt, r.hi, r.deep, 0);
-  cv.frame(lot.x + 9, lot.y + 27, lot.w - 18, lot.h - 36, r.par);
-  cv.rect(lot.x + 11, lot.y + 29, lot.w - 22, lot.h - 40, r.dark);
-  // Perimeter bulbs.
+function paintArcade(scene: Scene, lot: Lot, out: LightOut): void {
+  const b = BUILDINGS[lot.family]!;
+  const r = allowedRise(scene, lot);
+  const w = lot.w;
+  const d = lot.h;
+  const cv = Canvas.sprite(w, d + r);
+  paintRoofSurface(cv, 0, 0, w, d, b, (lx, ly) =>
+    hash2((lx + (ly & 2)) >> 1, ly >> 1, 61) > 0.86 ? b.roofAlt : b.roof,
+  );
+  // Bulbs along the parapet.
   emissive(cv, () => {
     let i = 0;
-    for (let x = lot.x + 4; x < lot.x + lot.w - 3; x += 5) {
-      cv.set(x, lot.y + 3, i % 2 === 0 ? PAL.gold : PAL.goldDim);
-      cv.set(x, lot.y + lot.h - 4, i++ % 2 === 0 ? PAL.goldDim : PAL.gold);
+    for (let x = 4; x < w - 3; x += 5) {
+      cv.set(x, 1, i % 2 === 0 ? PAL.gold : PAL.goldDim);
+      cv.set(x, d - 2, i++ % 2 === 0 ? PAL.goldHi : PAL.gold);
     }
-    for (let y = lot.y + 8; y < lot.y + lot.h - 5; y += 5) {
-      cv.set(lot.x + 3, y, i % 2 === 0 ? PAL.gold : PAL.goldDim);
-      cv.set(lot.x + lot.w - 4, y, i++ % 2 === 0 ? PAL.goldDim : PAL.gold);
+    for (let y = 6; y < d - 4; y += 5) {
+      cv.set(1, y, i % 2 === 0 ? PAL.gold : PAL.goldDim);
+      cv.set(w - 2, y, i++ % 2 === 0 ? PAL.goldDim : PAL.gold);
     }
   });
-  // The star.
-  const sx = lot.x + 62;
-  const sy = lot.y + 76;
+  // The star, set flat into the roof.
+  const sx = 62;
+  const sy = 60;
   emissive(cv, () => {
-    for (let yy = -44; yy <= 44; yy++) {
-      for (let xx = -44; xx <= 44; xx++) {
+    for (let yy = -46; yy <= 46; yy++) {
+      for (let xx = -46; xx <= 46; xx++) {
         const px = sx + xx;
         const py = sy + yy;
         if (inStar(px, py, sx, sy, 43, 18)) {
@@ -390,57 +473,88 @@ function paintArcade(ctx: BakeContext, lot: Lot, sites: LandmarkSites, out: Land
             const core = inStar(px, py, sx, sy, 41, 17.1) && !inStar(px, py, sx, sy, 39, 16.3);
             cv.set(px, py, core ? PAL.goldHi : PAL.gold);
           } else if (inStar(px, py, sx, sy, 33, 13.8)) {
-            if (!inStar(px, py, sx, sy, 28, 11.7))
-              cv.set(px, py, (xx + yy) % 2 === 0 ? PAL.purpleDim : PAL.inkSoft);
+            if (!inStar(px, py, sx, sy, 28, 11.7)) cv.set(px, py, PAL.purpleDim);
             else if (inStar(px, py, sx, sy, 24, 10) && !inStar(px, py, sx, sy, 20, 8.4))
               cv.set(px, py, PAL.cyan);
             else if (inStar(px, py, sx, sy, 15, 6.3))
               cv.set(px, py, inStar(px, py, sx, sy, 11, 4.6) ? PAL.coralHi : PAL.coral);
             else cv.set(px, py, PAL.ink);
-          } else {
-            cv.set(px, py, PAL.ink);
-          }
-        } else if (inStar(px, py, sx, sy, 45, 19)) {
-          cv.set(px, py, PAL.goldDim);
-        }
+          } else cv.set(px, py, PAL.ink);
+        } else if (inStar(px, py, sx, sy, 45, 19)) cv.set(px, py, PAL.goldDim);
       }
     }
   });
-  // Lettering.
-  const tx = lot.x + 124;
-  cv.rect(tx - 6, lot.y + 36, 96, 62, PAL.ink);
-  cv.frame(tx - 6, lot.y + 36, 96, 62, PAL.steelDark);
-  cv.hline(tx - 6, lot.y + 36, 96, PAL.steel);
-  neonText(cv, tx + 6, lot.y + 43, 'STARLIGHT', 0, 2);
-  neonText(cv, tx + 6, lot.y + 60, 'ARCADE', 1, 3);
+  // The name, standing on a frame toward the front of the roof.
+  const bx = 122;
+  const bh = 46;
+  const by = d - 14 - bh - 5;
+  for (let k = 1; k <= 4; k++) cv.mapRect(bx + k, d - 14 + k, 98, 1, (c) => darker(c, 0.45));
+  for (const lx of [bx + 4, bx + 46, bx + 90]) {
+    cv.vline(lx, by + bh, 6, PAL.steelDark);
+    cv.vline(lx + 1, by + bh, 6, PAL.steel);
+  }
+  cv.rect(bx, by, 98, bh, PAL.ink);
+  cv.frame(bx, by, 98, bh, PAL.steelDark);
+  cv.hline(bx, by, 98, PAL.steelLight);
+  neonText(cv, bx + 13, by + 5, 'STARLIGHT', 0, 2);
+  neonText(cv, bx + 13, by + 19, 'ARCADE', 1, 3);
   emissive(cv, () => {
-    for (let k = 0; k < 84; k += 4) cv.set(tx + k, lot.y + 80, k % 8 === 0 ? PAL.gold : PAL.purple);
-    for (let k = 0; k < 84; k += 4) cv.set(tx + k, lot.y + 92, k % 8 === 0 ? PAL.purple : PAL.gold);
-    drawText(cv, tx + 8, lot.y + 84, 'OPEN ALL NIGHT', PAL.mint, 'micro', 1);
+    for (let k = 0; k < 90; k += 4)
+      cv.set(bx + 4 + k, by + 37, k % 8 === 0 ? PAL.gold : PAL.purple);
+    drawText(cv, bx + 21, by + 39, 'OPEN ALL NIGHT', PAL.mint, 'micro', 1);
   });
-  drawMarquee(cv, sites.marquee.x, sites.marquee.y, 0);
-  // Glow.
-  out.pools.push({ x: sx, y: sy, radii: [52, 62], tint: TINT_GOLD, level: lot.id });
-  out.pools.push({
-    x: tx + 44,
-    y: lot.y + 66,
-    radii: [50, 60],
-    tint: TINT_CYAN,
-    level: lot.id,
-    squashY: 1.4,
+  // Facade: marquee over three sets of doors, poster cases either side.
+  const fy = d;
+  for (let ly = 0; ly < r; ly++)
+    for (let lx = 0; lx < w; lx++) cv.set(lx, fy + ly, lx % 12 === 11 ? b.wallAlt : b.wall);
+  cv.hline(0, fy, w, b.trim);
+  cv.hline(0, fy + 1, w, b.line);
+  cv.vline(w - 1, fy, r, b.line);
+  cv.hline(0, fy + r - 1, w, PAL.ink);
+  drawMarquee(cv, 71, fy + 2, 0);
+  for (let k = 0; k < 3; k++) {
+    const dx = 76 + k * 28;
+    cv.rect(dx, fy + 16, 22, r - 17, b.line);
+    emissive(cv, () => {
+      cv.rect(dx + 1, fy + 17, 20, r - 19, PAL.windowMid);
+      cv.hline(dx + 1, fy + 17, 20, PAL.windowWarm);
+      cv.vline(dx + 10, fy + 18, r - 20, PAL.windowDim);
+      cv.vline(dx + 11, fy + 18, r - 20, PAL.windowDim);
+    });
+  }
+  const posters: readonly Color[] = [
+    PAL.cyan,
+    PAL.coral,
+    PAL.gold,
+    PAL.purple,
+    PAL.mint,
+    PAL.coral,
+  ];
+  posters.forEach((c, k) => {
+    const px = k < 3 ? 8 + k * 20 : 168 + (k - 3) * 20;
+    cv.rect(px, fy + 6, 14, r - 10, PAL.ink);
+    emissive(cv, () => {
+      cv.rect(px + 1, fy + 7, 12, r - 12, darker(c, 0.45));
+      cv.rect(px + 3, fy + 9, 8, 5, c);
+      cv.hline(px + 3, fy + r - 8, 8, PAL.ivory);
+    });
   });
-  out.pools.push({
-    x: lot.x + lot.w / 2,
-    y: lot.y + lot.h / 2,
-    radii: [128, 156],
-    tint: TINT_PURPLE,
-    level: 0,
-    squashY: 1.45,
-  });
-  out.lights.push({ x: sx, y: sy, radius: 150, color: TINT_HEX[TINT_GOLD]!, intensity: 0.8 });
+  scene.add(standBox(cv, lot.x, lot.y, d, r));
+  scene.footprint(lot.x, lot.y, w, d, 7);
+  const foot = lot.y + d + 8;
+  out.pools.push({ x: lot.x + 115, y: foot, radii: [44, 70], tint: TINT_GOLD, squashY: 1.7 });
+  out.pools.push({ x: lot.x + 30, y: foot, radii: [22, 36], tint: TINT_CYAN, squashY: 1.5 });
+  out.pools.push({ x: lot.x + 196, y: foot, radii: [22, 36], tint: TINT_PURPLE, squashY: 1.5 });
   out.lights.push({
-    x: tx + 44,
-    y: lot.y + 66,
+    x: lot.x + sx,
+    y: lot.y + sy - r,
+    radius: 150,
+    color: TINT_HEX[TINT_GOLD]!,
+    intensity: 0.8,
+  });
+  out.lights.push({
+    x: lot.x + 170,
+    y: lot.y + d - r - 30,
     radius: 150,
     color: TINT_HEX[TINT_PURPLE]!,
     intensity: 0.7,
@@ -449,30 +563,42 @@ function paintArcade(ctx: BakeContext, lot: Lot, sites: LandmarkSites, out: Land
 
 // --- Neon tower ----------------------------------------------------------------------------
 
-/** Ring neon for the tower. `state` per ring: 0 dim, 1 on, 2 hot. Rings are outer, mid, inner. */
+const DRUM_R = 24;
+const DRUM_RISE = 10;
+const RING_BOX_W = 50;
+const RINGS = [
+  { r: 22, rise: 26, c: PAL.cyan, hi: PAL.cyanHi, dim: PAL.cyanDim },
+  { r: 16, rise: 46, c: PAL.purple, hi: PAL.purpleHi, dim: PAL.purpleDim },
+  { r: 8, rise: 52, c: PAL.coral, hi: PAL.coralHi, dim: PAL.coralDim },
+] as const;
+const MAST_RISE = 104;
+/** Rows from the top of the ring sprite to the foot of the mast. */
+export const RING_BOX_H = RINGS[2].rise + RINGS[2].r + 2;
+
+/**
+ * Ring neon for the tower, drawn relative to the foot of the mast at (cx, cy). `state` per
+ * ring: 0 dim, 1 on, 2 hot. The rings are level circles, so they stay round in this view and
+ * simply stack up the screen.
+ */
 export function drawTowerRings(
   cv: Canvas,
   cx: number,
   cy: number,
   state: readonly [number, number, number],
 ): void {
-  const rings = [
-    { r: 26, c: PAL.cyan, hi: PAL.cyanHi, dim: PAL.cyanDim },
-    { r: 19, c: PAL.purple, hi: PAL.purpleHi, dim: PAL.purpleDim },
-    { r: 12, c: PAL.coral, hi: PAL.coralHi, dim: PAL.coralDim },
-  ];
   emissive(cv, () => {
-    rings.forEach((ring, k) => {
+    RINGS.forEach((ring, k) => {
       const st = state[k]!;
-      cv.ring(cx - 0.5, cy - 0.5, ring.r + 1, st > 0 ? ring.dim : PAL.inkSoft, 4);
-      cv.ring(cx - 0.5, cy - 0.5, ring.r, st === 0 ? ring.dim : ring.c, 2);
-      if (st === 2) cv.ring(cx - 0.5, cy - 0.5, ring.r, ring.hi, 2);
+      const ry = cy - ring.rise;
+      cv.ring(cx - 0.5, ry - 0.5, ring.r + 1, st > 0 ? ring.dim : PAL.inkSoft, 4);
+      cv.ring(cx - 0.5, ry - 0.5, ring.r, st === 0 ? ring.dim : ring.c, 2);
+      if (st === 2) cv.ring(cx - 0.5, ry - 0.5, ring.r, ring.hi, 2);
       else if (st === 1) {
         // Hot core on the lit quadrant only.
         for (let a = Math.PI; a < Math.PI * 1.5; a += 0.02)
           cv.set(
             Math.round(cx - 0.5 + Math.cos(a) * (ring.r - 0.5)),
-            Math.round(cy - 0.5 + Math.sin(a) * (ring.r - 0.5)),
+            Math.round(ry - 0.5 + Math.sin(a) * (ring.r - 0.5)),
             ring.hi,
           );
       }
@@ -480,8 +606,10 @@ export function drawTowerRings(
   });
 }
 
-/** Aircraft warning beacon. `level` 0 off, 1 dim, 2 bright. */
-export function drawBeacon(cv: Canvas, cx: number, cy: number, level: number): void {
+/** Aircraft warning beacon on its cap. `level` 0 off, 1 dim, 2 bright. Canvas is 14 by 14. */
+export function drawTowerHub(cv: Canvas, cx: number, cy: number, level: number): void {
+  cv.rect(cx - 2, cy, 4, 5, PAL.steelDark);
+  cv.hline(cx - 3, cy + 5, 6, PAL.steel);
   emissive(cv, () => {
     if (level === 2) {
       cv.rect(cx - 3, cy - 1, 6, 2, PAL.redDim);
@@ -498,74 +626,83 @@ export function drawBeacon(cv: Canvas, cx: number, cy: number, level: number): v
   });
 }
 
-/** Central hub of the tower with its beacon. Redrawn whole for every beacon frame. */
-export function drawTowerHub(cv: Canvas, cx: number, cy: number, level: number): void {
-  cv.disc(cx - 0.5, cy - 0.5, 6, PAL.ink);
-  cv.disc(cx - 0.5, cy - 0.5, 5, PAL.steelDark);
-  cv.ring(cx - 0.5, cy - 0.5, 5, PAL.steel);
-  drawBeacon(cv, cx, cy, level);
-}
-
-function paintTower(ctx: BakeContext, lot: Lot, out: LandmarkOutput): void {
-  const cv = ctx.world;
-  const cx = lot.x + 32;
-  const cy = lot.y + 32;
-  cv.disc(cx - 0.5, cy - 0.5, 29, PAL.inkSoft);
-  // Radial struts.
+function paintTower(scene: Scene, sites: LandmarkSites, out: LightOut): void {
+  const cx = sites.tower.x;
+  const cy = sites.tower.y;
+  const W = 2 * DRUM_R + 6;
+  const H = MAST_RISE + 12 + DRUM_R + 1;
+  const cv = Canvas.sprite(W, H);
+  const mx = W >> 1;
+  const my = MAST_RISE + 12;
+  const slate = BUILDINGS[ROOF_SLATE]!;
+  // Drum: south face first, then the deck.
+  for (let x = -DRUM_R; x <= DRUM_R; x++) {
+    const half = Math.sqrt(Math.max(0, (DRUM_R + 0.35) * (DRUM_R + 0.35) - x * x));
+    const yb = Math.round(my + half);
+    for (let v = 0; v < DRUM_RISE; v++) {
+      const lit = x < -DRUM_R * 0.45;
+      let c: Color = lit ? slate.wall : x > DRUM_R * 0.6 ? slate.line : slate.wallAlt;
+      if (v === 0) c = PAL.ink;
+      cv.set(mx + x, yb - v, c);
+    }
+    if ((x + 60) % 9 < 5 && Math.abs(x) < DRUM_R - 3)
+      emissive(cv, () => cv.rect(mx + x, yb - 6, 1, 3, x % 18 < 9 ? PAL.cyanDim : PAL.cyan));
+  }
+  cv.disc(mx - 0.5, my - DRUM_RISE - 0.5, DRUM_R, slate.rim);
+  cv.disc(mx - 0.5, my - DRUM_RISE - 0.5, DRUM_R - 1, slate.roofLine);
+  cv.disc(mx - 0.5, my - DRUM_RISE + 0.5, DRUM_R - 3, slate.roof);
   for (let k = 0; k < 8; k++) {
     const a = (k / 8) * Math.PI * 2 + Math.PI / 8;
     cv.line(
-      cx + Math.cos(a) * 7,
-      cy + Math.sin(a) * 7,
-      cx + Math.cos(a) * 28,
-      cy + Math.sin(a) * 28,
-      PAL.steelDark,
+      mx,
+      my - DRUM_RISE,
+      mx + Math.cos(a) * (DRUM_R - 4),
+      my - DRUM_RISE + Math.sin(a) * (DRUM_R - 4),
+      slate.roofLine,
     );
   }
-  drawTowerRings(cv, cx, cy, [1, 1, 1]);
-  drawTowerHub(cv, cx, cy, 2);
-  out.pools.push({ x: cx, y: cy, radii: [48, 62], tint: TINT_CYAN, level: 0 });
-  out.lights.push({ x: cx, y: cy, radius: 62, color: TINT_HEX[TINT_CYAN]!, intensity: 0.8 });
-}
-
-function paintTowerPlaza(
-  ctx: BakeContext,
-  layout: CityLayout,
-  sites: LandmarkSites,
-  out: LandmarkOutput,
-): void {
-  const cv = ctx.world;
-  const { field } = ctx;
-  const ok = (x: number, y: number, m: number): boolean => {
-    for (const [px, py] of [
-      [x - m, y - m],
-      [x + m, y - m],
-      [x - m, y + m],
-      [x + m, y + m],
-    ] as const) {
-      const i = py * field.w + px;
-      if (field.edge[i]! < 9 || layout.roofId[i] !== 0 || layout.ground[i] !== G_PLAZA)
-        return false;
+  // Lattice mast, tapering, banded in warning paint, with a platform under each ring.
+  for (let v = DRUM_RISE; v <= MAST_RISE; v++) {
+    const t = (v - DRUM_RISE) / (MAST_RISE - DRUM_RISE);
+    const half = Math.round(7 - t * 5);
+    const y = my - v;
+    const band = Math.floor(v / 13) % 2 === 0;
+    const hi = band ? PAL.ivory : PAL.coralHi;
+    const mid = band ? PAL.kerbIvoryDark : PAL.coral;
+    const lo = band ? PAL.steel : PAL.coralDim;
+    cv.set(mx - half, y, hi);
+    cv.set(mx - half + 1, y, mid);
+    cv.set(mx + half, y, lo);
+    cv.set(mx + half - 1, y, lo);
+    const span = half * 2 - 3;
+    if (span > 0) {
+      const m = v % (span * 2);
+      cv.set(mx - half + 2 + (m < span ? m : span * 2 - 1 - m), y, mid);
+      if (v % 13 === 0) cv.hline(mx - half, y, half * 2 + 1, hi);
     }
-    return true;
-  };
-  const y = sites.tower.y;
-  let n = 0;
-  for (let x = sites.tower.x + 62; x < sites.tower.x + 340; x += 34) {
-    if (!ok(x, y, 9)) continue;
-    if (n % 3 === 2) {
-      cv.rect(x - 1, y - 1, 3, 3, PAL.steelDark);
-      lampHead(cv, x, y);
-      out.pools.push({ x, y, radii: [10, 18, 27], tint: TINT_WARM, level: 0 });
-    } else {
-      cv.rect(x - 8, y - 8, 16, 16, PAL.kerbShade);
-      cv.rect(x - 7, y - 7, 14, 14, PAL.soil);
-      cv.curHeight = 5;
-      tree(cv, x, y, 7, x * 3 + 1, n % 2 === 0);
-      cv.curHeight = -1;
-    }
-    n++;
   }
+  for (const ring of RINGS) {
+    const y = my - ring.rise;
+    cv.rect(mx - 6, y - 1, 12, 3, PAL.steelDark);
+    cv.hline(mx - 6, y - 1, 12, PAL.steelLight);
+  }
+  emissive(cv, () => {
+    // A string of cyan marker lights up the west leg.
+    for (let v = DRUM_RISE + 6; v < MAST_RISE; v += 9) {
+      const t = (v - DRUM_RISE) / (MAST_RISE - DRUM_RISE);
+      cv.set(mx - Math.round(7 - t * 5) - 1, my - v, PAL.cyan);
+    }
+  });
+  drawTowerRings(cv, mx, my, [1, 1, 1]);
+  // The beacon on top is an animated prop of its own.
+  const item = { art: cv, x: cx - mx, y: cy - my, baseY: cy + DRUM_R };
+  scene.addSplit(item, { id: 'neon_tower_top', kind: 'tower_top', fade: true });
+  scene.footprint(cx - DRUM_R, cy - DRUM_R, DRUM_R * 2, DRUM_R * 2, 8);
+  sites.rings = { x: cx - RING_BOX_W / 2, y: cy - RING_BOX_H };
+  sites.beacon = { x: cx - 7, y: cy - MAST_RISE - 12 };
+  out.pools.push({ x: cx, y: cy + DRUM_R + 20, radii: [34, 58], tint: TINT_CYAN, squashY: 1.3 });
+  out.pools.push({ x: cx, y: cy - 70, radii: [26, 44], tint: TINT_PURPLE });
+  out.lights.push({ x: cx, y: cy - 30, radius: 70, color: TINT_HEX[TINT_CYAN]!, intensity: 0.8 });
 }
 
 // --- Harbor --------------------------------------------------------------------------------
@@ -575,195 +712,235 @@ const CRANE_DK = col('#8C6628');
 const CRANE_DEEP = col('#5A4222');
 const HULL = col('#5A2B36');
 const HULL_HI = col('#8C4652');
+const HULL_DK = col('#3A1C28');
 const DECK = col('#2F3850');
 const DECK_LINE = col('#262E44');
 
-function container(
-  cv: Canvas,
-  x: number,
-  y: number,
-  horizontal: boolean,
-  paint: Color,
-  stacked: boolean,
-): void {
-  const w = horizontal ? 30 : 13;
-  const h = horizontal ? 13 : 30;
-  const base = stacked ? lighter(paint, 0.14) : paint;
-  dropShadow(cv, x, y, w, h, stacked ? 4 : 2);
-  cv.rect(x, y, w, h, base);
-  for (let k = 2; k < (horizontal ? w : h) - 2; k += 3) {
-    if (horizontal) cv.vline(x + k, y + 1, h - 2, darker(base, 0.2));
-    else cv.hline(x + 1, y + k, w - 2, darker(base, 0.2));
-  }
-  cv.frame(x, y, w, h, darker(base, 0.5));
-  cv.hline(x + 1, y + 1, w - 2, lighter(base, 0.28));
-  cv.vline(x + 1, y + 1, h - 2, lighter(base, 0.28));
-  for (const [px, py] of [
-    [x, y],
-    [x + w - 1, y],
-    [x, y + h - 1],
-    [x + w - 1, y + h - 1],
-  ] as const)
-    cv.set(px, py, PAL.ink);
-  // Door end with lock rods.
-  if (horizontal) {
-    cv.vline(x + w - 3, y + 2, h - 4, darker(base, 0.34));
-    cv.set(x + w - 2, y + 4, PAL.steelLight);
-    cv.set(x + w - 2, y + h - 5, PAL.steelLight);
-  } else {
-    cv.hline(x + 2, y + h - 3, w - 4, darker(base, 0.34));
-    cv.set(x + 4, y + h - 2, PAL.steelLight);
-    cv.set(x + w - 5, y + h - 2, PAL.steelLight);
-  }
-}
+const CRANE_RISE = 62;
 
-function crane(cv: Canvas, x: number, out: LandmarkOutput, seed: number): void {
+/** Portal crane: four legs on the quay rails, a boom far out over the water, a load on wires. */
+function crane(scene: Scene, x: number, out: LightOut, seed: number): void {
   const railA = 2566;
   const railB = 2586;
-  const top = 2474;
-  const tip = 2748;
-  // Boom shadow thrown onto quay and water.
-  for (let y = top; y <= tip; y++)
-    for (let k = -8; k <= 8; k++) cv.map(x + k + 12, y + 12, contactShade);
-  for (let k = -28; k <= 28; k++)
-    for (let j = 0; j < 30; j++) cv.map(x + k + 6, railA - 4 + j + 6, contactShade);
-  // Hanging load and its far shadow: the gap between them sells the height.
-  const loadY = 2664;
-  const livery = LIVERIES[seed % LIVERIES.length]!;
-  for (let yy = 0; yy < 13; yy++)
-    for (let xx = 0; xx < 30; xx++) cv.map(x - 15 + xx + 16, loadY + yy + 16, contactShade);
-  container(cv, x - 15, loadY, true, livery, false);
-  // Portal: sill beams on the rails and two side frames.
-  for (const ry of [railA, railB]) {
-    box(cv, x - 28, ry - 3, 56, 6, CRANE_Y, PAL.gold, CRANE_DK, 0);
-    cv.rect(x - 28, ry + 3, 8, 2, PAL.ink);
-    cv.rect(x + 20, ry + 3, 8, 2, PAL.ink);
+  const land = 2532;
+  const tip = 2746;
+  const top = land - CRANE_RISE - 10;
+  const W = 66;
+  const H = tip + 4 - top;
+  const cv = Canvas.sprite(W, H);
+  const mx = W >> 1;
+  const Y = (wy: number): number => wy - top;
+  const leg = (lx: number, gy: number): void => {
+    for (let v = 0; v <= CRANE_RISE; v++) {
+      cv.set(lx, Y(gy) - v, CRANE_Y);
+      cv.set(lx + 1, Y(gy) - v, CRANE_DK);
+      cv.set(lx + 2, Y(gy) - v, CRANE_DEEP);
+      if (v % 16 < 3 && v > 6) {
+        cv.set(lx, Y(gy) - v, PAL.coral);
+        cv.set(lx + 1, Y(gy) - v, PAL.coralDim);
+      }
+    }
+    cv.rect(lx - 2, Y(gy) - 2, 7, 3, PAL.steelDark);
+    cv.hline(lx - 2, Y(gy) - 2, 7, PAL.steel);
+  };
+  // Back legs and their bracing first.
+  leg(mx - 27, railA);
+  leg(mx + 24, railA);
+  for (let k = 0; k <= 50; k++) {
+    const yy = Y(railA) - 8 - Math.round((k / 50) * 30);
+    cv.set(mx - 25 + k, yy, CRANE_DK);
+    cv.set(mx + 24 - k, yy, CRANE_DEEP);
   }
-  box(cv, x - 28, railA - 3, 6, railB - railA + 6, CRANE_Y, PAL.gold, CRANE_DK, 0);
-  box(cv, x + 22, railA - 3, 6, railB - railA + 6, CRANE_Y, PAL.gold, CRANE_DK, 0);
-  for (let k = 0; k < 4; k++) {
-    cv.rect(x - 28, railA + 1 + k * 5, 6, 2, PAL.coral);
-    cv.rect(x + 22, railA + 1 + k * 5, 6, 2, PAL.coral);
+  cv.rect(mx - 27, Y(railA) - 44, 54, 3, CRANE_DK);
+  // A-frame over the landward legs, seen from the front as a triangle.
+  const apexY = Y(railA) - CRANE_RISE - 22;
+  for (let k = 0; k <= 26; k++) {
+    const yy = Y(railA) - CRANE_RISE - Math.round((k / 26) * 22);
+    cv.set(mx - 26 + k, yy, PAL.gold);
+    cv.set(mx - 25 + k, yy, CRANE_Y);
+    cv.set(mx + 26 - k, yy, CRANE_DK);
+    cv.set(mx + 25 - k, yy, CRANE_DEEP);
   }
-  // Boom: two chords with zigzag lacing.
-  for (let y = top; y <= tip; y++) {
-    const m = (y - top) % 12;
-    const zig = m < 6 ? m : 12 - m;
-    cv.set(x - 5 + Math.round((zig * 9) / 6), y, CRANE_DK);
-    if (m === 0) cv.hline(x - 5, y, 10, CRANE_Y);
-  }
-  for (let y = top; y <= tip; y++) {
-    cv.set(x - 7, y, PAL.gold);
-    cv.set(x - 6, y, CRANE_Y);
-    cv.set(x + 5, y, CRANE_Y);
-    cv.set(x + 6, y, CRANE_DK);
-    if ((y - top) % 24 < 3) {
-      cv.set(x - 7, y, PAL.coral);
-      cv.set(x - 6, y, PAL.coral);
-      cv.set(x + 5, y, PAL.coral);
-      cv.set(x + 6, y, PAL.coralDim);
+  cv.rect(mx - 2, apexY - 1, 5, 3, CRANE_Y);
+  emissive(cv, () => cv.rect(mx - 1, apexY - 3, 2, 2, PAL.red));
+  // Front legs and the portal beam.
+  leg(mx - 27, railB);
+  leg(mx + 24, railB);
+  cv.rect(mx - 27, Y(railB) - 44, 54, 4, CRANE_Y);
+  cv.hline(mx - 27, Y(railB) - 44, 54, PAL.gold);
+  cv.hline(mx - 27, Y(railB) - 41, 54, CRANE_DEEP);
+  for (let k = 0; k < 54; k += 6) cv.rect(mx - 27 + k, Y(railB) - 43, 3, 2, PAL.coral);
+  // Side girders at the top, tying the legs together under the boom.
+  for (const lx of [mx - 27, mx + 24]) {
+    for (let wy = railA; wy <= railB; wy++) {
+      cv.set(lx, Y(wy) - CRANE_RISE, PAL.gold);
+      cv.set(lx + 1, Y(wy) - CRANE_RISE, CRANE_Y);
+      cv.set(lx + 2, Y(wy) - CRANE_RISE, CRANE_DK);
     }
   }
-  cv.rect(x - 7, top - 2, 14, 3, CRANE_DEEP);
-  cv.rect(x - 7, tip, 14, 3, CRANE_DEEP);
-  // Machinery house over the landside legs.
-  box(cv, x - 13, 2522, 26, 34, PAL.kerbIvoryDark, PAL.kerbIvory, PAL.steelDark, 0);
-  cv.rect(x - 11, 2526, 22, 4, PAL.kerbCoral);
-  cv.rect(x - 8, 2536, 7, 7, PAL.steelDark);
-  cv.ring(x - 5, 2539, 2, PAL.steel);
-  cv.rect(x + 2, 2536, 8, 5, PAL.steel);
-  cv.hline(x + 2, 2536, 8, PAL.steelLight);
-  cv.rect(x - 10, 2548, 20, 2, PAL.steelDark);
-  // Trolley and operator cab.
-  box(cv, x - 10, loadY - 2, 20, 9, PAL.steelDark, PAL.steel, PAL.ink, 0);
-  cv.rect(x - 3, loadY, 6, 5, PAL.steel);
-  box(cv, x + 7, 2608, 12, 14, PAL.kerbIvoryDark, PAL.kerbIvory, PAL.steelDark, 0);
+  cv.rect(mx - 27, Y(railB) - CRANE_RISE, 54, 4, CRANE_Y);
+  cv.hline(mx - 27, Y(railB) - CRANE_RISE + 3, 54, CRANE_DEEP);
+  // Hanging load: wires from the trolley down to a container over the water.
+  const loadY = 2668;
+  const loadRise = 26;
+  const livery = LIVERIES[seed % LIVERIES.length]!;
+  for (const wx of [mx - 9, mx + 8])
+    for (let v = loadRise + CONTAINER_RISE; v < CRANE_RISE; v++)
+      cv.set(wx, Y(loadY) - v, PAL.steelDark);
+  const load = containerSprite(true, livery, false).art;
+  cv.blit(load, mx - 15, Y(loadY) - loadRise - load.h + 7);
+  // Boom: two chords with lacing, seen from above at full height, and its south end face.
+  const by0 = Y(land) - CRANE_RISE;
+  const by1 = Y(tip) - CRANE_RISE;
+  for (let y = by0; y <= by1; y++) {
+    const m = (y - by0) % 12;
+    const zig = m < 6 ? m : 12 - m;
+    cv.set(mx - 5 + Math.round((zig * 9) / 6), y, CRANE_DK);
+    if (m === 0) cv.hline(mx - 5, y, 10, CRANE_Y);
+    cv.set(mx - 7, y, PAL.gold);
+    cv.set(mx - 6, y, CRANE_Y);
+    cv.set(mx + 5, y, CRANE_Y);
+    cv.set(mx + 6, y, CRANE_DK);
+    if ((y - by0) % 24 < 3) {
+      cv.set(mx - 7, y, PAL.coral);
+      cv.set(mx - 6, y, PAL.coral);
+      cv.set(mx + 5, y, PAL.coral);
+      cv.set(mx + 6, y, PAL.coralDim);
+    }
+  }
+  cv.rect(mx - 7, by1, 14, 5, CRANE_DEEP);
+  cv.hline(mx - 7, by1, 14, CRANE_DK);
+  cv.rect(mx - 7, by0 - 2, 14, 3, CRANE_DK);
+  // Machinery house on the landward end, trolley and cab under the boom.
+  drawBox(cv, mx - 12, by0 + 6 - 7, 24, 26, 7, PAL.kerbIvory, PAL.kerbIvoryDark);
+  cv.rect(mx - 10, by0 + 3, 20, 3, PAL.kerbCoral);
+  cv.rect(mx - 7, by0 + 12, 6, 6, PAL.steelDark);
+  cv.rect(mx + 2, by0 + 12, 7, 4, PAL.steel);
+  drawBox(cv, mx - 10, Y(loadY) - CRANE_RISE - 3, 20, 8, 4, PAL.steel, PAL.steelDark);
+  drawBox(cv, mx + 8, Y(2612) - CRANE_RISE + 2, 11, 10, 8, PAL.kerbIvory, PAL.kerbIvoryDark);
   emissive(cv, () => {
-    cv.rect(x + 9, 2617, 8, 3, PAL.windowWarm);
-    cv.set(x - 1, tip + 1, PAL.red);
-    cv.set(x, tip + 1, PAL.red);
-    cv.set(x - 1, top - 1, PAL.red);
-    cv.set(x, top - 1, PAL.red);
+    cv.rect(mx + 10, Y(2612) - CRANE_RISE + 14, 7, 3, PAL.windowWarm);
+    cv.rect(mx - 1, by1 + 2, 2, 2, PAL.red);
+    cv.rect(mx - 1, by0 - 2, 2, 2, PAL.red);
+    // Floodlights under the portal.
+    cv.rect(mx - 20, Y(railB) - 40, 3, 2, PAL.lamp);
+    cv.rect(mx + 17, Y(railB) - 40, 3, 2, PAL.lamp);
   });
-  lampHead(cv, x - 25, railA - 6);
-  lampHead(cv, x + 25, railA - 6);
-  lampHead(cv, x, 2600);
-  out.pools.push({ x, y: 2548, radii: [36, 62, 88], tint: TINT_COOL, level: 0 });
-  out.pools.push({ x, y: 2612, radii: [22, 38], tint: TINT_GOLD, level: 0 });
+  const sx = x - mx;
+  if (!scene.artFits(cv, sx, top)) console.warn(`crane at ${x} would cover drivable ground`);
+  scene.add({ art: cv, x: sx, y: top, baseY: tip });
+  // Ground shadows: boom, portal, and the load far below its container.
+  scene.shadeRect(x - 7 + 14, land + 14, 14, tip - land);
+  scene.shadeRect(x - 27 + 6, railA + 4, 56, railB - railA + 4);
+  scene.shadeRect(x - 15 + 12, loadY - 12 + 10, 30, 13);
+  for (const lx of [x - 27, x + 24])
+    for (const ry of [railA, railB]) scene.footprint(lx, ry - 1, 3, 2, 10);
+  out.pools.push({ x, y: 2552, radii: [44, 78], tint: TINT_COOL });
+  out.pools.push({ x, y: 2640, radii: [24, 40], tint: TINT_GOLD });
   out.lights.push({ x, y: 2548, radius: 88, color: TINT_HEX[TINT_COOL]!, intensity: 0.9 });
 }
 
-function ship(cv: Canvas, x0: number, yc: number, len: number, rnd: () => number): void {
+/** Freighter: deck seen from above at freeboard height, the south side of the hull below it. */
+function ship(
+  scene: Scene,
+  x0: number,
+  yc: number,
+  len: number,
+  beam: number,
+  rnd: () => number,
+): void {
+  const free = 9;
+  const head = 30;
+  const cv = Canvas.sprite(len, head + beam * 2 + 2 + free);
   const half = (u: number): number => {
     if (u < 0 || u >= len) return -1;
-    if (u < 10) return 30 + u * 0.7;
-    if (u < len - 78) return 37;
+    if (u < 10) return beam - 7 + u * 0.7;
+    if (u < len - 78) return beam;
     const t = (u - (len - 78)) / 78;
-    return 37 * Math.sqrt(Math.max(0, 1 - t * t));
+    return beam * Math.sqrt(Math.max(0, 1 - t * t));
   };
+  const cy = head + beam;
   for (let u = 0; u < len; u++) {
     const hw = half(u);
-    for (let v = -Math.ceil(hw); v <= Math.ceil(hw); v++)
-      if (Math.abs(v) <= hw) cv.map(x0 + u + 6, yc + v + 6, contactShade);
-  }
-  for (let u = 0; u < len; u++) {
-    const hw = half(u);
+    if (hw < 0) continue;
+    const lo = Math.round(cy + hw);
+    // Hull side below the deck edge.
+    for (let v = 0; v < free; v++) {
+      const c =
+        v === free - 1
+          ? PAL.waterDeep
+          : v >= free - 3
+            ? PAL.kerbCoralDark
+            : v === 0
+              ? HULL_HI
+              : u > len - 40
+                ? HULL_DK
+                : HULL;
+      cv.set(u, lo + v, c);
+    }
     for (let v = -Math.ceil(hw); v <= Math.ceil(hw); v++) {
       const av = Math.abs(v);
       if (av > hw) continue;
       const rim = av > hw - 2.2 || u < 2 || half(u + 2) < av;
       let c: Color;
-      if (rim) c = v < 0 || u < 2 ? HULL_HI : HULL;
-      else if (av > hw - 3.4) c = PAL.kerbIvoryDark;
-      else
-        c =
-          u % 16 === 0 || v === 0 ? DECK_LINE : hash2(x0 + u, yc + v, 12) < 0.05 ? DECK_LINE : DECK;
-      cv.set(x0 + u, yc + v, c);
+      if (rim) c = v < 0 || u < 2 ? HULL_HI : PAL.kerbIvoryDark;
+      else c = u % 16 === 0 || v === 0 ? DECK_LINE : DECK;
+      cv.set(u, cy + v, c);
     }
   }
-  // Cargo.
-  for (let u = 66; u + 30 < len - 84; u += 32) {
-    for (let v = -30; v <= 17; v += 15) {
+  // Cargo, stowed in rows; back rows first.
+  const rows = Math.floor((beam * 2 - 8) / 15);
+  for (let rI = 0; rI < rows; rI++) {
+    const v = -beam + 5 + rI * 15;
+    for (let u = 66; u + 30 < len - 84; u += 32) {
       if (rnd() < 0.2) continue;
-      container(cv, x0 + u, yc + v, true, LIVERIES[(rnd() * LIVERIES.length) | 0]!, rnd() < 0.4);
+      const sp = containerSprite(true, LIVERIES[(rnd() * LIVERIES.length) | 0]!, rnd() < 0.4);
+      cv.blit(sp.art, u, cy + v + 13 - sp.art.h);
     }
   }
-  // Bridge, funnel, mast.
-  box(cv, x0 + 12, yc - 30, 42, 60, PAL.kerbIvoryDark, PAL.kerbIvory, PAL.steelDark, 4);
-  cv.rect(x0 + 16, yc - 26, 34, 52, PAL.kerb);
-  cv.frame(x0 + 16, yc - 26, 34, 52, PAL.kerbShade);
-  cv.mapDisc(x0 + 30, yc + 3, 7, contactShade);
-  cv.disc(x0 + 27, yc, 7, PAL.coralDim);
-  cv.disc(x0 + 26.5, yc - 0.5, 5.6, PAL.kerbCoral);
-  cv.disc(x0 + 27, yc, 3, PAL.ink);
-  cv.set(x0 + 23, yc - 4, PAL.coralHi);
-  cv.rect(x0 + 40, yc - 14, 5, 5, PAL.steelDark);
-  cv.hline(x0 + 38, yc - 12, 9, PAL.steelLight);
+  // Bridge house with lit windows toward the camera, funnel, mast.
+  const bw = Math.min(42, Math.round(len * 0.12));
+  const bd = beam * 2 - 16;
+  const br = 18;
+  const bx = 12;
+  const byy = cy - beam + 8;
+  drawBox(cv, bx, byy - br, bw, bd, br, PAL.kerbIvory, PAL.kerbIvoryDark);
+  cv.frame(bx + 3, byy - br + 3, bw - 6, bd - 6, PAL.kerbShade);
   emissive(cv, () => {
-    for (let v = -24; v <= 24; v += 4)
-      cv.rect(x0 + 52, yc + v - 1, 2, 2, v % 8 === 0 ? PAL.windowWarm : PAL.windowMid);
-    cv.set(x0 + 42, yc - 12, PAL.red);
-    cv.set(x0 + len - 6, yc, PAL.mint);
+    for (let k = 3; k + 3 < bw - 2; k += 5) {
+      cv.rect(bx + k, byy - br + bd + 3, 3, 3, k % 10 === 3 ? PAL.windowWarm : PAL.windowMid);
+      cv.rect(bx + k, byy - br + bd + 10, 3, 3, k % 15 === 3 ? PAL.windowMid : PAL.windowNight);
+    }
   });
-  // Bow gear.
-  cv.disc(x0 + len - 30, yc - 6, 2, PAL.steel);
-  cv.disc(x0 + len - 30, yc + 6, 2, PAL.steel);
-  cv.rect(x0 + len - 52, yc - 5, 10, 10, DECK_LINE);
-  cv.frame(x0 + len - 52, yc - 5, 10, 10, PAL.steel);
+  const fxx = bx + (bw >> 1);
+  const fyy = byy - br + (bd >> 1);
+  for (let v = 0; v < 12; v++) cv.hline(fxx - 5, fyy - v, 11, v > 8 ? PAL.ink : PAL.kerbCoral);
+  cv.hline(fxx - 5, fyy - 9, 11, PAL.kerbIvory);
+  cv.vline(fxx - 5, fyy - 11, 12, PAL.coralHi);
+  cv.vline(fxx + 5, fyy - 11, 12, PAL.coralDim);
+  cv.vline(bx + bw - 6, byy - br - 12, 14, PAL.steelLight);
+  cv.hline(bx + bw - 8, byy - br - 9, 5, PAL.steel);
+  emissive(cv, () => {
+    cv.set(bx + bw - 6, byy - br - 13, PAL.red);
+    cv.set(len - 6, cy, PAL.mint);
+  });
+  scene.add({ art: cv, x: x0, y: yc - beam - head - free, baseY: yc + beam });
+  for (let u = 0; u < len; u += 2) {
+    const hw = half(u);
+    if (hw > 0) scene.shadeRect(x0 + u + 6, Math.round(yc - hw) + 6, 2, Math.round(hw * 2));
+  }
 }
 
-function boat(cv: Canvas, x: number, y: number, paint: Color): void {
+function boat(scene: Scene, x: number, y: number, paint: Color): void {
+  const cv = Canvas.sprite(11, 24);
   const rows = [3, 5, 7, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 7];
   rows.forEach((wRow, k) => {
-    for (let j = 0; j < wRow; j++) cv.map(x + 5 - (wRow >> 1) + j + 3, y + k + 3, contactShade);
-  });
-  rows.forEach((wRow, k) => {
-    const lx = x + 5 - (wRow >> 1);
+    const lx = 5 - (wRow >> 1);
     for (let j = 0; j < wRow; j++) {
       const rim = j === 0 || j === wRow - 1 || k === 0 || k === rows.length - 1;
       cv.set(
         lx + j,
-        y + k,
+        k,
         rim
           ? j === 0 || k === 0
             ? PAL.kerbIvory
@@ -774,26 +951,110 @@ function boat(cv: Canvas, x: number, y: number, paint: Color): void {
       );
     }
   });
-  cv.rect(x + 3, y + 7, 5, 3, PAL.glass);
+  cv.rect(3, 7, 5, 3, PAL.glass);
+  for (let j = 1; j < 10; j++) {
+    cv.set(j, 19, PAL.kerbIvoryDark);
+    cv.set(j, 20, darker(paint, 0.3));
+    cv.set(j, 21, darker(paint, 0.3));
+    cv.set(j, 22, PAL.waterDeep);
+  }
+  scene.add({ art: cv, x, y: y - 3, baseY: y + 19 });
+  scene.shadeRect(x + 3, y + 3, 9, 19);
 }
 
-function paintHarbor(ctx: BakeContext, layout: CityLayout, out: LandmarkOutput): void {
+function paintWarehouse(scene: Scene, lot: Lot, out: LightOut): void {
+  const b = BUILDINGS[lot.family]!;
+  const r = allowedRise(scene, lot);
+  const w = lot.w;
+  const d = lot.h;
+  const cv = Canvas.sprite(w, d + r);
+  const ridge = d >> 1;
+  paintRoofSurface(cv, 0, 0, w, d, b, (lx, ly) => {
+    if (ly === ridge || ly === ridge - 1) return b.rim;
+    if (ly === ridge + 1) return b.roofLine;
+    // The slope away from the light is a tone down.
+    const south = ly > ridge;
+    return lx % 6 === 5 ? b.roofLine : south ? b.roofAlt : b.roof;
+  });
+  for (let sx = 14; sx + 20 < w - 10; sx += 30) {
+    const lit = hash2(lot.x + sx, lot.y, 71) < 0.55;
+    for (const sy of [8, d - 20]) {
+      cv.rect(sx, sy, 20, 9, PAL.steelDark);
+      cv.hline(sx, sy, 20, PAL.steelLight);
+      for (let yy = 1; yy < 8; yy++) {
+        for (let xx = 1; xx < 19; xx++) {
+          if (xx % 5 === 0) continue;
+          if (lit)
+            emissive(cv, () => cv.set(sx + xx, sy + yy, yy === 1 ? PAL.windowWarm : PAL.windowMid));
+          else cv.set(sx + xx, sy + yy, PAL.glass);
+        }
+      }
+    }
+  }
+  const label = lot.x < 1500 ? 'DOCK 7' : 'PIER 12';
+  // Facade: corrugated wall, loading doors, the name in tall paint.
+  const fy = d;
+  for (let ly = 0; ly < r; ly++)
+    for (let lx = 0; lx < w; lx++) cv.set(lx, fy + ly, lx % 3 === 2 ? b.wallAlt : b.wall);
+  cv.hline(0, fy, w, b.trim);
+  cv.hline(0, fy + 1, w, b.line);
+  cv.vline(w - 1, fy, r, b.line);
+  cv.hline(0, fy + r - 1, w, PAL.ink);
+  const tw = textWidth(label, 'micro', 2);
+  const tx = (w - tw) >> 1;
+  drawText(cv, tx, fy + 5, label, mixc(b.trim, PAL.kerbIvory, 0.4), 'micro', 2);
+  for (let x = 8; x + 22 < w - 6; x += 34) {
+    if (x + 22 > tx - 6 && x < tx + tw + 6) continue;
+    const lit = hash2(lot.x + x, 5, 73) < 0.4;
+    cv.rect(x - 1, fy + 5, 24, r - 6, b.line);
+    for (let yy = fy + 6; yy < fy + r - 1; yy++) {
+      if (lit && yy > fy + 10)
+        emissive(cv, () => cv.hline(x, yy, 22, yy === fy + 11 ? PAL.windowWarm : PAL.windowMid));
+      else cv.hline(x, yy, 22, (yy & 1) === 0 ? PAL.steel : PAL.steelDark);
+    }
+    emissive(cv, () => cv.set(x + 11, fy + 3, PAL.lamp));
+    if (lit)
+      out.pools.push({
+        x: lot.x + x + 11,
+        y: lot.y + d + 3,
+        radii: [12, 20],
+        tint: TINT_WARM,
+        squashY: 1.5,
+      });
+  }
+  scene.add(standBox(cv, lot.x, lot.y, d, r));
+  scene.footprint(lot.x, lot.y, w, d, 6);
+}
+
+function paintHarbor(ctx: BakeContext, scene: Scene, layout: CityLayout, out: LightOut): void {
   const cv = ctx.world;
   const rnd = mulberry32(ctx.seed ^ 0x4a7b0);
   const H = HARBOR;
   const worldH = ctx.def.worldHeight;
-  // Quay wall and safety line.
+  // Quay edge: a lit coping, then the wall dropping to the water, hung with fenders.
   for (let x = H.x0; x < H.x1; x++) {
-    cv.set(x, H.water - 4, PAL.wallHi);
-    cv.set(x, H.water - 3, PAL.wallCap);
-    cv.set(x, H.water - 2, PAL.wallShade);
-    cv.set(x, H.water - 1, PAL.wallBase);
-    if ((x >> 2) % 3 !== 0) cv.set(x, H.water, PAL.waterDeep);
-    if (((x >> 3) & 3) < 3) cv.set(x, H.water - 10, PAL.paintGoldWorn);
-    if (x % 64 === 20) {
-      cv.rect(x, H.water - 8, 3, 3, PAL.steelDark);
-      cv.set(x, H.water - 8, PAL.steelLight);
-    }
+    cv.set(x, H.water - 2, PAL.wallHi);
+    cv.set(x, H.water - 1, PAL.wallCap);
+    for (let v = 0; v < 7; v++)
+      cv.set(
+        x,
+        H.water + v,
+        v === 6
+          ? PAL.waterDeep
+          : x % 22 === 0
+            ? PAL.wallBase
+            : v < 2
+              ? PAL.wallShade
+              : darker(PAL.wallShade, 0.3),
+      );
+    if (x % 44 > 19 && x % 44 < 24)
+      for (let v = 1; v < 6; v++)
+        cv.set(x, H.water + v, v === 1 || v === 5 ? PAL.ink : PAL.inkSoft);
+    if (((x >> 3) & 3) < 3) cv.set(x, H.water - 9, PAL.paintGoldWorn);
+  }
+  for (let x = H.x0 + 20; x < H.x1; x += 64) {
+    if (x > 2196 && x < 2600) continue;
+    stand(scene, bollardSprite(), x, H.water - 4, 3, 2);
   }
   // The basin's side walls.
   for (let y = H.water; y < worldH; y++) {
@@ -821,20 +1082,24 @@ function paintHarbor(ctx: BakeContext, layout: CityLayout, out: LandmarkOutput):
     const cols = 3 + ((rnd() * 5) | 0);
     const bw = cols * 15;
     if (x + bw > 2730) break;
-    if (cranes.some((c) => x < c + 36 && c - 36 < x + bw)) {
+    if (cranes.some((c) => x < c + 40 && c - 40 < x + bw)) {
       x += 15;
       continue;
     }
-    // Painted bay outline.
-    cv.frame(x - 3, H.y0 + 9, bw + 4, 100, PAL.paintGoldWorn);
+    cv.frame(x - 3, H.y0 + 12, bw + 4, 100, PAL.paintGoldWorn);
     const livery = LIVERIES[(rnd() * LIVERIES.length) | 0]!;
     for (let row = 0; row < 3; row++) {
       for (let c = 0; c < cols; c++) {
         if (rnd() < 0.2) continue;
         const paint = rnd() < 0.55 ? livery : LIVERIES[(rnd() * LIVERIES.length) | 0]!;
-        cv.curHeight = 3;
-        container(cv, x + c * 15, H.y0 + 12 + row * 32, false, paint, rnd() < 0.36);
-        cv.curHeight = -1;
+        // Nothing is stacked in the row beside the road: that strip stays low.
+        const stacked = row > 0 && rnd() < 0.4;
+        const sp = containerSprite(false, paint, stacked);
+        const gx = x + c * 15 + 6;
+        const gy = H.y0 + 15 + row * 32 + 29;
+        if (!scene.spriteFits(sp, gx, gy)) continue;
+        scene.place(sp, gx, gy, undefined, true);
+        scene.footprint(gx - 6, gy - 29, 13, 30, stacked ? 5 : 3);
       }
     }
     x += bw + 20 + ((rnd() * 3) | 0) * 6;
@@ -856,30 +1121,28 @@ function paintHarbor(ctx: BakeContext, layout: CityLayout, out: LandmarkOutput):
               : PAL.wood,
       );
     }
-    for (let k = 1; k <= 3; k++) cv.map(px + 21 + k, y + k, contactShade);
   }
-  for (let y = H.water + 8; y < H.water + 96; y += 20) {
-    cv.rect(px - 1, y, 3, 3, PAL.woodDark);
-    cv.rect(px + 20, y, 3, 3, PAL.woodDark);
-    cv.set(px - 1, y, PAL.woodLight);
-    cv.set(px + 20, y, PAL.woodLight);
+  for (let k = 0; k < 22; k++)
+    for (let v = 0; v < 4; v++)
+      cv.set(
+        px + k,
+        H.water + 96 + v,
+        v === 3 ? PAL.waterDeep : k % 7 === 0 ? PAL.ink : PAL.woodDark,
+      );
+  scene.shadeRect(px + 22, H.water + 4, 3, 96);
+  boat(scene, px - 16, H.water + 14, PAL.kerbCoral);
+  boat(scene, px - 16, H.water + 48, PAL.cyanDim);
+  boat(scene, px + 28, H.water + 30, PAL.goldDim);
+  standLantern(scene, out, px + 11, H.water + 92, TINT_WARM, [14, 26]);
+  // Ships and cranes.
+  ship(scene, 2196, 2662, 400, 37, rnd);
+  ship(scene, 760, 2752, 250, 30, rnd);
+  for (const c of cranes) crane(scene, c, out, c);
+  // Lamps along the quay.
+  for (let lx = H.x0 + 330; lx < H.x1 - 320; lx += 150) {
+    if (cranes.some((c) => Math.abs(c - lx) < 50)) continue;
+    standLantern(scene, out, lx, H.water - 12, TINT_COOL, [16, 30]);
   }
-  boat(cv, px - 16, H.water + 14, PAL.kerbCoral);
-  boat(cv, px - 16, H.water + 44, PAL.cyanDim);
-  boat(cv, px + 28, H.water + 30, PAL.goldDim);
-  lampHead(cv, px + 11, H.water + 90);
-  out.pools.push({ x: px + 11, y: H.water + 90, radii: [12, 22, 32], tint: TINT_WARM, level: 0 });
-  // Freighter alongside.
-  cv.curHeight = 4;
-  ship(cv, 2196, 2662, 400, rnd);
-  cv.curHeight = -1;
-  cv.line(2210, 2626, 2204, H.water - 6, PAL.steel);
-  cv.line(2560, 2640, 2580, H.water - 6, PAL.steel);
-  // A second, smaller hull further out, mostly in the dark.
-  cv.curHeight = 3;
-  ship(cv, 760, 2752, 250, rnd);
-  cv.curHeight = -1;
-  for (const c of cranes) crane(cv, c, out, c);
   // Channel buoys.
   emissive(cv, () => {
     for (const [bx, by, c] of [
@@ -887,9 +1150,8 @@ function paintHarbor(ctx: BakeContext, layout: CityLayout, out: LandmarkOutput):
       [1900, 2776, PAL.mint],
       [1320, 2770, PAL.red],
       [2700, 2760, PAL.mint],
-    ] as const) {
+    ] as const)
       cv.rect(bx, by, 2, 2, c);
-    }
   });
   for (const [bx, by, tint] of [
     [1700, 2740, 2],
@@ -897,77 +1159,21 @@ function paintHarbor(ctx: BakeContext, layout: CityLayout, out: LandmarkOutput):
     [1320, 2770, 2],
     [2700, 2760, 1],
   ] as const)
-    out.pools.push({ x: bx + 1, y: by + 1, radii: [5, 10], tint, level: 0 });
-  // Warehouses.
-  for (const lot of layout.lots) {
-    if (!lot || lot.tag !== 'warehouse') continue;
-    out.claimed.add(lot.id);
-    cv.clipMap = layout.roofId;
-    cv.clipId = lot.id;
-    const r = ROOFS[lot.family]!;
-    const ridge = lot.y + (lot.h >> 1);
-    cv.hline(lot.x + 3, ridge - 1, lot.w - 6, r.hi);
-    cv.hline(lot.x + 3, ridge, lot.w - 6, r.par);
-    cv.hline(lot.x + 3, ridge + 1, lot.w - 6, r.deep);
-    for (let sx = lot.x + 14; sx + 20 < lot.x + lot.w - 10; sx += 30) {
-      const lit = hash2(sx, lot.y, 71) < 0.55;
-      for (const sy of [lot.y + 14, lot.y + lot.h - 24]) {
-        cv.rect(sx, sy, 20, 9, PAL.steelDark);
-        cv.hline(sx, sy, 20, PAL.steel);
-        if (lit) {
-          emissive(cv, () => {
-            for (let yy = 1; yy < 8; yy++)
-              for (let xx = 1; xx < 19; xx++)
-                cv.set(
-                  sx + xx,
-                  sy + yy,
-                  xx % 5 === 0 ? PAL.windowDim : yy === 1 ? PAL.windowWarm : PAL.windowMid,
-                );
-          });
-          out.pools.push({
-            x: sx + 10,
-            y: sy + 4,
-            radii: [13, 18],
-            tint: TINT_WARM,
-            level: lot.id,
-            squashY: 1.4,
-          });
-        } else {
-          for (let yy = 1; yy < 8; yy++)
-            for (let xx = 1; xx < 19; xx++)
-              cv.set(sx + xx, sy + yy, xx % 5 === 0 ? PAL.steelDark : PAL.glass);
-        }
-      }
-    }
-    const label = lot.x < 1500 ? 'DOCK 7' : 'PIER 12';
-    drawText(
-      cv,
-      lot.x + ((lot.w - textWidth(label, 'micro', 3)) >> 1),
-      ridge - 22,
-      label,
-      r.par,
-      'micro',
-      3,
-    );
-    cv.clipMap = null;
-  }
+    out.pools.push({ x: bx + 1, y: by + 1, radii: [5, 10], tint });
+  for (const lot of layout.lots)
+    if (lot && lot.tag === 'warehouse') paintWarehouse(scene, lot, out);
 }
 
 // --- Tram viaduct --------------------------------------------------------------------------
 
-const BALLAST = col('#2B2F40');
-const BALLAST_LIGHT = col('#353A4D');
+const BALLAST = col('#3A4058');
+const BALLAST_LIGHT = col('#454C66');
 
-/** Draws the rail deck between world x0 and x1 onto `cv`, whose origin is at (ox, oy). */
-export function drawViaduct(
-  cv: Canvas,
-  ox: number,
-  oy: number,
-  yc: number,
-  x0: number,
-  x1: number,
-  caps = true,
-): void {
+/**
+ * Rail deck seen in the oblique view, for world columns x0 to x1: the deck from above, then the
+ * girder's south face. Row 0 of the art is the north edge of the deck.
+ */
+export function drawViaductDeck(cv: Canvas, ox: number, x0: number, x1: number): void {
   for (let x = x0; x < x1; x++) {
     for (let dy = -VIADUCT_HALF; dy < VIADUCT_HALF; dy++) {
       let c: Color;
@@ -978,134 +1184,176 @@ export function drawViaduct(
       else if (dy === -16) c = PAL.steelLight;
       else if (dy === -15) c = PAL.steelDark;
       else if (dy === 14) c = PAL.steelDark;
-      else if (dy === 15) c = PAL.steel;
-      else if (dy === 16) c = PAL.ink;
+      else if (dy === 15) c = PAL.steelLight;
+      else if (dy === 16) c = PAL.steelHi;
       else if (dy === -11 || dy === -5 || dy === 4 || dy === 10) c = PAL.rail;
       else if (dy === -10 || dy === -4 || dy === 5 || dy === 11) c = PAL.railGroove;
-      else if ((track1 || track2) && sleeper) c = PAL.woodDark;
+      else if ((track1 || track2) && sleeper) c = PAL.wood;
       else if (dy === -2 || dy === 1) c = PAL.steelDark;
       else if (dy === -1 || dy === 0) c = x % 8 === 0 ? PAL.steelDark : PAL.steel;
       else c = hash2(x >> 1, dy, 55) < 0.2 ? BALLAST_LIGHT : BALLAST;
-      cv.set(x - ox, yc + dy - oy, c);
+      cv.set(x - ox, dy + VIADUCT_HALF, c);
     }
-    // Girder caps poke out past the deck at each pier.
-    if (caps && x % 64 < 6) {
-      for (const dy of [-20, -19, -18, 17, 18, 19]) {
-        const lit = dy === -20 || x % 64 === 0;
-        cv.set(
-          x - ox,
-          yc + dy - oy,
-          lit ? PAL.kerb : dy === 19 || x % 64 === 5 ? PAL.steelDark : PAL.kerbShade,
-        );
-      }
+    // Riveted plate girder.
+    for (let v = 0; v < VIADUCT_GIRDER; v++) {
+      const c =
+        v === 0
+          ? PAL.steel
+          : v === VIADUCT_GIRDER - 1
+            ? PAL.ink
+            : x % 16 === 0
+              ? PAL.steelDark
+              : x % 16 === 8 && v === 3
+                ? PAL.steel
+                : PAL.wallShade;
+      cv.set(x - ox, VIADUCT_HALF * 2 + v, c);
     }
     // Catenary masts on the center walkway.
     if (x % 56 === 28) {
-      for (let dy = -13; dy <= 12; dy++) cv.set(x - ox, yc + dy - oy, PAL.inkSoft);
-      cv.rect(x - 1 - ox, yc - 2 - oy, 3, 3, PAL.steelHi);
-      cv.set(x + 1 - ox, yc - oy, PAL.steel);
+      for (let v = 0; v < 12; v++)
+        cv.set(x - ox, VIADUCT_HALF - 1 - v, v > 9 ? PAL.steelHi : PAL.inkSoft);
+      cv.hline(x - 4 - ox, VIADUCT_HALF - 11, 9, PAL.inkSoft);
     }
   }
 }
 
 /** A two-car tram on the upper track, frozen at the platform. */
-function drawTram(cv: Canvas, x: number, yc: number): void {
+function drawTram(cv: Canvas, x: number, y: number): void {
   for (let car = 0; car < 2; car++) {
     const cx = x + car * 44;
-    box(cv, cx, yc - 14, 42, 11, PAL.kerbIvoryDark, PAL.kerbIvory, PAL.steelDark, 0);
-    cv.rect(cx + 2, yc - 12, 38, 2, PAL.kerbCoral);
-    cv.rect(cx + 4, yc - 9, 34, 3, PAL.steelDark);
-    cv.rect(cx + 16, yc - 10, 9, 4, PAL.steel);
+    drawBox(cv, cx, y - 7, 42, 9, 7, PAL.kerbIvory, PAL.kerbIvoryDark);
+    cv.rect(cx + 2, y - 5, 38, 2, PAL.kerbCoral);
+    cv.rect(cx + 16, y - 3, 9, 3, PAL.steel);
+    cv.hline(cx, y + 2, 42, PAL.kerbCoral);
     emissive(cv, () => {
-      for (let k = 0; k < 8; k++) cv.rect(cx + 5 + k * 4, yc - 5, 3, 1, PAL.windowWarm);
+      for (let k = 0; k < 8; k++)
+        cv.rect(cx + 4 + k * 4.5, y + 3, 3, 3, k % 3 === 1 ? PAL.windowMid : PAL.windowWarm);
     });
   }
-  cv.rect(x + 42, yc - 12, 2, 7, PAL.ink);
   emissive(cv, () => {
-    cv.set(x + 86, yc - 12, PAL.ivory);
-    cv.set(x + 86, yc - 6, PAL.ivory);
-    cv.set(x - 1, yc - 12, PAL.red);
-    cv.set(x - 1, yc - 6, PAL.red);
+    cv.set(x + 86, y + 6, PAL.ivory);
+    cv.set(x - 1, y + 6, PAL.red);
   });
 }
 
-function paintViaductGround(
-  ctx: BakeContext,
+function paintViaduct(
+  scene: Scene,
   layout: CityLayout,
   sites: LandmarkSites,
-  out: LandmarkOutput,
+  worldW: number,
+  out: LightOut,
 ): void {
-  const cv = ctx.world;
   const yc = sites.viaduct.y;
-  const west = sites.viaduct.roadX0 - 440;
-  cv.curHeight = 13;
-  drawViaduct(cv, 0, 0, yc, west, sites.viaduct.roadX0);
-  drawViaduct(cv, 0, 0, yc, sites.viaduct.roadX1, ctx.def.worldWidth);
-  drawTram(cv, west + 18, yc);
-  cv.curHeight = -1;
-  // The deck hides whatever roof is under it, so rooftop light must not bleed onto it.
-  for (let y = yc - 20; y < yc + 20; y++) {
-    for (let x = west; x < ctx.def.worldWidth; x++) {
-      if (x >= sites.viaduct.roadX0 && x < sites.viaduct.roadX1) continue;
-      if (cv.height![y * layout.w + x] === 13) layout.roofId[y * layout.w + x] = 0;
+  const top = yc - VIADUCT_HALF - VIADUCT_RISE;
+  const under = VIADUCT_RISE - VIADUCT_GIRDER;
+  const segment = (x0: number, x1: number, tram: boolean): void => {
+    const head = 14;
+    const cv = Canvas.sprite(x1 - x0, head + VIADUCT_HALF * 2 + VIADUCT_RISE);
+    // Piers stand under the deck: draw them first, the deck goes over their heads.
+    for (let x = x0; x < x1; x++) {
+      const m = ((x % 64) + 64) % 64;
+      if (m >= 8) continue;
+      for (let v = 0; v < under + 4; v++) {
+        const c = m === 0 ? PAL.kerb : m === 7 ? PAL.steelDark : v === 0 ? PAL.ink : PAL.kerbShade;
+        cv.set(x - x0, head + VIADUCT_HALF * 2 + VIADUCT_RISE - 1 - v, c);
+      }
     }
-  }
+    const deck = new Canvas(x1 - x0, VIADUCT_HALF * 2 + VIADUCT_GIRDER);
+    drawViaductDeck(deck, x0, x0, x1);
+    cv.blit(deck, 0, head);
+    if (tram) drawTram(cv, 24, head + 4);
+    scene.add({ art: cv, x: x0, y: top - head, baseY: yc + VIADUCT_HALF - 1 });
+    scene.shadeRect(x0 + 8, yc - VIADUCT_HALF + 10, x1 - x0, VIADUCT_HALF * 2);
+    for (let x = x0; x < x1; x++)
+      if (((x % 64) + 64) % 64 === 0) scene.footprint(x, yc + VIADUCT_HALF - 3, 8, 3, 4);
+  };
+  segment(sites.viaduct.west, sites.viaduct.roadX0, true);
+  segment(sites.viaduct.roadX1, worldW, false);
   // Abutments either side of the road: chunky piers with hazard paint, outside the corridor.
-  for (const ax of [sites.viaduct.roadX0 - 7, sites.viaduct.roadX1 + 1]) {
-    cv.curHeight = 13;
-    box(cv, ax, yc - 24, 6, 48, PAL.kerbShade, PAL.kerb, PAL.steelDark, 0);
-    for (let k = 0; k < 48; k += 6) cv.rect(ax + 1, yc - 23 + k, 4, 3, PAL.paintGold);
-    cv.curHeight = -1;
-  }
-  // Station building at the west end.
-  const lot = layout.lots.find((l) => l?.tag === 'station');
-  if (lot) {
-    out.claimed.add(lot.id);
-    cv.clipMap = layout.roofId;
-    cv.clipId = lot.id;
-    const r = ROOFS[lot.family]!;
-    // Glazed platform canopy across the middle.
-    const gy = lot.y + 30;
-    cv.rect(lot.x + 6, gy, lot.w - 12, 36, PAL.steelDark);
-    for (let yy = 1; yy < 35; yy++) {
-      for (let xx = 1; xx < lot.w - 13; xx++) {
-        const rib = xx % 9 === 0 || yy === 17 || yy === 18;
+  for (const ax of [sites.viaduct.roadX0 - 8, sites.viaduct.roadX1]) {
+    const cv = Canvas.sprite(8, under + 6);
+    for (let v = 0; v < under + 6; v++) {
+      for (let k = 0; k < 8; k++) {
+        const stripe = (Math.floor((v + k) / 3) & 1) === 0;
         cv.set(
-          lot.x + 6 + xx,
-          gy + yy,
-          rib ? PAL.steel : (xx + yy * 2) % 11 === 0 ? PAL.glassLight : PAL.glass,
+          k,
+          under + 5 - v,
+          v === 0
+            ? PAL.ink
+            : v < 14
+              ? stripe
+                ? PAL.paintGold
+                : PAL.ink
+              : k === 0
+                ? PAL.kerb
+                : k === 7
+                  ? PAL.steelDark
+                  : PAL.kerbShade,
         );
       }
     }
-    cv.hline(lot.x + 6, gy, lot.w - 12, PAL.steelLight);
-    cv.rect(lot.x + 22, lot.y + 8, 68, 16, PAL.ink);
-    cv.frame(lot.x + 22, lot.y + 8, 68, 16, r.par);
-    neonText(cv, lot.x + 27, lot.y + 11, 'TRAM', 0, 2);
-    neonText(cv, lot.x + 64, lot.y + 13, 'LINE 5', 3, 1);
-    emissive(cv, () => {
-      for (let k = 0; k < lot.w - 20; k += 6)
-        cv.set(lot.x + 10 + k, lot.y + lot.h - 12, PAL.windowWarm);
-    });
-    cv.clipMap = null;
+    if (scene.artFits(cv, ax, yc + VIADUCT_HALF + 1 - under - 6))
+      scene.add({ art: cv, x: ax, y: yc + VIADUCT_HALF + 1 - under - 6, baseY: yc + VIADUCT_HALF });
+  }
+  // Station: the deck runs into its upper floor. Glazed train shed on top, a lit hall below.
+  const lot = layout.lots.find((l) => l?.tag === 'station');
+  if (lot) {
+    const b = BUILDINGS[lot.family]!;
+    const r = allowedRise(scene, lot);
+    const w = lot.w;
+    const d = lot.h;
+    const cv = Canvas.sprite(w, d + r);
+    paintRoofSurface(cv, 0, 0, w, d, b, (lx, ly) =>
+      lx % 16 === 15 || ly % 16 === 15 ? b.roofLine : b.roof,
+    );
+    const gy = 30;
+    cv.rect(6, gy, w - 12, 36, PAL.steelDark);
+    for (let yy = 1; yy < 35; yy++) {
+      for (let xx = 1; xx < w - 13; xx++) {
+        const rib = xx % 9 === 0 || yy === 17 || yy === 18;
+        if (rib) cv.set(6 + xx, gy + yy, PAL.steel);
+        else if ((xx + yy * 2) % 11 === 0) cv.set(6 + xx, gy + yy, PAL.glassLight);
+        else
+          emissive(cv, () =>
+            cv.set(6 + xx, gy + yy, yy < 17 ? PAL.glass : darker(PAL.glassLight, 0.25)),
+          );
+      }
+    }
+    cv.hline(6, gy, w - 12, PAL.steelLight);
+    cv.rect(22, 8, 68, 16, PAL.ink);
+    cv.frame(22, 8, 68, 16, b.rimLow);
+    neonText(cv, 27, 11, 'TRAM', 0, 2);
+    neonText(cv, 64, 13, 'LINE 5', 3, 1);
+    const fy = d;
+    for (let ly = 0; ly < r; ly++)
+      for (let lx = 0; lx < w; lx++) cv.set(lx, fy + ly, lx % 14 === 13 ? b.wallAlt : b.wall);
+    cv.hline(0, fy, w, b.trim);
+    cv.hline(0, fy + 1, w, b.line);
+    cv.vline(w - 1, fy, r, b.line);
+    cv.hline(0, fy + r - 1, w, PAL.ink);
+    for (let k = 0; k < 5; k++) {
+      const ax = 8 + k * 20;
+      cv.rect(ax, fy + 5, 14, r - 6, b.line);
+      emissive(cv, () => {
+        cv.rect(ax + 1, fy + 7, 12, r - 9, PAL.windowMid);
+        cv.hline(ax + 3, fy + 5, 8, PAL.windowWarm);
+        cv.hline(ax + 2, fy + 6, 10, PAL.windowWarm);
+        cv.vline(ax + 6, fy + 7, r - 9, PAL.windowDim);
+        cv.hline(ax + 1, fy + 13, 12, PAL.windowDim);
+      });
+    }
+    scene.add(standBox(cv, lot.x, lot.y, d, r));
+    scene.footprint(lot.x, lot.y, w, d, 7);
     out.pools.push({
-      x: lot.x + 56,
-      y: lot.y + 16,
-      radii: [36, 46],
-      tint: TINT_CYAN,
-      level: lot.id,
-      squashY: 1.6,
-    });
-    out.pools.push({
-      x: lot.x + 56,
-      y: lot.y + lot.h - 12,
-      radii: [40, 54],
+      x: lot.x + w / 2,
+      y: lot.y + d + 8,
+      radii: [40, 62],
       tint: TINT_WARM,
-      level: lot.id,
-      squashY: 2.2,
+      squashY: 1.8,
     });
     out.lights.push({
       x: lot.x + 56,
-      y: lot.y + 16,
+      y: lot.y + 16 - r,
       radius: 46,
       color: TINT_HEX[TINT_CYAN]!,
       intensity: 0.5,
@@ -1115,80 +1363,86 @@ function paintViaductGround(
 
 // --- Start line ----------------------------------------------------------------------------
 
-function paintStart(
-  ctx: BakeContext,
-  layout: CityLayout,
-  sites: LandmarkSites,
-  out: LandmarkOutput,
-): void {
-  const cv = ctx.world;
-  const lot = layout.lots.find((l) => l?.tag === 'grandstand');
-  if (lot) {
-    out.claimed.add(lot.id);
-    cv.clipMap = layout.roofId;
-    cv.clipId = lot.id;
-    const r = ROOFS[lot.family]!;
-    const seats = [
-      PAL.coralDim,
-      PAL.cyanDim,
-      PAL.goldDim,
-      PAL.purpleDim,
-      PAL.kerbIvoryDark,
-      PAL.mintDim,
-      PAL.kerbCoral,
-      PAL.steel,
-    ];
-    // Canopy over the back rows, open tiers of seats toward the track.
-    const tiers = 9;
-    for (let t = 0; t < tiers; t++) {
-      const y = lot.y + 22 + t * 5;
-      cv.hline(lot.x + 5, y + 4, lot.w - 10, r.deep);
-      for (let x = lot.x + 6; x < lot.x + lot.w - 6; x++) {
-        const aisle = (x - lot.x) % 38 < 3;
-        for (let k = 0; k < 4; k++) {
-          let c: Color = t % 2 === 0 ? r.alt : r.base;
-          if (aisle) c = r.par;
-          else if (k < 2 && (x - lot.x) % 3 !== 2) {
-            const hsh = hash2((x - lot.x) / 3, t, 6021);
-            if (hsh < 0.74) c = seats[(hash2((x - lot.x) / 3, t, 6022) * seats.length) | 0]!;
-            else c = r.dark;
-            if (k === 1 && hsh < 0.74) c = darker(c, 0.3);
-          }
-          cv.set(x, y + k, c);
+function paintGrandstand(scene: Scene, lot: Lot, sites: LandmarkSites, out: LightOut): void {
+  const b = BUILDINGS[lot.family]!;
+  const w = lot.w;
+  const d = lot.h;
+  const canopyRise = allowedRise(scene, lot);
+  const seats: readonly Color[] = [
+    PAL.coral,
+    PAL.cyanDim,
+    PAL.gold,
+    PAL.purple,
+    PAL.kerbIvory,
+    PAL.mintDim,
+    PAL.kerbCoral,
+    PAL.steelLight,
+  ];
+  // Tiers climb away from the track: each is a tread seen from above and a riser below it.
+  const TIERS = 8;
+  const TREAD = 6;
+  const STEP = 3;
+  const front = 6;
+  const cv = Canvas.sprite(w, canopyRise + d);
+  const baseRow = canopyRise + d - 1;
+  // Back wall up to the canopy.
+  const backY = baseRow - TIERS * (TREAD + STEP) - front;
+  cv.rect(0, 30, w, backY - 26, b.wallLow);
+  for (let x = 6; x < w; x += 19) cv.vline(x, 30, backY - 26, b.line);
+  for (let t = TIERS - 1; t >= 0; t--) {
+    const y0 = baseRow - front - (t + 1) * (TREAD + STEP) + 1;
+    for (let x = 0; x < w; x++) {
+      const aisle = x % 38 < 3 || x < 2 || x >= w - 2;
+      for (let k = 0; k < TREAD; k++) {
+        let c: Color = t % 2 === 0 ? b.roofAlt : b.roof;
+        if (aisle) c = b.rimLow;
+        else if (k >= 1 && k <= 3 && x % 3 !== 2) {
+          const hsh = hash2((x / 3) | 0, t, 6021);
+          if (hsh < 0.78) {
+            const seat = seats[(hash2((x / 3) | 0, t, 6022) * seats.length) | 0]!;
+            c = k === 1 ? lighter(seat, 0.2) : k === 2 ? seat : darker(seat, 0.4);
+          } else c = k === 3 ? b.inner : b.roofLine;
         }
+        cv.set(x, y0 + k, c);
       }
+      for (let k = 0; k < STEP; k++)
+        cv.set(x, y0 + TREAD + k, aisle ? b.line : k === 0 ? b.wall : b.line);
     }
-    box(cv, lot.x + 3, lot.y + 3, lot.w - 6, 17, r.par, r.hi, r.deep, 3);
-    for (let x = lot.x + 12; x < lot.x + lot.w - 8; x += 14) cv.vline(x, lot.y + 5, 13, r.base);
-    neonText(
-      cv,
-      lot.x + ((lot.w - textWidth('BOLT RIVALS GRAND PRIX', 'micro', 1)) >> 1),
-      lot.y + 9,
-      'BOLT RIVALS GRAND PRIX',
-      3,
-      1,
-    );
-    emissive(cv, () => {
-      for (let x = lot.x + 8; x < lot.x + lot.w - 6; x += 18)
-        cv.rect(x, lot.y + 19, 2, 1, PAL.lamp);
-    });
-    cv.clipMap = null;
-    out.pools.push({
-      x: lot.x + lot.w / 2,
-      y: lot.y + 44,
-      radii: [110, 130],
-      tint: TINT_WARM,
-      level: lot.id,
-      squashY: 3,
-    });
   }
+  // Front wall on the collision edge, with hoardings.
+  for (let x = 0; x < w; x++) {
+    for (let k = 0; k < front; k++) {
+      const board = Math.floor(x / 38) % 3;
+      let c: Color = k === 0 ? b.trim : k === front - 1 ? PAL.ink : b.wall;
+      if (k > 0 && k < front - 1 && x % 38 > 3 && x % 38 < 36)
+        c = board === 0 ? PAL.coralDim : board === 1 ? PAL.cyanDim : PAL.purpleDim;
+      cv.set(x, baseRow - front + 1 + k, c);
+    }
+  }
+  // Canopy over the back rows, on columns, its fascia facing the track.
+  const cd = 26;
+  const cy0 = 0;
+  for (let x = 8; x < w; x += 53) {
+    cv.vline(x, cy0 + cd, backY - cd + 4, PAL.steelLight);
+    cv.vline(x + 1, cy0 + cd, backY - cd + 4, PAL.steelDark);
+  }
+  paintRoofSurface(cv, 0, cy0, w, cd, b, (lx) => (lx % 14 === 13 ? b.roofLine : b.roof));
+  cv.rect(0, cy0 + cd, w, 9, PAL.ink);
+  cv.hline(0, cy0 + cd, w, b.trim);
+  const text = 'BOLT RIVALS GRAND PRIX';
+  neonText(cv, (w - textWidth(text, 'micro', 1)) >> 1, cy0 + cd + 2, text, 3, 1);
+  emissive(cv, () => {
+    for (let x = 6; x < w - 4; x += 12) cv.rect(x, cy0 + cd + 9, 2, 1, PAL.lamp);
+  });
+  cv.hline(0, cy0 + cd + 9, w, b.line);
+  scene.add({ art: cv, x: lot.x, y: lot.y - canopyRise, baseY: lot.y + d - 1 });
+  scene.footprint(lot.x, lot.y, w, d, 8);
   // Flood pools on the grid: the best lit place on the circuit.
   out.pools.push({
     x: sites.start.x + 14,
     y: sites.start.y,
-    radii: [84, 128, 168],
+    radii: [110, 168],
     tint: TINT_COOL,
-    level: 0,
     squashY: 1.55,
   });
   for (const dy of [-44, 44])
@@ -1203,11 +1457,11 @@ function paintStart(
 
 function paintPlazaDressing(
   ctx: BakeContext,
+  scene: Scene,
   layout: CityLayout,
   sites: LandmarkSites,
-  out: LandmarkOutput,
+  out: LightOut,
 ): void {
-  const cv = ctx.world;
   const { field } = ctx;
   const ok = (x: number, y: number, m: number): boolean => {
     for (const [px, py] of [
@@ -1218,85 +1472,74 @@ function paintPlazaDressing(
     ] as const) {
       if (px < 0 || py < 0 || px >= field.w || py >= field.h) return false;
       const i = py * field.w + px;
-      if (field.edge[i]! < 9 || layout.roofId[i] !== 0 || layout.ground[i] !== G_PLAZA)
+      if (field.edge[i]! < 12 || layout.roofId[i] !== 0 || layout.ground[i] !== G_PLAZA)
         return false;
     }
     return true;
   };
   const planter = (x: number, y: number, r: number, warm: boolean): void => {
-    if (!ok(x, y, r + 2)) return;
-    cv.rect(x - r - 1, y - r - 1, 2 * r + 2, 2 * r + 2, PAL.kerbShade);
-    cv.rect(x - r, y - r, 2 * r, 2 * r, PAL.soil);
-    cv.curHeight = 5;
-    tree(cv, x, y, r, x * 5 + y, warm);
-    cv.curHeight = -1;
+    if (!ok(x, y, 4)) return;
+    ctx.world.rect(x - 5, y - 4, 10, 7, PAL.kerbShade);
+    ctx.world.rect(x - 4, y - 3, 8, 5, PAL.soil);
+    plantTree(scene, x, y, r, x * 5 + y, warm);
   };
   const lamp = (x: number, y: number, tint: number): void => {
     if (!ok(x, y, 3)) return;
-    cv.rect(x - 1, y - 1, 3, 3, PAL.steelDark);
-    lampHead(cv, x, y);
-    out.pools.push({ x, y, radii: [10, 18, 27], tint, level: 0 });
+    standLantern(scene, out, x, y, tint, [14, 26]);
   };
-  // Clock square: trees at the corners, lamps on the axes.
+  // Clock square: trees round the hall, lamps on the axes.
   const c = sites.clock;
   for (const [dx, dy] of [
     [66, -66],
     [84, -30],
     [84, 30],
-    [66, 66],
+    [66, 70],
     [20, -70],
-    [20, 70],
     [-30, -66],
-    [-30, 66],
+    [-28, 70],
+    [20, 74],
   ] as const)
     planter(c.x + dx, c.y + dy, 7, (dx + dy) % 3 === 0);
   lamp(c.x + 70, c.y, TINT_GOLD);
   lamp(c.x - 6, c.y - 68, TINT_GOLD);
-  lamp(c.x - 6, c.y + 68, TINT_GOLD);
+  lamp(c.x - 30, c.y + 62, TINT_GOLD);
+  lamp(c.x + 44, c.y + 62, TINT_GOLD);
   // Arcade forecourt.
   const a = sites.arcade;
   for (let x = a.x + 10; x < a.x + a.w; x += 44) {
-    planter(x, a.y - 8, 5, true);
-    planter(x + 22, a.y + a.h + 7, 5, false);
+    planter(x, a.y - 4, 5, true);
+    planter(x + 22, a.y + a.h + 22, 6, false);
   }
   for (let y = a.y + 14; y < a.y + a.h; y += 40) {
     planter(a.x - 8, y, 5, false);
     planter(a.x + a.w + 7, y + 20, 5, true);
   }
-  // Grandstand apron and station forecourt.
+  for (let x = a.x + 34; x < a.x + a.w; x += 54) lamp(x, a.y + a.h + 14, TINT_PURPLE);
+  // Tower island.
+  const t = sites.tower;
+  for (const dx of [-32, 32]) planter(t.x + dx, t.y + 6, 5, dx > 0);
+  // Grandstand ends.
   const s = sites.start;
-  for (let x = s.x - 116; x <= s.x + 116; x += 58) lamp(x, s.y - 106, TINT_COOL);
-  planter(s.x - 120, s.y - 196, 4, false);
-  planter(s.x + 120, s.y - 196, 4, true);
+  for (const dx of [-120, 120]) lamp(s.x + dx, s.y - 150, TINT_COOL);
 }
 
 export function paintLandmarks(
   ctx: BakeContext,
+  scene: Scene,
   layout: CityLayout,
   sites: LandmarkSites,
-  out: LandmarkOutput,
+  out: LightOut,
 ): void {
   const cv = ctx.world;
   cv.curFlags = 0;
-  cv.curHeight = -1;
-  paintHarbor(ctx, layout, out);
-  paintPlazaDressing(ctx, layout, sites, out);
-  paintTowerPlaza(ctx, layout, sites, out);
+  paintHarbor(ctx, scene, layout, out);
+  paintPlazaDressing(ctx, scene, layout, sites, out);
   for (const lot of layout.lots) {
     if (!lot || !lot.tag) continue;
-    if (lot.visible < lot.w * lot.h * (lot.round ? 0.7 : 1))
-      console.warn(
-        `landmark ${lot.tag} is clipped by the corridor (${lot.visible} of ${lot.w * lot.h} px)`,
-      );
-    if (lot.tag === 'warehouse' || lot.tag === 'station' || lot.tag === 'grandstand') continue;
-    out.claimed.add(lot.id);
-    cv.clipMap = layout.roofId;
-    cv.clipId = lot.id;
-    if (lot.tag === 'clock') paintClock(ctx, lot, out);
-    else if (lot.tag === 'arcade') paintArcade(ctx, lot, sites, out);
-    else if (lot.tag === 'tower') paintTower(ctx, lot, out);
-    cv.clipMap = null;
+    if (lot.tag === 'clock') paintClock(scene, lot, out);
+    else if (lot.tag === 'arcade') paintArcade(scene, lot, out);
+    else if (lot.tag === 'grandstand') paintGrandstand(scene, lot, sites, out);
   }
-  paintViaductGround(ctx, layout, sites, out);
-  paintStart(ctx, layout, sites, out);
+  paintTower(scene, sites, out);
+  paintViaduct(scene, layout, sites, ctx.def.worldWidth, out);
 }

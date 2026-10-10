@@ -74,10 +74,13 @@ function DebugReadout() {
   const maxCorrection = useHud((s) => s.maxCorrection);
   const mode = useHud((s) => s.linkMode);
   const renderer = useHud((s) => s.renderer);
+  const heading = useHud((s) => s.headingDeg);
+  const reversing = useHud((s) => s.reversing);
   return (
     <div className="debug" data-testid="debug">
       {fps} fps · {renderer} · {mode} · {Math.round(latency)} ms · pending {pending} · corrections{' '}
-      {corrections} · max {maxCorrection.toFixed(2)} px
+      {corrections} · max {maxCorrection.toFixed(2)} px · heading {heading} deg
+      {reversing ? ' · reversing' : ''}
     </div>
   );
 }
@@ -93,6 +96,7 @@ type Props = { manifests: GameManifests; onPause: () => void };
 export function Hud({ manifests, onPause }: Props) {
   const unit = useApp((s) => s.settings.speedUnit);
   const showGuide = useApp((s) => s.settings.showTouchGuide);
+  const steering = useApp((s) => s.settings.steering);
   const steered = useApp((s) => s.milestones.steered);
   const completeMilestone = useApp((s) => s.completeMilestone);
   const speedMph = useHud((s) => s.speed);
@@ -163,7 +167,11 @@ export function Hud({ manifests, onPause }: Props) {
         </div>
       )}
       <Countdown />
-      {hint && <div className="hint">{STRINGS.race.steerHint}</div>}
+      {hint && (
+        <div className="hint">
+          {steering === 'wheel' ? STRINGS.race.steerHintWheel : STRINGS.race.steerHint}
+        </div>
+      )}
       {DEBUG && <DebugReadout />}
 
       <div className="hud-speed panel">

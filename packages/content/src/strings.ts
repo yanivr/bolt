@@ -29,7 +29,10 @@ export const STRINGS = {
   },
   race: {
     go: 'GO!',
-    steerHint: 'Drag to steer. Pull down to brake.',
+    // The default control is direction steering, so the Section 4 line is reworded to say what
+    // the stick really does. The approved wording still describes the Left and Right option.
+    steerHint: 'Drag toward where you want to go. Pull back to brake.',
+    steerHintWheel: 'Drag to steer. Pull down to brake.',
     wrongWay: 'WRONG WAY',
     lap: 'LAP',
     finalLap: 'FINAL LAP',
@@ -60,7 +63,9 @@ export const STRINGS = {
     drivingHand: 'Driving Hand',
     leftThumb: 'Left Thumb Steers',
     rightThumb: 'Right Thumb Steers',
-    reducedCamera: 'Reduced Camera Motion',
+    steering: 'Touch Steering',
+    steerDirection: 'Point the Way',
+    steerWheel: 'Left and Right',
     reduceFlashes: 'Reduce Flashing Effects',
     cameraShake: 'Camera Shake',
     music: 'Music',

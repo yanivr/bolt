@@ -125,6 +125,8 @@ export const PAL = {
   windowWarm: col('#FFD98A'),
   windowMid: col('#E39A4C'),
   windowDim: col('#8F5636'),
+  windowNight: col('#18223A'),
+  windowGlint: col('#2F4D70'),
 } as const;
 
 /** Rooftop color families: highlight, parapet, base, texture alternate, dark, deep. */
@@ -161,6 +163,38 @@ export const ROOFS: readonly RoofRamp[] = [
   ramp('#7F8B68', '#55604B', '#373F35', '#3D463A', '#272D27', '#1D221E'),
   ramp('#8A8FA2', '#606579', '#3E4256', '#44495C', '#2D3144', '#222535'),
 ];
+
+/**
+ * A building in the oblique view: the roof catches the sky and is the lightest plane, the south
+ * face sits in shadow tones and leaves the work to windows and neon.
+ */
+export type BuildingRamp = {
+  roof: Color;
+  roofAlt: Color;
+  roofLine: Color;
+  rim: Color;
+  rimLow: Color;
+  inner: Color;
+  wall: Color;
+  wallAlt: Color;
+  wallLow: Color;
+  line: Color;
+  trim: Color;
+};
+
+export const BUILDINGS: readonly BuildingRamp[] = ROOFS.map((r) => ({
+  roof: mixc(r.alt, r.par, 0.44),
+  roofAlt: mixc(r.alt, r.par, 0.26),
+  roofLine: mixc(r.base, r.par, 0.12),
+  rim: r.hi,
+  rimLow: mixc(r.hi, r.par, 0.55),
+  inner: r.dark,
+  wall: mixc(r.base, r.par, 0.3),
+  wallAlt: mixc(r.base, r.par, 0.14),
+  wallLow: mixc(r.base, r.dark, 0.35),
+  line: r.dark,
+  trim: mixc(r.par, r.hi, 0.25),
+}));
 
 /** Slate and concrete dominate; the saturated families are accents. */
 export const ROOF_WEIGHTS: readonly number[] = [
@@ -227,8 +261,8 @@ const TINTS: ReadonlyArray<readonly [number, number, number]> = [
   [0.96, 0.94, 0.84],
 ];
 
-const GAIN = [0, 0.26, 0.54, 0.86];
-const LIFT = [0, 9, 20, 34];
+const GAIN = [0, 0.2, 0.42, 0.68];
+const LIFT = [0, 7, 15, 25];
 
 /** Posterized lamp response. Step 1 to 3; each step is a distinct hard tone. */
 export function litNight(c: Color, step: number, tint: number): Color {

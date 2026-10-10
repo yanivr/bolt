@@ -1,13 +1,15 @@
 import { DEFAULT_LOADOUT } from '@bolt/content';
 import type { MatchPhase, VehicleLoadout } from '@bolt/shared';
 import { create } from 'zustand';
+import type { SteeringMode } from '../input/driveInput.js';
 import type { LinkMode, LinkStatus } from '../network/link.js';
 
 export type Screen = 'boot' | 'home' | 'race';
 
 export type Settings = {
   drivingHand: 'left' | 'right';
-  reducedCamera: boolean;
+  /** How the floating stick is read: a direction on screen, or left and right like a wheel. */
+  steering: SteeringMode;
   reduceFlashes: boolean;
   /** 0 disables camera shake entirely, 1 is the full restrained amount. */
   cameraShake: number;
@@ -20,7 +22,7 @@ export type Settings = {
 
 export const DEFAULT_SETTINGS: Settings = {
   drivingHand: 'left',
-  reducedCamera: false,
+  steering: 'direction',
   // Section 5.13: flashes are reduced by default on first launch.
   reduceFlashes: true,
   cameraShake: 1,
@@ -51,8 +53,20 @@ function loadSettings(): Settings {
   try {
     const raw = window.localStorage.getItem(SETTINGS_KEY);
     if (!raw) return { ...DEFAULT_SETTINGS };
-    const parsed = JSON.parse(raw) as Partial<Settings>;
-    return { ...DEFAULT_SETTINGS, ...parsed };
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    // Keep only settings that still exist, with the type they should have, so a value saved
+    // by an older build can never reach the game.
+    const settings: Record<string, unknown> = { ...DEFAULT_SETTINGS };
+    for (const key of Object.keys(DEFAULT_SETTINGS)) {
+      if (typeof parsed[key] === typeof settings[key]) settings[key] = parsed[key];
+    }
+    if (settings.steering !== 'direction' && settings.steering !== 'wheel')
+      settings.steering = DEFAULT_SETTINGS.steering;
+    if (settings.drivingHand !== 'left' && settings.drivingHand !== 'right')
+      settings.drivingHand = DEFAULT_SETTINGS.drivingHand;
+    if (settings.speedUnit !== 'mph' && settings.speedUnit !== 'kmh')
+      settings.speedUnit = DEFAULT_SETTINGS.speedUnit;
+    return settings as Settings;
   } catch {
     return { ...DEFAULT_SETTINGS };
   }
@@ -153,6 +167,10 @@ export type HudState = {
   mapY: number;
   finished: boolean;
   fps: number;
+  /** Heading of the local car in whole degrees, 0 up the screen and clockwise. Debug readout. */
+  headingDeg: number;
+  /** True while the local car is backing up. Debug readout. */
+  reversing: boolean;
   hasSteered: boolean;
   hasBraked: boolean;
   /** Prediction diagnostics, shown only with ?debug=1. */
@@ -183,6 +201,8 @@ export const useHud = create<HudState>(() => ({
   mapY: 0,
   finished: false,
   fps: 60,
+  headingDeg: 0,
+  reversing: false,
   hasSteered: false,
   hasBraked: false,
   pendingInputs: 0,

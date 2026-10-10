@@ -5,7 +5,7 @@ import { ENGINES, PAINTS, TIRES } from './parts.js';
 import { getWeatherPreset } from './weather.js';
 
 /** Semantic version of the shipped catalog and balance data. Bump on any value change. */
-export const CATALOG_VERSION = '0.1.0';
+export const CATALOG_VERSION = '0.2.0';
 
 export const DEFAULT_LOADOUT: VehicleLoadout = {
   chassisId: 'chassis_beetle',

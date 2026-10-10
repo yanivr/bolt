@@ -1,0 +1,8 @@
+OLD SERVER INPUT POLICY (reuse last sample when the queue is empty), reference driver, 120 s
+
+network                                  corrections  /min  worst px  mean px  worst speed err px/s  lap
+ideal LAN, steady frames                     0     0.0     0.0     0.0       0    3
+home WiFi 15 ms + 0-12 ms jitter             0     0.0     0.0     0.0       0    3
+WiFi + 70 ms frame hitch every ~3 s          1     0.5     8.0     8.0      74    3
+mobile data 60 ms + 0-45 ms jitter           0     0.0     0.0     0.0       0    3
+mobile data + 110 ms hitch every ~4 s       23    11.5     9.0     8.0     126    3

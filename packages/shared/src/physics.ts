@@ -1,5 +1,6 @@
 import {
   BRAKE_LIFT_THRESHOLD,
+  FREE_ROLL_SLIP,
   IDLE_THROTTLE,
   KINETIC_GRIP_FACTOR,
   MAX_COMBINED_GRIP,
@@ -7,14 +8,19 @@ import {
   REVERSE_HOLD_SECONDS,
   SHOULDER_GRIP_FACTOR,
   SHOULDER_ROLLING_DECEL,
+  SCRUB_FULL_SLIP,
+  STEER_BLEND_SHARPNESS,
   STEER_ENGAGE_TIME,
-  STEER_OVERDRIVE,
+  STEER_GRIP_SENSE,
   STEER_RELEASE_TIME,
   SURFACE_GRIP,
   SURFACE_ROLLING_DECEL,
   THROTTLE_ASSIST_MIN,
   THROTTLE_ASSIST_SLIP_FULL,
   THROTTLE_ASSIST_SLIP_START,
+  TIRE_FADE_END,
+  TIRE_FADE_START,
+  TIRE_KNEE_SHARPNESS,
   WALL_FORGIVE_SPEED,
   WALL_FRICTION_DECEL,
   WALL_GRACE_SECONDS,
@@ -43,6 +49,10 @@ import type {
  * Order follows Section 7.3: engine force, traction, forward integration, yaw, lateral slip,
  * then collision response that keeps tangential motion.
  */
+
+const ALIGN_FLOOR_SPEED = 30;
+/** Self-aligning yaw is bounded so a car shoved sideways turns briskly but never snaps round. */
+const ALIGN_LIMIT = 2.2;
 
 export type ControlInput = {
   /** -1 full left to 1 full right. */
@@ -133,6 +143,42 @@ export function driveForceAt(params: VehicleParams, forwardSpeed: number): numbe
   return params.driveForce * taper * launch;
 }
 
+/**
+ * Curvature that full lock asks for at a forward speed. Below the hand-over speed this is the
+ * fixed low-speed turning circle; above it the request falls with the square of speed, so full
+ * lock always asks for the same lateral acceleration and the stick maps to cornering force.
+ */
+export function lockCurvature(params: VehicleParams, forwardSpeed: number, grip: number): number {
+  const demand =
+    params.lateralGripAccel * params.steerGripDemand * Math.pow(grip, STEER_GRIP_SENSE);
+  const ratio = (forwardSpeed * forwardSpeed * params.maxSteerCurvature) / demand;
+  const n = STEER_BLEND_SHARPNESS;
+  return params.maxSteerCurvature / Math.pow(1 + Math.pow(ratio, n), 1 / n);
+}
+
+/**
+ * Steady yaw rate, radians per second, that one unit of steering produces at this speed while
+ * the tires are gripping. Negative in reverse. Controllers divide by it to turn a wanted yaw
+ * rate into a stick position.
+ */
+export function steerYawGain(params: VehicleParams, forwardSpeed: number, grip: number): number {
+  return (
+    (forwardSpeed * lockCurvature(params, forwardSpeed, grip)) /
+    (1 + params.yawAlign / params.slipStiffness)
+  );
+}
+
+/**
+ * Share of peak lateral force the tires deliver for a demand `r`, where 1 is the force that
+ * would exactly reach the grip limit. Linear for small demands, a smooth knee into the peak,
+ * then a gentle fade toward the sliding value. Continuous everywhere.
+ */
+export function tireResponse(r: number, kinetic: number): number {
+  const n = TIRE_KNEE_SHARPNESS;
+  const knee = r / Math.pow(1 + Math.pow(r, n), 1 / n);
+  return knee * lerp(1, kinetic, smoothstep(TIRE_FADE_START, TIRE_FADE_END, r));
+}
+
 export type StepScratch = { loc: TrackLocation; probe: TrackLocation };
 export function createStepScratch(): StepScratch {
   return { loc: createLocation(), probe: createLocation() };
@@ -152,8 +198,10 @@ export function stepVehicle(
   const steerTarget = input.coast
     ? 0
     : clamp(Number.isFinite(input.steer) ? input.steer : 0, -1, 1);
+  // Returning toward centre is a release. Crossing over to the other side is not: it engages at
+  // the quicker rate all the way through, so a left-right flick has no kink at the centre.
   const releasing =
-    Math.abs(steerTarget) < Math.abs(state.steeringInput) || steerTarget * state.steeringInput < 0;
+    Math.abs(steerTarget) < Math.abs(state.steeringInput) && steerTarget * state.steeringInput >= 0;
   state.steeringInput +=
     (steerTarget - state.steeringInput) *
     expBlend(dt, releasing ? STEER_RELEASE_TIME : STEER_ENGAGE_TIME);
@@ -216,12 +264,13 @@ export function stepVehicle(
 
   // --- 6. Yaw --------------------------------------------------------------------------------
   const lateralLimit = params.lateralGripAccel * grip;
-  const speedRatio = Math.abs(vf) / params.steerHalfSpeed;
-  let curvature = (state.steeringInput * params.maxSteerCurvature) / (1 + speedRatio * speedRatio);
-  // Steering assist: never ask for much more lateral acceleration than the tires can give.
-  const curvatureCap = (lateralLimit * STEER_OVERDRIVE) / Math.max(vf * vf, 400);
-  curvature = clamp(curvature, -curvatureCap, curvatureCap);
-  const yawTarget = vf * curvature;
+  const curvature = state.steeringInput * lockCurvature(params, vf, grip);
+  // Self-aligning: the nose is drawn toward the direction of travel in proportion to slip. In
+  // reverse the same expression draws the tail toward it.
+  const alignSpeed = vf < 0 ? Math.min(vf, -ALIGN_FLOOR_SPEED) : Math.max(vf, ALIGN_FLOOR_SPEED);
+  const align =
+    params.yawAlign * (vl / alignSpeed) * smoothstep(8, 48, Math.abs(vf) + Math.abs(vl));
+  const yawTarget = vf * curvature + clamp(align, -ALIGN_LIMIT, ALIGN_LIMIT);
   state.yawRate += (yawTarget - state.yawRate) * expBlend(dt, params.yawResponseTime);
   state.headingRad = wrapAngle(state.headingRad + state.yawRate * dt);
 
@@ -239,16 +288,24 @@ export function stepVehicle(
 
   const wanted = -vl * Math.min(1, params.slipStiffness * dt);
   const maxDv = lateralLimit * dt;
-  let sliding = false;
-  let dv = wanted;
-  if (Math.abs(wanted) > maxDv) {
-    sliding = true;
-    dv = Math.sign(wanted) * maxDv * KINETIC_GRIP_FACTOR * params.slipRecovery;
-  }
+  const demand = Math.abs(wanted) / maxDv;
+  const kinetic = Math.min(1, KINETIC_GRIP_FACTOR * params.slipRecovery);
+  // The tire curve can never deliver more than was asked for, so the car cannot be pushed
+  // through zero slip and out the other side.
+  const dv = Math.sign(wanted) * Math.min(Math.abs(wanted), maxDv * tireResponse(demand, kinetic));
+  // The tires push across the car, not across its path, so some of their work comes off the
+  // car's speed. Within the free-rolling band of slip that loss is given back and cornering
+  // costs nothing; past it the loss fades in to its full physical value, which is what slows
+  // a slide and ends a drift. Nothing switches on or off.
+  const before = Math.hypot(vf, vl);
   vl += dv;
-  if (sliding) {
-    // Scrubbing tires bleed a little forward speed, which is what ends a drift.
-    vf -= Math.sign(vf) * Math.min(Math.abs(vf), Math.abs(dv) * 0.16);
+  const after = Math.hypot(vf, vl);
+  if (after > 1e-6 && before > after) {
+    const slip = Math.atan2(Math.abs(vl), Math.abs(vf));
+    const giveBack = 1 - smoothstep(FREE_ROLL_SLIP, SCRUB_FULL_SLIP, slip);
+    const scale = (after + (before - after) * giveBack) / after;
+    vf *= scale;
+    vl *= scale;
   }
 
   vx = fx * vf + rx * vl;

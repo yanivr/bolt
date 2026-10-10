@@ -11,8 +11,9 @@ import {
   NOMINAL_TOP_SPEED,
   REVERSE_SPEED,
   SLIP_STIFFNESS,
-  STEER_HALF_SPEED,
+  STEER_GRIP_DEMAND,
   TRACTION_ACCEL,
+  YAW_ALIGN_GAIN,
   YAW_RESPONSE_TIME,
 } from './balance.js';
 import type {
@@ -59,8 +60,9 @@ export function deriveVehicleParams(
     tireSurfaceGrip: tires.surfaceGrip,
     tireWetGripFactor: tires.wetGripFactor,
     maxSteerCurvature: MAX_STEER_CURVATURE * chassis.yawFactor,
-    steerHalfSpeed: STEER_HALF_SPEED,
+    steerGripDemand: STEER_GRIP_DEMAND,
     yawResponseTime: YAW_RESPONSE_TIME / chassis.yawFactor,
+    yawAlign: YAW_ALIGN_GAIN,
     slipStiffness: SLIP_STIFFNESS,
     slipRecovery: tires.slipRecoveryFactor,
     reverseSpeed: REVERSE_SPEED,

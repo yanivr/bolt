@@ -1,0 +1,37 @@
+SHIPPED PIPELINE (north-up, fixed whole-number scale), 844x390 CSS at DPR 2, default Beetle
+
+Steady top speed on a straight
+Hitch: the most one frame's movement differs from the average of its neighbours, device px per refresh.
+"exact" columns are before pixel rounding (timing and camera only); "drawn" columns are what reaches the glass.
+display                          px/refr | exact: ground  car | drawn: ground  car | snap err | car-vs-ground | on-grid % | heading flicker
+60 Hz clean                         9.02    0.00    0.00    1.00    0.00    0.86    0.98     100     0
+90 Hz clean                         6.01    0.00    0.00    1.00    0.00    0.86    0.99     100     0
+120 Hz clean                        4.51    0.00    0.00    1.00    0.00    0.86    0.51     100     0
+60 Hz, timestamps +/-2 ms           9.02    0.06    0.00    2.00    0.00    0.86    0.99     100     0
+60 Hz, 4% dropped frames            9.01    0.00    0.00    1.00    0.00    0.86    0.98     100     0
+60 Hz, +/-2 ms and 4% dropped       9.02    0.05    0.00    2.00    0.00    0.86    1.00     100     0
+120 Hz, +/-1 ms and 4% dropped      4.51    0.03    0.00    1.00    0.00    0.86    0.54     100     0
+
+Steady top speed on a diagonal (both axes moving)
+Hitch: the most one frame's movement differs from the average of its neighbours, device px per refresh.
+"exact" columns are before pixel rounding (timing and camera only); "drawn" columns are what reaches the glass.
+display                          px/refr | exact: ground  car | drawn: ground  car | snap err | car-vs-ground | on-grid % | heading flicker
+60 Hz clean                         9.03    0.00    0.00    1.41    0.00    0.93    0.99     100     0
+90 Hz clean                         6.03    0.00    0.00    1.41    0.00    0.93    1.02     100     0
+120 Hz clean                        4.53    0.00    0.00    1.41    0.00    0.93    0.92     100     0
+60 Hz, timestamps +/-2 ms           9.03    0.06    0.00    1.41    0.00    0.93    1.02     100     0
+60 Hz, 4% dropped frames            9.03    0.00    0.00    1.41    0.00    0.93    0.99     100     0
+60 Hz, +/-2 ms and 4% dropped       9.02    0.05    0.00    1.41    0.00    0.93    1.02     100     0
+120 Hz, +/-1 ms and 4% dropped      4.53    0.03    0.00    1.41    0.00    0.93    0.98     100     0
+
+Reference driver, Neon Cut, first 45 s
+Hitch: the most one frame's movement differs from the average of its neighbours, device px per refresh.
+"exact" columns are before pixel rounding (timing and camera only); "drawn" columns are what reaches the glass.
+display                          px/refr | exact: ground  car | drawn: ground  car | snap err | car-vs-ground | on-grid % | heading flicker
+60 Hz clean                         8.28    0.48    0.45    2.92    1.80    0.97    1.25     100     0
+90 Hz clean                         5.54    0.33    0.27    2.83    1.50    0.99    1.29     100     0
+120 Hz clean                        4.17    0.20    0.16    2.83    1.41    0.99    1.33     100     0
+60 Hz, timestamps +/-2 ms           8.28    0.43    0.48    2.83    1.41    0.99    1.25     100     0
+60 Hz, 4% dropped frames            8.28    0.48    0.45    2.83    1.80    0.99    1.25     100     0
+60 Hz, +/-2 ms and 4% dropped       8.28    0.45    0.43    2.83    1.80    0.99    1.24     100     0
+120 Hz, +/-1 ms and 4% dropped      4.16    0.17    0.13    2.83    1.41    0.99    1.32     100     0

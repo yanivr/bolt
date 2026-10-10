@@ -1,12 +1,14 @@
 import { mulberry32 } from '@bolt/shared';
 import type { BakeContext } from '../biome.js';
+import type { Scene } from '../oblique.js';
 import { ROOF_WEIGHTS } from './palette.js';
-import { WALL_OUT } from './road.js';
 
 /**
  * City plan outside the corridor: a recursive street grid, blocks, and rectangular building
- * lots aligned to the world axes. Lots are clipped by the corridor wall, so buildings follow
- * the street line on curves without ever intruding on drivable space.
+ * lots aligned to the world axes. Every lot is a clean rectangle that stays clear of the
+ * corridor. Lots on the far (north) bank of a road are pulled down to the collision edge so
+ * their facades form the wall; lots on the near (south) bank are pushed back until neither
+ * their roof nor a car parked against the edge can overlap them on screen.
  */
 
 export const G_STREET = 1;
@@ -17,35 +19,42 @@ export const G_PLAZA = 5;
 export const G_WATER = 6;
 export const G_QUAY = 7;
 
+/** Depth of the strip south of a road in which nothing tall may stand or appear. */
+export const NEAR_STRIP = 24;
+/** Screen height of a ground floor and of each further storey. */
+export const FLOOR_0 = 18;
+export const FLOOR_N = 10;
+
+/** Shift of the storey roll per roof family: slate, teal, maroon, plum, olive, concrete. */
+const FAMILY_HEIGHT_BIAS: readonly number[] = [0.12, -0.24, 0.04, 0, -0.14, 0.1];
+
 export type Rect = { x: number; y: number; w: number; h: number };
 
 export type Lot = Rect & {
   id: number;
   family: number;
-  /** Cast shadow length in pixels. */
-  height: number;
+  /** Screen rise of the roof above the ground, in pixels. */
+  rise: number;
+  floors: number;
   seed: number;
-  /** Corner notch removed from the rectangle, making an L-shaped roof. */
-  cut: Rect | null;
-  /** Number of pixels that survived clipping. */
-  visible: number;
-  /** Smallest corridor edge distance seen on the roof: how close it sits to the track. */
+  /** Rows of open ground between the facade and drivable ground to the south; 999 if none. */
+  front: number;
+  /** Smallest corridor edge distance on the footprint: how close it sits to the track. */
   roadDist: number;
   tag: string;
-  round: boolean;
 };
 
 export type Block = Rect & { kind: number; seed: number };
 export type Street = Rect & { horizontal: boolean };
 export type Reserve = Rect & { ground: number };
-export type FixedLot = Rect & { family: number; height: number; tag: string; round?: boolean };
+export type FixedLot = Rect & { family: number; rise: number; tag: string };
 
 export type CityLayout = {
   w: number;
   h: number;
   ground: Uint8Array;
   roofId: Uint16Array;
-  /** Indexed by id; entry 0 is unused. */
+  /** Indexed by id; entry 0 is unused. Dropped lots are null. */
   lots: Array<Lot | null>;
   blocks: Block[];
   streets: Street[];
@@ -54,8 +63,13 @@ export type CityLayout = {
 const overlaps = (a: Rect, b: Rect): boolean =>
   a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
+export function riseForFloors(floors: number): number {
+  return FLOOR_0 + (floors - 1) * FLOOR_N + 1;
+}
+
 export function buildLayout(
   ctx: BakeContext,
+  scene: Scene,
   reserves: readonly Reserve[],
   fixed: readonly FixedLot[],
 ): CityLayout {
@@ -73,43 +87,78 @@ export function buildLayout(
     for (let y = Math.max(0, r.y); y < y1; y++)
       ground.fill(kind, y * w + Math.max(0, r.x), y * w + x1);
   };
-  const addLot = (
-    r: Rect,
-    family: number,
-    height: number,
-    cut: Rect | null,
-    tag = '',
-    round = false,
-  ): Lot => {
-    const lot: Lot = {
-      ...r,
-      id: lots.length,
-      family,
-      height,
-      seed: (rnd() * 0x7fffffff) | 0,
-      cut,
-      visible: 0,
-      roadDist: 999,
-      tag,
-      round,
-    };
-    lots.push(lot);
-    return lot;
-  };
   const even = (v: number): number => Math.round(v / 2) * 2;
 
+  // Pixels a roof must not stand on: the corridor itself plus a side margin, so the barrier
+  // along a north-south road stays visible beside the roofs.
+  const SIDE = 6;
+  const bad = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    let last = -999;
+    for (let x = 0; x < w; x++) {
+      if (field.edge[y * w + x]! <= 1) last = x;
+      if (x - last <= SIDE) bad[y * w + x] = 1;
+    }
+    last = 99999;
+    for (let x = w - 1; x >= 0; x--) {
+      if (field.edge[y * w + x]! <= 1) last = x;
+      if (last - x <= SIDE) bad[y * w + x] = 1;
+    }
+  }
+  const badIn = (r: Rect): Rect | null => {
+    let bx0 = Infinity;
+    let by0 = Infinity;
+    let bx1 = -Infinity;
+    let by1 = -Infinity;
+    for (let y = Math.max(0, r.y); y < Math.min(h, r.y + r.h); y++) {
+      for (let x = Math.max(0, r.x); x < Math.min(w, r.x + r.w); x++) {
+        if (!bad[y * w + x]) continue;
+        if (x < bx0) bx0 = x;
+        if (x > bx1) bx1 = x;
+        if (y < by0) by0 = y;
+        if (y > by1) by1 = y;
+      }
+    }
+    return bx1 < bx0 ? null : { x: bx0, y: by0, w: bx1 - bx0 + 1, h: by1 - by0 + 1 };
+  };
+  /** Cuts a rectangle back to its largest part that is clear of the corridor. */
+  const trim = (r0: Rect): Rect | null => {
+    let r: Rect = {
+      x: Math.max(0, r0.x),
+      y: Math.max(0, r0.y),
+      w: Math.min(w, r0.x + r0.w) - Math.max(0, r0.x),
+      h: Math.min(h, r0.y + r0.h) - Math.max(0, r0.y),
+    };
+    for (let pass = 0; pass < 8; pass++) {
+      if (r.w < 20 || r.h < 14) return null;
+      const b = badIn(r);
+      if (!b) return r;
+      const options: Rect[] = [
+        { x: r.x, y: r.y, w: b.x - r.x, h: r.h },
+        { x: b.x + b.w, y: r.y, w: r.x + r.w - b.x - b.w, h: r.h },
+        { x: r.x, y: r.y, w: r.w, h: b.y - r.y },
+        { x: r.x, y: b.y + b.h, w: r.w, h: r.y + r.h - b.y - b.h },
+      ];
+      let best = options[0]!;
+      for (const o of options) if (o.w * o.h > best.w * best.h) best = o;
+      r = best;
+    }
+    return null;
+  };
+
+  const candidates: Array<{ r: Rect; family: number }> = [];
   const splitLot = (r: Rect, family: number, depth: number): void => {
     const big = Math.max(r.w, r.h);
     const small = Math.min(r.w, r.h);
     const mustSplit = big > 150 || (big > 96 && small > 96);
-    const maySplit = big >= 56 && r.w * r.h > 2600 && rnd() < 0.72;
-    if ((mustSplit || maySplit) && big >= 52) {
+    const maySplit = big >= 60 && r.w * r.h > 2800 && rnd() < 0.7;
+    if ((mustSplit || maySplit) && big >= 56) {
       const horizontal = r.w === r.h ? rnd() < 0.5 : r.w > r.h;
       const span = horizontal ? r.w : r.h;
-      const gap = [0, 0, 0, 0, 2, 4, 6][(rnd() * 7) | 0]!;
-      const cutAt = even(Math.max(24, Math.min(span - 24 - gap, span * (0.3 + rnd() * 0.4))));
+      const gap = [0, 0, 0, 0, 2, 4, 8][(rnd() * 7) | 0]!;
+      const cutAt = even(Math.max(26, Math.min(span - 26 - gap, span * (0.3 + rnd() * 0.4))));
       // Neighbors usually keep the block's material; sometimes a different building moves in.
-      const fam2 = rnd() < 0.34 ? ROOF_WEIGHTS[(rnd() * ROOF_WEIGHTS.length) | 0]! : family;
+      const fam2 = rnd() < 0.4 ? ROOF_WEIGHTS[(rnd() * ROOF_WEIGHTS.length) | 0]! : family;
       if (horizontal) {
         splitLot({ x: r.x, y: r.y, w: cutAt, h: r.h }, family, depth + 1);
         splitLot({ x: r.x + cutAt + gap, y: r.y, w: r.w - cutAt - gap, h: r.h }, fam2, depth + 1);
@@ -119,30 +168,8 @@ export function buildLayout(
       }
       return;
     }
-    if (r.w < 14 || r.h < 14) return;
-    const height = rnd() < 0.08 ? 15 + ((rnd() * 5) | 0) : 4 + ((rnd() * 9) | 0);
-    let cut: Rect | null = null;
-    if (r.w >= 56 && r.h >= 56 && rnd() < 0.34) {
-      const cw = even(r.w * (0.3 + rnd() * 0.22));
-      const ch = even(r.h * (0.3 + rnd() * 0.22));
-      const corner = (rnd() * 4) | 0;
-      cut = {
-        x: corner & 1 ? r.x + r.w - cw : r.x,
-        y: corner & 2 ? r.y + r.h - ch : r.y,
-        w: cw,
-        h: ch,
-      };
-      if (rnd() < 0.62) {
-        // The notch holds a lower annex rather than an open yard.
-        addLot(
-          cut,
-          rnd() < 0.5 ? family : ROOF_WEIGHTS[(rnd() * ROOF_WEIGHTS.length) | 0]!,
-          Math.max(3, height - 3 - ((rnd() * 3) | 0)),
-          null,
-        );
-      }
-    }
-    addLot(r, family, height, cut);
+    if (r.w < 20 || r.h < 14) return;
+    candidates.push({ r, family });
   };
 
   const makeBlock = (r: Rect): void => {
@@ -151,9 +178,9 @@ export function buildLayout(
     const roomy = r.w >= 110 && r.h >= 96;
     let kind = G_YARD;
     if (!hitsReserve && roomy) {
-      if (roll < 0.075) kind = G_PARK;
-      else if (roll < 0.15) kind = G_PARKING;
-      else if (roll < 0.175) kind = G_PLAZA;
+      if (roll < 0.085) kind = G_PARK;
+      else if (roll < 0.16) kind = G_PARKING;
+      else if (roll < 0.185) kind = G_PLAZA;
     }
     fillGround(r, kind);
     blocks.push({ ...r, kind, seed: (rnd() * 0x7fffffff) | 0 });
@@ -163,8 +190,19 @@ export function buildLayout(
   const splitRegion = (r: Rect, depth: number): void => {
     const big = Math.max(r.w, r.h);
     if (big > 300 || (big > 210 && rnd() < 0.55)) {
-      const gap = depth < 2 ? 26 : depth < 4 ? 18 : 12;
       const horizontal = r.w > r.h;
+      // East-west streets are wider: the roofs south of them lean over them on screen.
+      const gap = horizontal
+        ? depth < 2
+          ? 30
+          : depth < 4
+            ? 22
+            : 16
+        : depth < 2
+          ? 46
+          : depth < 4
+            ? 38
+            : 30;
       const span = horizontal ? r.w : r.h;
       const cutAt = even(span * (0.36 + rnd() * 0.28));
       if (horizontal)
@@ -188,57 +226,138 @@ export function buildLayout(
     makeBlock(r);
   };
   splitRegion({ x: -6, y: -6, w: w + 12, h: h + 12 }, 0);
-
   for (const rv of reserves) fillGround(rv, rv.ground);
-  const fixedIds = new Set<number>();
-  for (const f of fixed)
-    fixedIds.add(addLot(f, f.family, f.height, null, f.tag, f.round ?? false).id);
 
-  // Rasterize, clipping against the corridor wall.
+  const paintId = (r: Rect, id: number): void => {
+    for (let y = Math.max(0, r.y); y < Math.min(h, r.y + r.h); y++)
+      roofId.fill(id, y * w + Math.max(0, r.x), y * w + Math.min(w, r.x + r.w));
+  };
+  const addLot = (r: Rect, family: number, rise: number, floors: number, tag: string): Lot => {
+    const lot: Lot = {
+      ...r,
+      id: lots.length,
+      family,
+      rise,
+      floors,
+      seed: (rnd() * 0x7fffffff) | 0,
+      front: 999,
+      roadDist: 999,
+      tag,
+    };
+    lots.push(lot);
+    paintId(lot, lot.id);
+    return lot;
+  };
+
+  for (const f of fixed) addLot(f, f.family, f.rise, 1, f.tag);
+  const fixedCount = lots.length;
+  for (const c of candidates) {
+    if (reserves.some((rv) => overlaps(rv, c.r))) continue;
+    const r = trim(c.r);
+    if (!r) continue;
+    // Something fixed may already stand here.
+    let taken = false;
+    for (let y = r.y; y < r.y + r.h && !taken; y += 4)
+      for (let x = r.x; x < r.x + r.w; x += 4) if (roofId[y * w + x]) taken = true;
+    if (taken) continue;
+    addLot(r, c.family, 0, 0, '');
+  }
+
+  // Pull lots toward the corridor so the street wall is continuous.
+  const freeFor = (x: number, y: number, id: number): boolean => {
+    const i = y * w + x;
+    return (roofId[i] === 0 || roofId[i] === id) && ground[i] === G_YARD;
+  };
+  for (let id = fixedCount; id < lots.length; id++) {
+    const lot = lots[id]!;
+    // South, onto a north bank.
+    let hit = 0;
+    for (let k = 1; k <= 54 && hit === 0; k++) {
+      const y = lot.y + lot.h - 1 + k;
+      if (y >= h) break;
+      let blocked = false;
+      for (let x = lot.x; x < lot.x + lot.w; x++) {
+        if (bad[y * w + x]) hit = k;
+        else if (!freeFor(x, y, id)) blocked = true;
+      }
+      if (blocked && hit === 0) break;
+    }
+    if (hit > 1) lot.h += hit - 1;
+    // West and east, up to the side margin.
+    for (const dir of [-1, 1]) {
+      let reach = 0;
+      for (let k = 1; k <= 30 && reach === 0; k++) {
+        const x = dir < 0 ? lot.x - k : lot.x + lot.w - 1 + k;
+        if (x < 0 || x >= w) break;
+        let blocked = false;
+        for (let y = lot.y; y < lot.y + lot.h; y++) {
+          if (bad[y * w + x]) reach = k;
+          else if (!freeFor(x, y, id)) blocked = true;
+        }
+        if (blocked && reach === 0) break;
+      }
+      if (reach > 1) {
+        if (dir < 0) lot.x -= reach - 1;
+        lot.w += reach - 1;
+      }
+    }
+    paintId(lot, id);
+  }
+
+  // Heights, and the near-bank rule.
+  for (let id = fixedCount; id < lots.length; id++) {
+    const lot = lots[id]!;
+    const area = lot.w * lot.h;
+    // Each family has its own habit: offices and tenements climb, sheds and workshops stay low.
+    const roll = Math.min(0.999, Math.max(0, rnd() + (FAMILY_HEIGHT_BIAS[lot.family] ?? 0)));
+    let floors = roll < 0.3 ? 1 : roll < 0.68 ? 2 : roll < 0.9 ? 3 : 4;
+    if (lot.w < 30) floors = Math.min(floors, 2);
+    if (area > 9000) floors = Math.min(floors, 3);
+    if (area > 14000) floors = Math.min(floors, 2);
+    let gap = 255;
+    for (let x = lot.x; x < lot.x + lot.w; x++) gap = Math.min(gap, scene.clearN[lot.y * w + x]!);
+    if (gap < 200) {
+      // A road lies to the north: step the building back, lower it, or give the lot up.
+      let need = riseForFloors(floors) + NEAR_STRIP - gap;
+      while (need > 0 && lot.h - need < 20 && floors > 1) {
+        floors--;
+        need = riseForFloors(floors) + NEAR_STRIP - gap;
+      }
+      if (need > 0) {
+        if (lot.h - need < 16) {
+          paintId(lot, 0);
+          lots[id] = null;
+          continue;
+        }
+        paintId(lot, 0);
+        lot.y += need;
+        lot.h -= need;
+        paintId(lot, id);
+      }
+    }
+    lot.floors = floors;
+    lot.rise = riseForFloors(floors);
+  }
+
   for (const lot of lots) {
     if (!lot) continue;
-    const isFixed = fixedIds.has(lot.id);
-    if (!isFixed && reserves.some((rv) => overlaps(rv, lot))) continue;
-    const x1 = Math.min(w, lot.x + lot.w);
-    const y1 = Math.min(h, lot.y + lot.h);
-    const cx = lot.x + lot.w / 2;
-    const cy = lot.y + lot.h / 2;
-    const rr = (Math.min(lot.w, lot.h) / 2) * (Math.min(lot.w, lot.h) / 2);
-    for (let y = Math.max(0, lot.y); y < y1; y++) {
-      for (let x = Math.max(0, lot.x); x < x1; x++) {
-        const i = y * w + x;
-        const e = field.edge[i]!;
-        if (e <= WALL_OUT) continue;
-        if (
-          lot.cut &&
-          x >= lot.cut.x &&
-          x < lot.cut.x + lot.cut.w &&
-          y >= lot.cut.y &&
-          y < lot.cut.y + lot.cut.h
-        )
-          continue;
-        if (lot.round && (x + 0.5 - cx) * (x + 0.5 - cx) + (y + 0.5 - cy) * (y + 0.5 - cy) > rr)
-          continue;
-        roofId[i] = lot.id;
-        lot.visible++;
+    for (let y = lot.y; y < lot.y + lot.h; y += 2) {
+      for (let x = lot.x; x < lot.x + lot.w; x += 2) {
+        const e = field.edge[Math.min(h - 1, y) * w + Math.min(w - 1, x)]!;
         if (e < lot.roadDist) lot.roadDist = e;
       }
     }
-  }
-  // Drop slivers: a roof that lost most of itself to the road becomes open yard.
-  const drop = new Uint8Array(lots.length);
-  for (const lot of lots) {
-    if (!lot || fixedIds.has(lot.id)) continue;
-    const area = lot.w * lot.h - (lot.cut ? lot.cut.w * lot.cut.h : 0);
-    if (lot.visible < 220 || lot.visible < area * 0.3) drop[lot.id] = 1;
-  }
-  for (let i = 0; i < w * h; i++) {
-    const id = roofId[i]!;
-    if (id && drop[id]) {
-      roofId[i] = 0;
-      ground[i] = G_YARD;
+    const sy = lot.y + lot.h;
+    for (let x = lot.x; x < lot.x + lot.w; x++) {
+      for (let k = 0; k < 40; k++) {
+        const y = sy + k;
+        if (y >= h) break;
+        if (scene.drive[y * w + x]) {
+          if (k < lot.front) lot.front = k;
+          break;
+        }
+      }
     }
   }
-  for (const lot of lots) if (lot && drop[lot.id]) lot.visible = 0;
   return { w, h, ground, roofId, lots, blocks, streets };
 }

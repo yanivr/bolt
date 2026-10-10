@@ -12,24 +12,24 @@ Last updated: October 10, 2026, end of Milestone A implementation.
 
 Deliverables:
 
-- [x] Monorepo, strict TypeScript, shared types, lint, tests. `pnpm check` passes: 157 unit and integration tests.
+- [x] Monorepo, strict TypeScript, shared types, lint, tests. `pnpm check` passes: 314 unit, integration and feel-bench tests.
 - [x] CI workflow written (`.github/workflows/ci.yml`). **Not yet run**: the repository could not be reached from the build session.
 - [x] Phaser canvas, WebGL first with Canvas fallback configured. Canvas fallback is untested on a device without WebGL.
 - [x] Basic server: Express API, Colyseus 0.16 drive room, fixed 30 Hz authoritative loop, input validation, reconnect.
 - [x] Guest session: signed anonymous tokens, in-memory store behind the interface PostgreSQL will implement.
 - [x] One authored city track: Neon Cut, with shortcut, checkpoints, obstacles, landmarks, overlays, ambient loops.
-- [x] Beetle built from separate wheel and engine layers with directional steering; sixteen headings.
+- [x] Beetle built from separate wheel and engine layers with directional steering; 64 headings.
 - [x] Three benchmark chassis modelled ahead of mass production (Arrow, Turtle, Spider), bare.
-- [x] Single car that drives: floating joystick, keyboard, camera follow, prediction and reconciliation.
+- [x] Single car that drives: floating joystick with direction steering, keyboard, fixed north-up camera with look-ahead, prediction and reconciliation.
 
 **Gate: "It runs on a real phone, is controllable with a floating joystick, and shows crisp
 high-quality pixel art at 60 FPS on a standard test device."**
 
 - [ ] Runs on a real phone. **Open.** Only headless Chromium in a phone-sized touch viewport has been used.
-- [ ] Floating joystick feels right under a thumb. **Open.** Behaviour is covered by end-to-end tests; feel is not testable without hands.
+- [ ] Floating joystick feels right under a thumb. **Open, and rejected once.** The owner found the first build jumpy and too sensitive. Steering, camera and frame pacing were reworked and now pass numeric thresholds (`tests/feel`, `docs/evidence/feel`). That is evidence of smoothness and proportion, not of feel; it needs driving again on a phone.
 - [ ] 60 FPS on a standard test device. **Open.** Software rendering here reaches 10 to 35 FPS and says nothing about a phone.
 - [ ] Pixel art judged high quality by a person at game size and at 4x. **Open.** See `docs/ART_GUIDE.md` for what to look at and the known weak spots.
-- [ ] Motion and camera judged "excellent". **Open.** Needs a person driving it.
+- [ ] Motion and camera judged "excellent". **Open.** The camera is now fixed north-up at the reference distance, as the owner asked. Needs a person driving it.
 
 Milestone A is therefore **implemented, not passed**. Milestone B should not start mass
 production of the remaining sixteen chassis until the car art and driving feel are approved.
@@ -65,7 +65,7 @@ settings. G: load, security, Docker deployment, public HTTPS.
 - [ ] Short car codes create, persist, import and validate across browsers.
 - [ ] Rematch, edit build, swap cars and share flows work without an account.
 - [ ] No placeholder buttons, stock images, generic square cars or empty scenes remain. _True of what exists: every control shown does what it says. The home scene is a plain workbench, not the animated garage of Section 5.3._
-- [ ] Low-effects settings preserve readability and touch responsiveness. _Reduced camera motion, shake amount and reduced flashes exist; particle quality tiers do not._
+- [ ] Low-effects settings preserve readability and touch responsiveness. _Shake amount and reduced flashes exist; the camera no longer rotates or zooms at all; particle quality tiers do not._
 - [ ] Device tests and network stress tests meet documented budgets.
 - [ ] Privacy disclosure, deletion controls, error handling, backups and HTTPS are in place. _Guest tokens carry no personal data and can be cleared locally; no privacy page yet._
 - [ ] Automated tests and clean install and build commands pass on the committed revision. *A fresh clone installs from the lockfile, passes `pnpm check` (157 tests), builds and boots. Playwright passes 10 of 10 locally. CI itself has never run.*

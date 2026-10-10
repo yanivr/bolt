@@ -96,7 +96,10 @@ describe('player-facing copy (Section 18)', () => {
     expect(STRINGS.race.leaveConfirm).toBe("Leave this race? You won't be able to finish it.");
     expect(STRINGS.connection.lost).toBe('Connection lost. Trying to bring you back...');
     expect(STRINGS.race.pauseNote).toBe('The race keeps going while this menu is open.');
-    expect(STRINGS.race.steerHint).toBe('Drag to steer. Pull down to brake.');
+    // Direction steering is the default control (docs/DECISIONS.md), so the first-race hint
+    // describes it. The Section 4 wording is kept for the wheel-style option it still fits.
+    expect(STRINGS.race.steerHint).toBe('Drag toward where you want to go. Pull back to brake.');
+    expect(STRINGS.race.steerHintWheel).toBe('Drag to steer. Pull down to brake.');
   });
 
   it('has no em dashes, double hyphens or promotional filler', () => {

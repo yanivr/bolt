@@ -154,16 +154,55 @@ export const BRAKE_DECEL = 220;
 export const LATERAL_GRIP_ACCEL = 400;
 export const TRACTION_ACCEL = 190;
 
+/**
+ * Steering filter. The commanded stick reaches the wheels over about a tenth of a second and
+ * recentres a little more slowly (Section 7.1: 80 to 140 ms in, about 180 ms out).
+ */
 export const STEER_ENGAGE_TIME = 0.1;
-export const STEER_RELEASE_TIME = 0.18;
-export const MAX_STEER_CURVATURE = 1 / 46;
-export const STEER_HALF_SPEED = 215;
-export const YAW_RESPONSE_TIME = 0.055;
+export const STEER_RELEASE_TIME = 0.16;
+/**
+ * Tightest turn, as curvature, that full lock asks for at low speed. The tires and the
+ * self-aligning term below take about a fifth of it back, so the circle actually driven at
+ * parking speed is close to 66 world pixels: a little over one car length, and what the
+ * drawn front-wheel angle implies for this wheelbase.
+ */
+export const MAX_STEER_CURVATURE = 1 / 52;
+/**
+ * At speed, full lock asks for this multiple of the lateral acceleration the tires can give on
+ * dry asphalt, so the stick maps to cornering force rather than to an angle. A value a little
+ * above one leaves a stable drift angle at the very end of the stick's travel.
+ */
+export const STEER_GRIP_DEMAND = 1.3;
+/**
+ * How strongly the steering demand follows the grip of the surface under the car, as an
+ * exponent: 1 would make every surface feel the same with less turning, 0 would ask ice for
+ * the same cornering as asphalt. In between, slippery surfaces slide progressively more.
+ */
+export const STEER_GRIP_SENSE = 0.6;
+/** Sharpness of the hand-over from the low-speed turning circle to the grip-limited regime. */
+export const STEER_BLEND_SHARPNESS = 3;
+export const YAW_RESPONSE_TIME = 0.06;
 export const SLIP_STIFFNESS = 9;
-/** Sliding tires hold slightly less than gripping ones, which is what sustains a drift. */
-export const KINETIC_GRIP_FACTOR = 0.82;
-/** How far past the grip limit the steering assist lets a driver push before it caps yaw. */
-export const STEER_OVERDRIVE = 1.22;
+/**
+ * Self-aligning yaw, per second: the nose is pulled toward the direction of travel in
+ * proportion to the slip angle. This is what makes a slide settle at an angle instead of
+ * winding up into a spin, and what straightens the car after a knock.
+ */
+export const YAW_ALIGN_GAIN = 2.5;
+/**
+ * Tire curve. Lateral force rises with slip, rounds off smoothly into its peak and then falls
+ * gently to this share of the peak when the tire is fully sliding. There is no step anywhere.
+ */
+export const KINETIC_GRIP_FACTOR = 0.86;
+export const TIRE_KNEE_SHARPNESS = 4;
+export const TIRE_FADE_START = 1.4;
+export const TIRE_FADE_END = 3.2;
+/**
+ * Slip angles, in radians, between which cornering starts to cost speed. Below the first the
+ * car corners freely; above the second the tires' full sideways drag comes off its speed.
+ */
+export const FREE_ROLL_SLIP = 0.2;
+export const SCRUB_FULL_SLIP = 0.5;
 /** Throttle fades between these slip ratios so power cannot feed a spin. */
 export const THROTTLE_ASSIST_SLIP_START = 0.35;
 export const THROTTLE_ASSIST_SLIP_FULL = 0.9;
@@ -199,10 +238,53 @@ export const SPAWN_RAM_GRACE_SECONDS = 1.5;
 export const JOYSTICK_RADIUS_PX = 42;
 export const JOYSTICK_DEAD_ZONE = 0.12;
 export const JOYSTICK_CURVE = 1.25;
+/**
+ * The floating stick's origin trails the thumb once the thumb is this many radii away, so a
+ * change of direction never needs more than a short, known movement however far the thumb
+ * has wandered.
+ */
+export const JOYSTICK_TRAIL_RADII = 1.5;
+
+/**
+ * Direction steering: the stick points where the car should go on screen and a heading
+ * controller turns that into ordinary steering and brake samples.
+ */
+/** Stick deflection, as a share of the radius, at which the controller has full authority. */
+export const DIRECTION_FULL_AUTHORITY = 0.45;
+/** Heading error is closed at this rate per second, before steering limits. */
+export const HEADING_GAIN = 6;
+/** Seconds of yaw-rate lead, which is what stops the nose swinging past the target. */
+export const HEADING_DAMPING = 0.12;
+/** Floor on the yaw response used to scale commands, so parking-speed steering stays finite. */
+export const HEADING_MIN_YAW_GAIN = 0.55;
+/**
+ * Corner assist: a request this far off the nose, at these speeds, eases the throttle and
+ * applies up to this share of the brake.
+ */
+export const CORNER_ASSIST_ANGLE_START = (20 * Math.PI) / 180;
+export const CORNER_ASSIST_ANGLE_FULL = (60 * Math.PI) / 180;
+export const CORNER_ASSIST_SPEED_LOW = 120;
+export const CORNER_ASSIST_SPEED_HIGH = 200;
+export const CORNER_ASSIST_MAX = 1;
+/** Pointing further than this from the nose starts to trail the brake into the turn. */
+export const DIRECTION_BRAKE_START = (105 * Math.PI) / 180;
+export const DIRECTION_BRAKE_FULL = (150 * Math.PI) / 180;
+/** Trail braking fades out below these speeds, so a turn-around never stalls the car. */
+export const DIRECTION_TURN_SPEED_LOW = 70;
+export const DIRECTION_TURN_SPEED_HIGH = 150;
+/** Between these angles from the nose the request becomes a full stop. */
+export const DIRECTION_STOP_START = (138 * Math.PI) / 180;
+export const DIRECTION_STOP_FULL = (156 * Math.PI) / 180;
+/** Steering fades out between the full-stop angle and here, so a straight pull brakes straight. */
+export const DIRECTION_STEER_FADE_END = (176 * Math.PI) / 180;
+/** While backing up, the car keeps reversing until the stick points within this of the nose. */
+export const DIRECTION_REVERSE_EXIT = (80 * Math.PI) / 180;
+/** Below this speed a stick held behind the car asks for reverse outright. */
+export const DIRECTION_REVERSE_SPEED = 30;
 
 // --- Network ----------------------------------------------------------------------------------
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 export const MAX_QUEUED_INPUTS = 8;
 export const MAX_INPUTS_PER_PACKET = 6;
 export const REMOTE_INTERP_DELAY_MS = 120;

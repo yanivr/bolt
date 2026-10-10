@@ -14,10 +14,10 @@ Milestone A of Section 20 is implemented and awaiting hardware sign-off. What ru
   three laps, and baked clear-night pixel terrain.
 - A server-authoritative test drive: a Colyseus room simulates the car at 30 Hz, the client
   predicts with the same shared code and reconciles to the server.
-- A floating pull joystick with keyboard and mouse fallbacks, left-handed layout, and a
-  stable north-up camera option.
+- A fixed north-up camera with look-ahead, and a floating joystick that points where the car
+  should go, with a wheel-style option, keyboard and mouse fallbacks and a left-handed layout.
 - Four composited cars (Beetle plus the Arrow, Turtle and Spider benchmark frames), drawn from
-  separate body, wheel, engine, shadow and light layers at sixteen headings.
+  separate body, wheel, engine, shadow and light layers at 64 headings.
 - Anonymous guest sessions, a versioned HTTP API, and automated unit, integration and
   end-to-end tests.
 

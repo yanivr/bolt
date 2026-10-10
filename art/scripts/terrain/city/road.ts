@@ -4,19 +4,26 @@ import type { BakeContext } from '../biome.js';
 import type { Color } from '../canvas.js';
 import { F_NOSHADOW, stencil } from '../canvas.js';
 import { ZONE_PAVEMENT, ZONE_SHOULDER } from '../field.js';
+import type { Scene } from '../oblique.js';
 import type { CityLayout } from './layout.js';
 import { G_STREET } from './layout.js';
-import { PAL } from './palette.js';
+import { PAL, darker } from './palette.js';
+import { chevronBoard } from './sprites.js';
 
 /**
- * The stage: pavement, paint, kerbs, sidewalk and the solid edge. Every pixel here is derived
- * from the corridor field, so curves stay crisp and the wall line is exactly the collision
- * edge. Markings are evaluated in track space (distance along and across the road).
+ * The stage: pavement, paint, kerbs and sidewalk, all flat on the ground plane, plus the
+ * barrier that stands on the collision edge. Every pixel here is derived from the corridor
+ * field, so curves stay crisp and the foot of the barrier is exactly the collision edge.
+ * Markings are evaluated in track space (distance along and across the road).
  */
 
-/** Pixels of wall drawn outside the collision edge: 2 of dark base, 3 of lit cap. */
-export const WALL_OUT = 5;
-export const WALL_HEIGHT = 3;
+/** Screen rise and top width of the concrete wall and of the steel guardrail. */
+const WALL_RISE = 5;
+const WALL_TOP = 4;
+const RAIL_RISE = 7;
+const RAIL_TOP = 3;
+/** Ground distance from the collision edge that the barrier can occupy on a near bank. */
+export const BARRIER_REACH = RAIL_RISE + WALL_TOP + 2;
 
 export type RoadPlan = {
   /** Per main-line sample: 1 where striped racing kerbs replace the concrete kerb. */
@@ -34,6 +41,7 @@ export type RoadPlan = {
 };
 
 const SURF_SEED = 7001;
+const DASH_PERIOD = 44;
 
 function wide(branch: TrackBranch, src: Float64Array, radius: number): Float32Array {
   const out = new Float32Array(branch.count);
@@ -117,31 +125,45 @@ const COBBLE_TONES: readonly Color[] = [
   PAL.cobbleDark,
   PAL.cobble,
   PAL.cobble,
+  PAL.cobble,
   PAL.cobbleLight,
   PAL.cobbleLight,
-  PAL.cobbleHi,
 ];
+const COBBLE_CELL = 6;
 
+/**
+ * Hand-set cobbles: every stone is a rounded cell around a jittered center, so there are no
+ * straight courses and no running joints to read as brickwork.
+ */
 function cobbleTone(x: number, y: number): Color {
-  // Courses of hand-set stones: every course is shifted and its joints wander, so the
-  // surface reads as cobble rather than brickwork.
-  const row = Math.floor(y / 4);
-  const ly = y - row * 4;
-  if (ly === 3) return PAL.mortar;
-  const xo = x + ((hash2(row, 17, SURF_SEED + 19) * 11) | 0);
-  const pair = Math.floor(xo / 11);
-  const lx = xo - pair * 11;
-  const split = 4 + ((hash2(pair, row, SURF_SEED + 21) * 3) | 0);
-  if (lx === split || lx === 10) return PAL.mortar;
-  const first = lx < split;
-  const h = hash2(pair * 2 + (first ? 0 : 1), row, SURF_SEED + 20);
-  const tone = COBBLE_TONES[(h * COBBLE_TONES.length) | 0]!;
-  const start = first ? 0 : split + 1;
-  const end = first ? split - 1 : 9;
-  // Rounded crowns: a lit pixel at the upper left, a worn corner at the lower right.
-  if (lx === start && ly === 0) return h > 0.3 ? PAL.cobbleHi : tone;
-  if (lx === end && ly === 2) return PAL.cobbleDark;
-  return tone;
+  const gx = Math.floor(x / COBBLE_CELL);
+  const gy = Math.floor(y / COBBLE_CELL);
+  let d1 = 1e9;
+  let d2 = 1e9;
+  let tone = 0;
+  let ox = 0;
+  let oy = 0;
+  for (let j = -1; j <= 1; j++) {
+    for (let i = -1; i <= 1; i++) {
+      const cx = (gx + i) * COBBLE_CELL + 1 + hash2(gx + i, gy + j, SURF_SEED + 19) * 4;
+      const cy = (gy + j) * COBBLE_CELL + 1 + hash2(gx + i, gy + j, SURF_SEED + 20) * 4;
+      const dx = x + 0.5 - cx;
+      const dy = y + 0.5 - cy;
+      const d = dx * dx + dy * dy;
+      if (d < d1) {
+        d2 = d1;
+        d1 = d;
+        tone = hash2(gx + i, gy + j, SURF_SEED + 21);
+        ox = dx;
+        oy = dy;
+      } else if (d < d2) d2 = d;
+    }
+  }
+  if (Math.sqrt(d2) - Math.sqrt(d1) < 0.9) return PAL.mortar;
+  const c = COBBLE_TONES[(tone * COBBLE_TONES.length) | 0]!;
+  // A worn crown catches the light toward the upper left.
+  if (tone > 0.45 && ox < -0.4 && oy < -0.4 && ox > -1.6 && oy > -1.6) return PAL.cobbleHi;
+  return c;
 }
 
 type Decal = {
@@ -149,9 +171,11 @@ type Decal = {
   s: number;
   lat: number;
   reach: number;
+  /** Anchor and snapped travel axis, where the road runs along a world axis. */
+  axis?: { x: number; y: number; ux: number; uy: number; hw: number };
 };
 
-export function paintRoad(ctx: BakeContext, layout: CityLayout, plan: RoadPlan): void {
+export function paintRoad(ctx: BakeContext, plan: RoadPlan): void {
   const { field, track, world } = ctx;
   const { w, h, edge, lateral, s: sArr, half, branch, sample, zone, surface } = field;
   const main = track.main;
@@ -159,13 +183,31 @@ export function paintRoad(ctx: BakeContext, layout: CityLayout, plan: RoadPlan):
   const cobbleIdx = field.surfaces.indexOf('cobble');
   const data = world.data;
   const flags = world.flags!;
-  const heightPlane = world.height!;
   const wrap = (d: number): number => ((((d + L / 2) % L) + L) % L) - L / 2;
 
   // Decals bucketed by arc length so each pixel tests only what is near it.
   const BUCKET = 64;
   const buckets: Decal[][] = Array.from({ length: Math.ceil(L / BUCKET) + 1 }, () => []);
   const addDecal = (d: Decal): void => {
+    const p = sampleBranch(main, d.s);
+    const far = sampleBranch(main, d.s + d.reach);
+    const near = sampleBranch(main, d.s - d.reach);
+    if (Math.abs(p.tx) > 0.995 && Math.abs(far.y - near.y) < 1.5)
+      d.axis = {
+        x: Math.round(p.x),
+        y: Math.round(p.y),
+        ux: Math.sign(p.tx),
+        uy: 0,
+        hw: p.halfWidth,
+      };
+    else if (Math.abs(p.ty) > 0.995 && Math.abs(far.x - near.x) < 1.5)
+      d.axis = {
+        x: Math.round(p.x),
+        y: Math.round(p.y),
+        ux: 0,
+        uy: Math.sign(p.ty),
+        hw: p.halfWidth,
+      };
     const from = Math.floor((d.s - d.reach) / BUCKET);
     const to = Math.floor((d.s + d.reach) / BUCKET);
     const nb = Math.ceil(L / BUCKET);
@@ -188,6 +230,19 @@ export function paintRoad(ctx: BakeContext, layout: CityLayout, plan: RoadPlan):
       addDecal({ kind: 'chevron', s: hp.s - 340 + k * 30, lat: hp.dir, reach: 56 });
   }
 
+  // Ruled lane dashes for the axis-aligned stretches: x, y, w, h per dash, w of 0 for none.
+  const dashCount = Math.max(1, Math.floor(L / DASH_PERIOD));
+  const dashRect = new Int32Array(dashCount * 4);
+  for (let di = 0; di < dashCount; di++) {
+    const p = sampleBranch(main, di * DASH_PERIOD + 10);
+    const q = sampleBranch(main, di * DASH_PERIOD + 20);
+    const r = sampleBranch(main, di * DASH_PERIOD);
+    if (Math.abs(p.tx) > 0.998 && Math.abs(q.y - r.y) < 0.75)
+      dashRect.set([Math.round(p.x) - 10, Math.round(p.y - 1.5), 20, 3], di * 4);
+    else if (Math.abs(p.ty) > 0.998 && Math.abs(q.x - r.x) < 0.75)
+      dashRect.set([Math.round(p.x - 1.5), Math.round(p.y) - 10, 3, 20], di * 4);
+  }
+
   const put = (i: number, c: Color, fl = 0): void => {
     const o = i * 4;
     data[o] = (c >> 16) & 255;
@@ -202,13 +257,12 @@ export function paintRoad(ctx: BakeContext, layout: CityLayout, plan: RoadPlan):
   const shoulderOf = (i: number): number => track.branches[branch[i]!]!.shoulder[sample[i]!]!;
   const kOf = (i: number): number => edge[i]! + shoulderOf(i);
   const isKerb = (i: number): boolean => zone[i] === ZONE_SHOULDER && kOf(i) < 3;
-  const isCap = (i: number): boolean => edge[i]! > 2 && edge[i]! <= WALL_OUT;
 
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
       const e = edge[i]!;
-      if (e > WALL_OUT) continue;
+      if (e > 0) continue;
       const b = branch[i]!;
       const br = track.branches[b]!;
       const si = sample[i]!;
@@ -218,28 +272,6 @@ export function paintRoad(ctx: BakeContext, layout: CityLayout, plan: RoadPlan):
       const sh = br.shoulder[si]!;
       const d = e + hw + sh;
       const k = d - hw;
-
-      // --- The solid edge ---------------------------------------------------------------
-      if (e > 0) {
-        heightPlane[i] = WALL_HEIGHT;
-        if (e <= 2) {
-          put(i, PAL.wallBase);
-          continue;
-        }
-        const barrier = layout.ground[i] === G_STREET && layout.roofId[i] === 0;
-        let c: Color;
-        if (barrier) {
-          const stripe = (Math.floor(ss / 7) & 1) === 0;
-          c = stripe ? PAL.kerbCoral : PAL.kerbIvory;
-          if (!isCap(i + w + 1)) c = stripe ? PAL.kerbCoralDark : PAL.kerbIvoryDark;
-        } else {
-          c = PAL.wallCap;
-          if (!isCap(i - w - 1)) c = PAL.wallHi;
-          else if (!isCap(i + w + 1)) c = PAL.wallShade;
-        }
-        put(i, c);
-        continue;
-      }
 
       const isMain = b === 0;
       const z = zone[i]!;
@@ -374,11 +406,32 @@ export function paintRoad(ctx: BakeContext, layout: CityLayout, plan: RoadPlan):
             c = worn(x, y, PAL.paint, PAL.paintWorn, 0.2);
             fl = F_NOSHADOW;
           }
-          // Lane dashes on the centerline.
-          const m = ss - Math.floor(ss / 44) * 44;
-          if (lat >= -1.5 && lat < 1.5 && m < 20) {
-            c = worn(x, y, PAL.paint, PAL.paintWorn, 0.16);
-            fl = F_NOSHADOW;
+          // Lane dashes on the centerline. Where the road runs along a world axis each dash
+          // is a ruled rectangle, so it never staggers; on curves it follows the field.
+          if (lat >= -4 && lat < 4) {
+            const di = Math.floor(ss / DASH_PERIOD);
+            let on = false;
+            let ruled = false;
+            for (const dk of [di - 1, di, di + 1]) {
+              const o = (((dk % dashCount) + dashCount) % dashCount) * 4;
+              if (dashRect[o + 2]! === 0) continue;
+              if (dk === di) ruled = true;
+              if (
+                x >= dashRect[o]! &&
+                x < dashRect[o]! + dashRect[o + 2]! &&
+                y >= dashRect[o + 1]! &&
+                y < dashRect[o + 1]! + dashRect[o + 3]!
+              )
+                on = true;
+            }
+            if (!ruled && !on) {
+              const m = ss - di * DASH_PERIOD;
+              on = lat >= -1.5 && lat < 1.5 && m < 20;
+            }
+            if (on) {
+              c = worn(x, y, PAL.paint, PAL.paintWorn, 0.16);
+              fl = F_NOSHADOW;
+            }
           }
         }
       }
@@ -411,15 +464,26 @@ export function paintRoad(ctx: BakeContext, layout: CityLayout, plan: RoadPlan):
         const list = buckets[Math.floor(ss / BUCKET)];
         if (list) {
           for (const dc of list) {
-            const u = wrap(ss - dc.s);
+            // On a stretch that runs along a world axis the decal is ruled in world pixels
+            // from its anchor, so bars and boxes never stagger.
+            let u = wrap(ss - dc.s);
+            let lt = lat;
+            let kk = k;
+            if (dc.axis) {
+              const dx = x + 0.5 - dc.axis.x;
+              const dy = y + 0.5 - dc.axis.y;
+              u = dx * dc.axis.ux + dy * dc.axis.uy;
+              lt = dy * dc.axis.ux - dx * dc.axis.uy;
+              kk = Math.abs(lt) - dc.axis.hw;
+            }
             if (dc.kind === 'start') {
-              if (u >= -7 && u < 7 && k < -1) {
-                const check = (Math.floor((u + 70) / 7) + Math.floor((lat + 700) / 7)) & 1;
+              if (u >= -7 && u < 7 && kk < -1) {
+                const check = (Math.floor((u + 70) / 7) + Math.floor((lt + 700) / 7)) & 1;
                 c = check ? PAL.paintBright : PAL.ink;
                 fl = F_NOSHADOW;
               }
             } else if (dc.kind === 'grid') {
-              const v = lat - dc.lat;
+              const v = lt - dc.lat;
               const av = Math.abs(v);
               if (u >= -36 && u < 35 && av < 25) {
                 if (u < 33 && av < 22.5 && u >= -36) {
@@ -432,9 +496,9 @@ export function paintRoad(ctx: BakeContext, layout: CityLayout, plan: RoadPlan):
                 }
               }
             } else if (dc.kind === 'zebra') {
-              if (k < -10) {
+              if (kk < -10) {
                 if (u >= 0 && u < 22) {
-                  const bar = lat + 600 - Math.floor((lat + 600) / 13) * 13;
+                  const bar = lt + 600 - Math.floor((lt + 600) / 13) * 13;
                   if (bar < 7.5) {
                     c = worn(x, y, PAL.paintBright, PAL.paintWorn, 0.14);
                     fl = F_NOSHADOW;
@@ -445,7 +509,7 @@ export function paintRoad(ctx: BakeContext, layout: CityLayout, plan: RoadPlan):
                 }
               }
             } else if (dc.kind === 'arrow') {
-              const v = Math.abs(lat - dc.lat);
+              const v = Math.abs(lt - dc.lat);
               const uu = u + 20;
               if (uu >= 0 && uu < 40) {
                 const on = uu < 24 ? v < 2.6 : v < ((40 - uu) * 9.5) / 16;
@@ -456,7 +520,7 @@ export function paintRoad(ctx: BakeContext, layout: CityLayout, plan: RoadPlan):
               }
             } else {
               const reach = hw - 20;
-              const av = Math.abs(lat);
+              const av = Math.abs(lt);
               if (av < reach) {
                 const uu = u + av * 0.42;
                 if (uu >= 14 && uu < 23) {
@@ -632,4 +696,142 @@ function paintScatter(ctx: BakeContext, plan: RoadPlan): void {
       }
     }
   }
+}
+
+/**
+ * The barrier on the collision edge, raised into the oblique view. On straights it is a low
+ * concrete wall with a lit cap; through corners it is a steel guardrail on posts; across the
+ * mouth of a side street it is a red and white race barrier. Its foot is always the collision
+ * edge: on the far bank the face rises from the edge, on the near bank the barrier stands
+ * exactly far enough back that its top meets the edge on screen.
+ */
+export function paintBarrier(
+  ctx: BakeContext,
+  scene: Scene,
+  layout: CityLayout,
+  plan: RoadPlan,
+): void {
+  const { field, track } = ctx;
+  const { w, h, edge, lateral, s: sArr, branch, sample } = field;
+  const KIND_WALL = 1;
+  const KIND_RAIL = 2;
+  const KIND_RACE = 3;
+  // Per pixel: which barrier stands here, and how far along its top it is (1 is the road rim).
+  const kind = new Uint8Array(w * h);
+  const depth = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    const e = edge[i]!;
+    if (e <= 0 || e > BARRIER_REACH + 1) continue;
+    const br = track.branches[branch[i]!]!;
+    const si = sample[i]!;
+    const sign = lateral[i]! > 0 ? 1 : -1;
+    const ny = br.tx[si]! * sign;
+    const rail = branch[i] === 0 && plan.corner[si] === 1;
+    const rise = rail ? RAIL_RISE : WALL_RISE;
+    const top = rail ? RAIL_TOP : WALL_TOP;
+    const off = Math.max(0, rise * ny);
+    if (e <= off || e > off + top) continue;
+    let race = false;
+    if (!rail && layout.ground[i] === G_STREET && layout.roofId[i] === 0) {
+      // A side street that runs away from the road, not one that merely passes alongside.
+      const nx = -br.ty[si]! * sign;
+      race = true;
+      for (const reach of [30, 72]) {
+        const qx = Math.round((i % w) + nx * reach);
+        const qy = Math.round(((i / w) | 0) + ny * reach);
+        if (qx < 0 || qy < 0 || qx >= w || qy >= h) continue;
+        const q = qy * w + qx;
+        if (layout.ground[q] !== G_STREET || layout.roofId[q] !== 0 || edge[q]! < 20) race = false;
+      }
+    }
+    kind[i] = rail ? KIND_RAIL : race ? KIND_RACE : KIND_WALL;
+    depth[i] = Math.ceil(e - off);
+  }
+  const wallJoint = darker(PAL.wallShade, 0.3);
+  scene.extrude({
+    x0: 0,
+    y0: 0,
+    x1: w,
+    y1: h,
+    shadow: 2,
+    rise: (x, y) => {
+      const k = kind[y * w + x]!;
+      return k === 0 ? 0 : k === KIND_RAIL ? RAIL_RISE : WALL_RISE;
+    },
+    top: (x, y) => {
+      const i = y * w + x;
+      const k = kind[i]!;
+      const d = depth[i]!;
+      if (k === KIND_RAIL) return d <= 1 ? PAL.steelHi : d === 2 ? PAL.steelLight : PAL.steel;
+      if (k === KIND_RACE) {
+        const stripe = (Math.floor(sArr[i]! / 8) & 1) === 0;
+        return stripe ? (d <= 1 ? PAL.coral : PAL.kerbCoral) : d <= 1 ? PAL.ivory : PAL.kerbIvory;
+      }
+      return d <= 1 ? PAL.wallHi : d <= 3 ? PAL.wallCap : PAL.wallShade;
+    },
+    side: (x, y, v) => {
+      const i = y * w + x;
+      const k = kind[i]!;
+      const ss = sArr[i]!;
+      if (k === KIND_RAIL) {
+        // The beam's south face with a reflector now and then, then posts down to the ground.
+        if (v >= RAIL_RISE - 3) {
+          if (v === RAIL_RISE - 2 && Math.floor(ss / 2) % 14 === 3) return PAL.amber;
+          return v === RAIL_RISE - 1 ? PAL.steel : v === RAIL_RISE - 2 ? PAL.steelDark : PAL.ink;
+        }
+        const m = ss - Math.floor(ss / 14) * 14;
+        if (m >= 2.2) return null;
+        return v === 0 ? PAL.ink : m < 1.1 ? PAL.steelLight : PAL.steelDark;
+      }
+      if (v === 0) return PAL.wallBase;
+      if (k === KIND_RACE) {
+        const stripe = (Math.floor(ss / 8) & 1) === 0;
+        return stripe ? PAL.kerbCoralDark : PAL.kerbIvoryDark;
+      }
+      const m = ss - Math.floor(ss / 18) * 18;
+      return m < 1 ? wallJoint : v === WALL_RISE - 1 ? PAL.wallCap : PAL.wallShade;
+    },
+  });
+}
+
+/**
+ * Chevron boards on the outside of the sharp bends, standing on posts behind the barrier and
+ * pointing the way the road goes.
+ */
+export function placeChevrons(ctx: BakeContext, scene: Scene, layout: CityLayout): number {
+  const main = ctx.track.main;
+  const sc = ctx.field.smoothCurvature[0]!;
+  const n = main.count;
+  const step = main.length / n;
+  let placed = 0;
+  let since = 999;
+  for (let i = 0; i < n; i++) {
+    since += step;
+    const c = sc[i]!;
+    if (Math.abs(c) < 0.0027 || since < 46) continue;
+    const side = c > 0 ? -1 : 1;
+    const p = sampleBranch(main, main.s[i]!);
+    const nx = -p.ty * side;
+    const ny = p.tx * side;
+    const ahead = sampleBranch(main, main.s[i]! + 70);
+    const dir =
+      Math.abs(ahead.tx) > 0.25
+        ? Math.sign(ahead.tx)
+        : Math.abs(p.tx) > 0.1
+          ? Math.sign(p.tx)
+          : -nx;
+    const board = chevronBoard(dir >= 0 ? 1 : -1, Math.abs(c) > 0.0042 ? 3 : 2);
+    const reach = p.halfWidth + p.shoulder;
+    const back = BARRIER_REACH + 3 + Math.max(0, (board.art.h + 2) * ny);
+    const gx = Math.round(p.x + nx * (reach + back));
+    const gy = Math.round(p.y + ny * (reach + back));
+    if (gx < 12 || gy < 20 || gx >= layout.w - 12 || gy >= layout.h - 2) continue;
+    if (layout.roofId[gy * layout.w + gx] !== 0) continue;
+    if (!scene.spriteFits(board, gx, gy)) continue;
+    scene.place(board, gx, gy);
+    scene.footprint(gx - 2, gy - 1, 4, 2, 4);
+    placed++;
+    since = 0;
+  }
+  return placed;
 }

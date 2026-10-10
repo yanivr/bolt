@@ -12,7 +12,7 @@ export type BakeContext = {
   track: TrackRuntime;
   field: CorridorField;
   presetId: string;
-  /** World-sized surface with height and flag planes. The biome paints the final ground here. */
+  /** World-sized surface with a flag plane. The biome paints the final ground layer here. */
   world: Canvas;
   seed: number;
 };
@@ -41,11 +41,20 @@ export type AnimatedArt = {
 
 export type PreviewSpot = { name: string; x: number; y: number };
 
+/** Self-checks a painter runs on its own picture. Both numbers must be zero. */
+export type BiomeChecks = {
+  /** Drivable pixels hidden by raised geometry in the ground layer. */
+  coveredDrivable: number;
+  /** Pixels where frame 0 of a ground-level loop differs from the art baked under it. */
+  animatedMismatch: number;
+};
+
 export type BiomeOutput = {
   overlays: OverlayArt[];
   animated: AnimatedArt[];
   lights: TerrainLight[];
   previewSpots: PreviewSpot[];
+  checks: BiomeChecks;
 };
 
 export type BiomePainter = (ctx: BakeContext) => BiomeOutput;

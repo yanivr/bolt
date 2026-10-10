@@ -2,9 +2,8 @@ import { PixelBuffer } from '../lib/pixels.js';
 
 /**
  * Integer drawing surface used by every terrain painter. Colors are packed 0xRRGGBB numbers so
- * the hot per-pixel loops never allocate. The world surface also carries per-pixel metadata
- * (height for cast shadows, flags for the lighting pass) and an optional id clip so roof
- * dressing can never spill over a parapet.
+ * the hot per-pixel loops never allocate. The world surface and every standing sprite also
+ * carry a flag per pixel, which tells the lighting passes what is self-lit.
  */
 
 export type Color = number;
@@ -49,14 +48,10 @@ export class Canvas {
   readonly h: number;
   readonly buf: PixelBuffer;
   readonly data: Uint8ClampedArray;
-  /** Optional metadata planes, present on the world surface only. */
+  /** Optional flag plane, present on the world surface and on sprites. */
   flags: Uint8Array | null = null;
-  height: Uint8Array | null = null;
+  /** Flags written with every pixel. */
   curFlags = 0;
-  /** Height written with every pixel, or -1 to leave the height plane untouched. */
-  curHeight = -1;
-  clipMap: Uint16Array | null = null;
-  clipId = 0;
 
   constructor(w: number, h: number) {
     this.w = w;
@@ -68,21 +63,25 @@ export class Canvas {
   static world(w: number, h: number): Canvas {
     const c = new Canvas(w, h);
     c.flags = new Uint8Array(w * h);
-    c.height = new Uint8Array(w * h);
+    return c;
+  }
+
+  /** A sprite surface that remembers which of its pixels are self-lit. */
+  static sprite(w: number, h: number): Canvas {
+    const c = new Canvas(w, h);
+    c.flags = new Uint8Array(w * h);
     return c;
   }
 
   set(x: number, y: number, c: Color): void {
     if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
     const p = y * this.w + x;
-    if (this.clipMap && this.clipMap[p] !== this.clipId) return;
     const i = p * 4;
     this.data[i] = (c >> 16) & 255;
     this.data[i + 1] = (c >> 8) & 255;
     this.data[i + 2] = c & 255;
     this.data[i + 3] = 255;
     if (this.flags) this.flags[p] = this.curFlags;
-    if (this.height && this.curHeight >= 0) this.height[p] = this.curHeight;
   }
 
   /** Replaces the pixel including alpha, without blending. For crisp overlay halos. */
@@ -114,11 +113,11 @@ export class Canvas {
     return this.data[(y * this.w + x) * 4 + 3]!;
   }
 
-  /** Remaps the existing pixel through `fn`, honoring the clip. Used for contact shadows. */
+  /** Remaps an existing opaque pixel through `fn`, once. Used for contact shadows. */
   map(x: number, y: number, fn: (c: Color) => Color): void {
     if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
     const p = y * this.w + x;
-    if (this.clipMap && this.clipMap[p] !== this.clipId) return;
+    if (this.data[p * 4 + 3] === 0) return;
     if (this.flags) {
       if (this.flags[p]! & (F_EMISSIVE | F_SHADED)) return;
       this.flags[p] = this.flags[p]! | F_SHADED;

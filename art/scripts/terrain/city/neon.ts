@@ -2,7 +2,6 @@ import type { Canvas, Color, Stencil } from '../canvas.js';
 import { F_EMISSIVE, stencil } from '../canvas.js';
 import { drawText, textHeight, textWidth } from '../font.js';
 import { PAL, TINT_CORAL, TINT_CYAN, TINT_GOLD, TINT_PURPLE } from './palette.js';
-import { dropShadow } from './sprites.js';
 
 /** Rooftop neon: original made-up names and abstract glyphs in the four accent colors. */
 
@@ -192,14 +191,12 @@ export function drawNeonSign(
   y: number,
   spec: NeonSignSpec,
   litMask = 0xffffffff,
-  shadow = true,
 ): void {
   const { w, h } = neonSignSize(spec);
   const main = NEON[spec.color]!;
   const acc = NEON[spec.accent]!;
   const prev = cv.curFlags;
   cv.curFlags = 0;
-  if (shadow) dropShadow(cv, x, y, w, h, 2);
   cv.rect(x, y, w, h, PAL.ink);
   cv.frame(x, y, w, h, PAL.steelDark);
   cv.hline(x, y, w, PAL.steel);

@@ -1,22 +1,40 @@
 import { hash2, sampleBranch } from '@bolt/shared';
-import type { TerrainLight } from '@bolt/shared';
 import type { BakeContext } from '../biome.js';
-import type { Canvas, Color } from '../canvas.js';
-import { stencil } from '../canvas.js';
+import { Canvas } from '../canvas.js';
+import type { Color } from '../canvas.js';
 import { ZONE_SHOULDER } from '../field.js';
-import type { LightPool } from '../lighting.js';
+import type { Scene, Sprite } from '../oblique.js';
 import type { CityLayout } from './layout.js';
-import { NEON } from './neon.js';
-import { PAL, TINT_CORAL, TINT_GOLD, TINT_HEX, TINT_WARM, contactShade } from './palette.js';
+import { G_YARD } from './layout.js';
+import { LIVERIES, PAL, TINT_CORAL, TINT_GOLD, TINT_HEX, TINT_WARM } from './palette.js';
+import { parkCar, plantTree, standLantern } from './props.js';
+import type { LightOut } from './props.js';
+import { BARRIER_REACH } from './road.js';
 import type { RoadPlan } from './road.js';
-import { emissive, lampHead, tree } from './sprites.js';
+import {
+  LAMP_ARM,
+  benchSprite,
+  binSprite,
+  bollardSprite,
+  busShelter,
+  coneSprite,
+  crateStack,
+  dumpsterSprite,
+  hydrantSprite,
+  lampArm,
+  lampPole,
+  lampTwin,
+  newsBoxes,
+  planterSprite,
+  treeSprite,
+} from './sprites.js';
 
 /**
- * Street furniture on the drivable sidewalk. Nothing here is solid: props are small, sit
- * against the building line and leave the kerb side clear, so the sidewalk reads as walkable.
+ * Street furniture. The sidewalk is drivable, so nothing may stand on it: lamps, trees and
+ * everything else stand behind the collision edge. On the far bank of a road that is right
+ * behind the barrier; on the near bank it is as far back as the thing is tall, so that it never
+ * leans over the road. Lamp arms that reach over the kerb go to fading overlays.
  */
-
-export type StreetOutput = { pools: LightPool[]; lights: TerrainLight[] };
 
 /** Fills a rectangle laid along an arbitrary direction, without holes. */
 export function orientedRect(
@@ -40,301 +58,353 @@ export function orientedRect(
   }
 }
 
-const BOLLARD = stencil([
-  '..ooooo..',
-  '.oghhggo.',
-  'oghhgggdo',
-  'oghgggddo',
-  'ogggccddo',
-  'oggcccddo',
-  'ogddddddo',
-  '.oddddoo.',
-  '..ooooo..',
-]);
-
-const HYDRANT = stencil(['.rr.', 'rhrd', 'rrdd', '.dd.']);
-const BIN = stencil(['smms', 'mlmd', 'mmdd', 'sdds']);
-
 export const LAMP_SPACING = 172;
-export const LAMP_RADII: readonly number[] = [27, 52, 78];
+export const LAMP_RADII: readonly number[] = [40, 74];
 
 export function paintStreet(
   ctx: BakeContext,
+  scene: Scene,
   layout: CityLayout,
   plan: RoadPlan,
-  out: StreetOutput,
+  out: LightOut,
 ): void {
   const { world, field, track } = ctx;
   const main = track.main;
   const L = main.length;
   const w = field.w;
+  const h = field.h;
   world.curFlags = 0;
-  world.curHeight = -1;
 
-  const frame = (
-    s: number,
-  ): {
+  type Frame = {
     x: number;
     y: number;
     tx: number;
     ty: number;
+    /** Outward normal on the chosen side. */
     nx: number;
     ny: number;
     hw: number;
     sh: number;
-  } => {
+  };
+  const frame = (s: number, side: number): Frame => {
     const p = sampleBranch(main, s);
     return {
       x: p.x,
       y: p.y,
       tx: p.tx,
       ty: p.ty,
-      nx: -p.ty,
-      ny: p.tx,
+      nx: -p.ty * side,
+      ny: p.tx * side,
       hw: p.halfWidth,
       sh: p.shoulder,
     };
   };
-  const zoneAt = (x: number, y: number): number => {
-    const xi = Math.round(x);
-    const yi = Math.round(y);
-    if (xi < 0 || yi < 0 || xi >= w || yi >= field.h) return -1;
-    const i = yi * w + xi;
-    return field.branch[i] === 0 ? field.zone[i]! : -1;
-  };
-  const roofBehind = (f: ReturnType<typeof frame>, side: number): boolean => {
-    const x = Math.round(f.x + f.nx * side * (f.hw + f.sh + 11));
-    const y = Math.round(f.y + f.ny * side * (f.hw + f.sh + 11));
-    if (x < 0 || y < 0 || x >= w || y >= field.h) return false;
-    return layout.roofId[y * w + x] !== 0;
+  const solid = (x: number, y: number): boolean =>
+    x >= 0 && y >= 0 && x < w && y < h && scene.drive[y * w + x] === 0;
+  /** First non-drivable pixel walking outward from the edge point of a frame. */
+  const edgePoint = (f: Frame): { x: number; y: number } | null => {
+    for (let k = -2; k < 12; k++) {
+      const x = Math.round(f.x + f.nx * (f.hw + f.sh + k));
+      const y = Math.round(f.y + f.ny * (f.hw + f.sh + k));
+      if (solid(x, y) && field.edge[y * w + x]! > 0) return { x, y };
+    }
+    return null;
   };
   const nearAny = (s: number, list: readonly number[], r: number): boolean =>
     list.some((t) => {
       const d = Math.abs(s - t);
       return Math.min(d, L - d) < r;
     });
+  const occ = new Uint8Array(w * h);
+  const claim = (x: number, y: number, fw: number, fd: number): void => {
+    for (let yy = y - fd - 2; yy <= y + 2; yy++)
+      for (let xx = x - (fw >> 1) - 2; xx <= x + (fw >> 1) + 2; xx++)
+        if (xx >= 0 && yy >= 0 && xx < w && yy < h) occ[yy * w + xx] = 1;
+  };
+  /** Open ground for a foot `fw` wide and `fd` deep whose south-center is (x, y). */
+  const openFoot = (x: number, y: number, fw: number, fd: number, kindOnly = 0): boolean => {
+    for (let yy = y - fd + 1; yy <= y; yy += Math.max(1, fd - 1)) {
+      for (let xx = x - (fw >> 1); xx <= x + (fw >> 1); xx += Math.max(1, fw >> 1)) {
+        if (xx < 0 || yy < 0 || xx >= w || yy >= h) return false;
+        const i = yy * w + xx;
+        if (field.edge[i]! <= BARRIER_REACH || layout.roofId[i] !== 0 || occ[i]) return false;
+        if (kindOnly && layout.ground[i] !== kindOnly) return false;
+      }
+    }
+    return true;
+  };
+  /** The sprite must not sit on top of the barrier's picture either. */
+  const clearOfBarrier = (sp: Sprite, x: number, y: number): boolean => {
+    for (const [px, py] of [
+      [x - sp.ax, y - sp.ay],
+      [x - sp.ax + sp.art.w - 1, y - sp.ay],
+      [x, y - sp.ay],
+    ] as const) {
+      if (px < 0 || py < 0 || px >= w || py >= h) return false;
+      if (field.edge[py * w + px]! <= BARRIER_REACH) return false;
+    }
+    return true;
+  };
+  const put = (
+    sp: Sprite,
+    x: number,
+    y: number,
+    fw: number,
+    fd: number,
+    shadow: number,
+  ): boolean => {
+    if (!openFoot(x, y, fw, fd)) return false;
+    if (!clearOfBarrier(sp, x, y) || !scene.spriteFits(sp, x, y)) return false;
+    scene.place(sp, x, y);
+    scene.footprint(x - (fw >> 1), y - fd + 1, fw, fd, shadow);
+    claim(x, y, fw, fd);
+    return true;
+  };
 
   // --- Street lamps: alternate sides, steady rhythm ---------------------------------------
   const lampCount = Math.round(L / LAMP_SPACING);
   const lampStep = L / lampCount;
-  const lampS: Array<{ s: number; side: number }> = [];
+  let armCount = 0;
+  let treeCount = 0;
   for (let k = 0; k < lampCount; k++) {
     const s = (track.startS + lampStep * 0.5 + k * lampStep) % L;
-    let side = k % 2 === 0 ? -1 : 1;
     // The grid has its own floodlights.
     if (Math.min(Math.abs(s - track.startS), L - Math.abs(s - track.startS)) < 150) continue;
-    let f = frame(s);
-    let bx = f.x + f.nx * side * (f.hw + f.sh - 4);
-    let by = f.y + f.ny * side * (f.hw + f.sh - 4);
-    if (zoneAt(bx, by) !== ZONE_SHOULDER) {
-      side = -side;
-      f = frame(s);
-      bx = f.x + f.nx * side * (f.hw + f.sh - 4);
-      by = f.y + f.ny * side * (f.hw + f.sh - 4);
-      if (zoneAt(bx, by) !== ZONE_SHOULDER) continue;
+    let done = false;
+    for (const side of k % 2 === 0 ? [-1, 1] : [1, -1]) {
+      if (done) break;
+      const f = frame(s, side);
+      const e = edgePoint(f);
+      if (!e) continue;
+      // Where the light lands: on the road, a little in from the kerb.
+      const cx = f.x + f.nx * (f.hw - 26);
+      const cy = f.y + f.ny * (f.hw - 26);
+      let hx = e.x;
+      let hy = e.y;
+      if (f.ny < -0.7) {
+        // Far bank: a twin lamp right on the edge, in front of whatever stands there.
+        const sp = lampTwin();
+        let y = e.y;
+        while (y > e.y - 6 && !scene.spriteFits(sp, e.x, y)) y--;
+        if (!scene.spriteFits(sp, e.x, y)) continue;
+        scene.add({ art: sp.art, x: e.x - sp.ax, y: y - sp.ay, baseY: y + 4 });
+        scene.footprint(e.x - 1, y - 1, 3, 2, 5);
+        hy = y - sp.ay + 4;
+      } else if (f.ny > 0.7) {
+        // Near bank: a short lantern, stepped back so it never leans over the road.
+        const y = e.y + BARRIER_REACH + 15;
+        if (!openFoot(e.x, y, 3, 2)) continue;
+        if (!standLantern(scene, out, e.x, y, TINT_WARM, [10, 18])) continue;
+        claim(e.x, y, 5, 3);
+        hy = y - 10;
+      } else {
+        // Beside a north-south road: a pole behind the barrier, arm out over the kerb.
+        const dir = f.nx > 0 ? -1 : 1;
+        const px = Math.round(e.x + f.nx * 4);
+        const py = Math.round(e.y + f.ny * 4);
+        const pole = lampPole();
+        if (!solid(px, py) || !scene.spriteFits(pole, px, py)) continue;
+        if (layout.roofId[py * w + px] !== 0) continue;
+        scene.place(pole, px, py);
+        scene.footprint(px - 1, py - 1, 3, 2, 5);
+        claim(px, py, 5, 3);
+        const arm = lampArm(dir);
+        const ax = px;
+        const ay = py - pole.ay + 2;
+        if (scene.spriteFits(arm, ax, ay))
+          scene.add({ art: arm.art, x: ax - arm.ax, y: ay - arm.ay, baseY: py });
+        else {
+          scene.add({
+            art: arm.art,
+            x: ax - arm.ax,
+            y: ay - arm.ay,
+            baseY: py,
+            overlay: {
+              id: `lamp_arm_${String(armCount++).padStart(2, '0')}`,
+              kind: 'lamp_arm',
+              fade: true,
+            },
+          });
+        }
+        hx = px + dir * LAMP_ARM;
+        hy = ay + 2;
+      }
+      const scale = Math.min(1, f.hw / 80);
+      out.pools.push({
+        x: cx,
+        y: cy,
+        radii: LAMP_RADII.map((r) => Math.round(r * scale)),
+        tint: TINT_WARM,
+      });
+      out.lights.push({
+        x: hx,
+        y: hy,
+        radius: LAMP_RADII[1]!,
+        color: TINT_HEX[TINT_WARM]!,
+        intensity: 1,
+      });
+      done = true;
     }
-    lampS.push({ s, side });
-    const hx = Math.round(f.x + f.nx * side * (f.hw + 1));
-    const hy = Math.round(f.y + f.ny * side * (f.hw + 1));
-    const px = Math.round(bx);
-    const py = Math.round(by);
-    // Contact shadow, base plate, arm, head.
-    world.map(px + 2, py + 2, contactShade);
-    world.map(px + 1, py + 2, contactShade);
-    world.map(px + 2, py + 1, contactShade);
-    world.line(px, py, hx, hy, PAL.steelDark);
-    world.rect(px - 1, py - 1, 3, 3, PAL.steelDark);
-    world.set(px - 1, py - 1, PAL.steelLight);
-    world.set(px, py, PAL.steel);
-    lampHead(world, hx, hy);
-    const cx = f.x + f.nx * side * (f.hw - 24);
-    const cy = f.y + f.ny * side * (f.hw - 24);
-    const scale = Math.min(1, f.hw / 80);
-    out.pools.push({
-      x: cx,
-      y: cy,
-      radii: LAMP_RADII.map((r) => Math.round(r * scale)),
-      tint: TINT_WARM,
-      level: 0,
-    });
-    out.lights.push({
-      x: hx,
-      y: hy,
-      radius: LAMP_RADII[2]!,
-      color: TINT_HEX[TINT_WARM]!,
-      intensity: 1,
-    });
   }
 
-  // --- Furniture slots ---------------------------------------------------------------------
-  const SLOT = 26;
+  // --- Furniture and planting behind the barrier -------------------------------------------
+  const SLOT = 24;
   const slots = Math.floor(L / SLOT);
   for (let k = 0; k < slots; k++) {
     const s = k * SLOT + 9;
     for (const side of [-1, 1]) {
-      const f = frame(s);
-      const wallLat = f.hw + f.sh;
-      const at = (lat: number, du = 0): [number, number] => [
-        Math.round(f.x + f.tx * du + f.nx * side * lat),
-        Math.round(f.y + f.ty * du + f.ny * side * lat),
-      ];
-      const [ax, ay] = at(wallLat - 5);
-      if (zoneAt(ax, ay) !== ZONE_SHOULDER) continue;
-      if (
-        lampS.some(
-          (l) => l.side === side && Math.min(Math.abs(l.s - s), L - Math.abs(l.s - s)) < 14,
-        )
-      )
-        continue;
-      if (nearAny(s, plan.zebras, 34)) continue;
+      const f = frame(s, side);
+      const e = edgePoint(f);
+      if (!e) continue;
+      if (nearAny(s, plan.zebras, 30)) continue;
       const roll = hash2(k, side + 3, 4401);
-      const axis = Math.abs(f.tx) > 0.94 || Math.abs(f.ty) > 0.94;
-      const horizontalRoad = Math.abs(f.tx) > Math.abs(f.ty);
-      const building = roofBehind(f, side);
-      if (roll < 0.13) {
-        // Tree pit with a small round street tree.
-        const [tx, ty] = at(wallLat - 7);
-        world.rect(tx - 3, ty - 3, 7, 7, PAL.walkGrout);
-        world.rect(tx - 2, ty - 2, 5, 5, PAL.soil);
-        tree(world, tx, ty, 4, k * 7 + side, hash2(k, side, 4402) < 0.3);
-      } else if (roll < 0.19) {
-        const [bx, by] = at(wallLat - 4);
-        world.map(bx + 2, by + 3, contactShade);
-        world.map(bx + 3, by + 2, contactShade);
-        world.stamp(bx - 2, by - 2, BIN, {
-          s: PAL.steelDark,
-          m: PAL.mintDim,
-          l: PAL.mint,
-          d: PAL.leafDeep,
-        });
-      } else if (roll < 0.24) {
-        const [hx, hy] = at(4.5);
-        const [kx, ky] = at(f.hw + 5);
-        void hx;
-        void hy;
-        world.map(kx + 2, ky + 2, contactShade);
-        world.stamp(kx - 2, ky - 2, HYDRANT, { r: PAL.coral, h: PAL.coralHi, d: PAL.coralDim });
-      } else if (roll < 0.31 && axis) {
-        // Bench against the wall.
-        const [bx, by] = at(wallLat - 4, -4);
-        if (horizontalRoad) {
-          world.rect(bx, by - 1, 9, 3, PAL.wood);
-          world.hline(bx, by - 1, 9, PAL.woodLight);
-          world.hline(bx + 1, by + 2, 8, PAL.walkShade);
-        } else {
-          world.rect(bx - 1, by, 3, 9, PAL.wood);
-          world.vline(bx - 1, by, 9, PAL.woodLight);
-          world.vline(bx + 2, by + 1, 8, PAL.walkShade);
+      const pick = hash2(k, side + 5, 4402);
+      const seed = k * 7 + side + 11;
+      const near = f.ny > 0.45;
+      // How far behind the edge the foot of a sprite of this height must stand.
+      const back = (sp: Sprite, extra = 0): { x: number; y: number } => {
+        const dist = BARRIER_REACH + 3 + extra + (near ? sp.art.h * f.ny : 0);
+        return { x: Math.round(e.x + f.nx * dist), y: Math.round(e.y + f.ny * dist) };
+      };
+      if (roll >= 0.9 && near && f.ny > 0.8) {
+        // A street tree right behind the near barrier. Its crown leans over the sidewalk, so
+        // whatever of it reaches the road becomes an overlay of its own that fades.
+        const r = 6 + ((pick * 3) | 0);
+        const x = Math.round(e.x);
+        const y = Math.round(e.y + BARRIER_REACH + 5);
+        if (!openFoot(x, y, 3, 2)) continue;
+        const sp = treeSprite(r, seed, pick < 0.4);
+        const sx = x - sp.ax;
+        const sy = y - sp.ay;
+        // The crown is the canopy disc; the trunk under it stays on the ground.
+        const crownRows = 2 * r + 2;
+        const crown = Canvas.sprite(sp.art.w, crownRows);
+        crown.buf.copyFrom(sp.art.buf, 0, 0, sp.art.w, crownRows, 0, 0);
+        const trunk = Canvas.sprite(sp.art.w, sp.art.h - crownRows);
+        trunk.buf.copyFrom(sp.art.buf, 0, crownRows, sp.art.w, sp.art.h - crownRows, 0, 0);
+        if (!scene.artFits(trunk, sx, sy + crownRows)) continue;
+        scene.add({ art: trunk, x: sx, y: sy + crownRows, baseY: y });
+        if (scene.artFits(crown, sx, sy)) scene.add({ art: crown, x: sx, y: sy, baseY: y });
+        else {
+          scene.add({
+            art: crown,
+            x: sx,
+            y: sy,
+            baseY: y,
+            overlay: {
+              id: `street_tree_${String(treeCount++).padStart(2, '0')}`,
+              kind: 'tree_canopy',
+              fade: true,
+            },
+          });
         }
-      } else if (roll < 0.345 && axis) {
-        // Newspaper boxes in a row.
-        const colors = [PAL.cyanDim, PAL.coral, PAL.goldDim];
-        for (let j = 0; j < 3; j++) {
-          const [bx, by] = at(wallLat - 4, j * 4 - 4);
-          world.rect(bx - 1, by - 1, 3, 3, colors[j]!);
-          world.set(bx - 1, by - 1, j === 0 ? PAL.cyan : j === 1 ? PAL.coralHi : PAL.gold);
-          world.map(bx + 2, by + 2, contactShade);
-        }
-      } else if (roll < 0.375 && axis) {
-        // Bus stop: glass shelter roof with a bench and a lit panel.
-        const [ox, oy] = at(wallLat - 1, -11);
-        orientedRect(world, ox, oy, f.tx, f.ty, -f.nx * side, -f.ny * side, 22, 7, (u, v) => {
-          if (u === 0 || u === 21 || v === 0 || v === 6) return PAL.steelDark;
-          if (u % 5 === 0) return PAL.steel;
-          return v < 3 ? PAL.glass : (u + v) % 4 === 0 ? PAL.glassLight : PAL.glass;
-        });
-        const [lx, ly] = at(wallLat - 4, 13);
-        emissive(world, () => {
-          world.rect(lx - 1, ly - 1, 2, 3, PAL.cyan);
-          world.set(lx - 1, ly - 1, PAL.cyanHi);
-        });
-        out.pools.push({ x: lx, y: ly, radii: [6, 11], tint: 1, level: 0 });
-      } else if (roll < 0.47 && building && axis) {
-        // Shop awning with a spill of light from the doorway, sometimes cafe tables.
-        const style = (hash2(k, side, 4403) * 4) | 0;
-        const stripeA = [PAL.kerbCoral, PAL.cyanDim, PAL.mintDim, PAL.purpleDim][style]!;
-        const stripeB = [PAL.kerbIvory, PAL.kerbIvory, PAL.kerbIvory, PAL.kerbIvoryDark][style]!;
-        const [ox, oy] = at(wallLat + 1, -10);
-        orientedRect(world, ox, oy, f.tx, f.ty, -f.nx * side, -f.ny * side, 20, 6, (u, v) => {
-          if (v === 5) return (u & 3) === 3 ? null : PAL.wallBase;
-          return (Math.floor(u / 3) & 1) === 0 ? stripeA : stripeB;
-        });
-        const tint = [TINT_WARM, 1, TINT_GOLD, 3][style]!;
-        const [dx, dy] = at(wallLat - 1);
-        out.pools.push({ x: dx, y: dy, radii: [8, 14], tint, level: 0 });
-        out.lights.push({ x: dx, y: dy, radius: 14, color: TINT_HEX[tint]!, intensity: 0.4 });
-        if (hash2(k, side, 4404) < 0.6) {
-          for (const du of [-15, 15]) {
-            const [tx, ty] = at(wallLat - 6, du);
-            if (zoneAt(tx, ty) !== ZONE_SHOULDER) continue;
-            world.map(tx + 2, ty + 2, contactShade);
-            world.rect(tx - 1, ty - 1, 3, 3, PAL.kerbIvoryDark);
-            world.set(tx - 1, ty - 1, PAL.ivory);
-            world.set(tx - 2, ty, PAL.coralDim);
-            world.set(tx + 2, ty, PAL.coralDim);
-          }
-        }
+        scene.shadeDisc(x + 3, y + 1, r * 0.85, 1.7);
+        claim(x, y, 7, 3);
+      } else if (roll < 0.3) {
+        // Trees are the commonest thing: a row of them softens the wall line.
+        const r = 4 + ((pick * 4) | 0);
+        const reach = BARRIER_REACH + 4 + (near ? (2 * r + 6) * f.ny : 0) + pick * 10;
+        const x = Math.round(e.x + f.nx * reach);
+        const y = Math.round(e.y + f.ny * reach);
+        if (!openFoot(x, y, 3, 2)) continue;
+        if (y - 2 * r - 6 >= 0 && field.edge[(y - 2 * r - 6) * w + x]! <= BARRIER_REACH && near)
+          continue;
+        if (plantTree(scene, x, y, r, seed, pick < 0.3)) claim(x, y, 7, 3);
+      } else if (roll < 0.37) {
+        const sp = planterSprite(seed, 11 + ((pick * 3) | 0) * 2);
+        const g = back(sp);
+        put(sp, g.x, g.y, sp.art.w, 5, 2);
+      } else if (roll < 0.42) {
+        const sp = binSprite();
+        const g = back(sp);
+        put(sp, g.x, g.y, 4, 3, 2);
+      } else if (roll < 0.46) {
+        const sp = hydrantSprite();
+        const g = back(sp);
+        put(sp, g.x, g.y, 4, 3, 2);
       } else if (roll < 0.52) {
-        // Planter box.
-        const [bx, by] = at(wallLat - 4);
-        world.rect(bx - 2, by - 2, 5, 5, PAL.kerbShade);
-        world.rect(bx - 1, by - 1, 3, 3, PAL.leafDark);
-        world.set(bx - 1, by - 1, PAL.leafLight);
-        world.set(bx, by, PAL.leaf);
-        world.map(bx + 3, by + 3, contactShade);
-      } else if ((roll < 0.62 || (roll < 0.47 && !axis)) && roll >= 0.375 && building) {
-        // Lit doorway or shop window: neon and warm spill on the sidewalk.
-        const pick = hash2(k, side, 4405);
-        const tint = pick < 0.55 ? TINT_WARM : pick < 0.7 ? 1 : pick < 0.85 ? TINT_CORAL : 3;
-        const [dx, dy] = at(wallLat);
-        const [gx, gy] = at(wallLat + 1);
-        const glow = tint === TINT_WARM ? PAL.windowWarm : NEON[tint - 1]!.c;
-        emissive(world, () => {
-          orientedRect(
-            world,
-            gx - f.tx * 4,
-            gy - f.ty * 4,
-            f.tx,
-            f.ty,
-            f.nx * side,
-            f.ny * side,
-            8,
-            1.5,
-            () => glow,
-          );
-        });
-        out.pools.push({ x: dx, y: dy, radii: [7, 13], tint, level: 0 });
-        out.lights.push({ x: dx, y: dy, radius: 13, color: TINT_HEX[tint]!, intensity: 0.4 });
+        const sp = benchSprite();
+        const g = back(sp, 2);
+        put(sp, g.x, g.y, 10, 4, 2);
+      } else if (roll < 0.55) {
+        const sp = newsBoxes();
+        const g = back(sp);
+        put(sp, g.x, g.y, 14, 4, 2);
+      } else if (roll < 0.585) {
+        const sp = busShelter();
+        const g = back(sp, 2);
+        if (put(sp, g.x, g.y, 28, 6, 4)) {
+          out.pools.push({ x: g.x + 8, y: g.y + 3, radii: [8, 14], tint: 1 });
+        }
+      } else if (roll < 0.66) {
+        // A row of bollards.
+        for (let j = -1; j <= 1; j++) {
+          const sp = bollardSprite();
+          const g = back(sp);
+          put(sp, Math.round(g.x + f.tx * j * 8), Math.round(g.y + f.ty * j * 8), 3, 2, 2);
+        }
+      } else if (roll < 0.72) {
+        const sp = dumpsterSprite(LIVERIES[(pick * LIVERIES.length) | 0]!);
+        const g = back(sp, 6);
+        if (openFoot(g.x, g.y, 15, 6, G_YARD)) put(sp, g.x, g.y, 15, 6, 3);
+      } else if (roll < 0.76) {
+        const sp = crateStack(seed);
+        const g = back(sp, 8);
+        if (openFoot(g.x, g.y, 17, 6, G_YARD)) put(sp, g.x, g.y, 17, 6, 3);
+      } else if (roll < 0.8) {
+        const sp = coneSprite();
+        for (let j = 0; j < 2; j++) {
+          const g = back(sp, j * 3);
+          put(sp, Math.round(g.x + f.tx * j * 6), Math.round(g.y + f.ty * j * 6), 3, 2, 1);
+        }
+      } else if (roll < 0.87) {
+        // A car left behind the wall, parked along the road.
+        const horizontal = Math.abs(f.tx) > Math.abs(f.ty);
+        const dist = BARRIER_REACH + (horizontal ? 14 : 12) + (near ? 24 * f.ny : 0) + pick * 6;
+        const cx = Math.round(e.x + f.nx * dist);
+        const cy = Math.round(e.y + f.ny * dist);
+        const gy = cy + (horizontal ? 8 : 16);
+        const fw = horizontal ? 32 : 17;
+        const fd = horizontal ? 17 : 32;
+        if (!openFoot(cx, gy, fw, fd, G_YARD)) continue;
+        if (
+          parkCar(
+            scene,
+            cx,
+            cy,
+            horizontal,
+            pick < 0.5,
+            LIVERIES[((roll * 977) % LIVERIES.length) | 0]!,
+          )
+        )
+          claim(cx, gy, fw, fd);
       }
     }
   }
 
-  // --- Zebra dressing: tactile paving and the signal pole ---------------------------------
+  // --- Zebra dressing: tactile paving on the sidewalk -------------------------------------
   for (const z of plan.zebras) {
     for (const side of [-1, 1]) {
-      const f = frame(z + 11);
-      const ox = f.x - f.tx * 11 + f.nx * side * (f.hw + 4);
-      const oy = f.y - f.ty * 11 + f.ny * side * (f.hw + 4);
-      orientedRect(world, ox, oy, f.tx, f.ty, f.nx * side, f.ny * side, 22, f.sh - 6, (u, v) =>
-        ((u + v) & 1) === 0 ? PAL.paintGoldWorn : PAL.walkShade,
-      );
+      const f = frame(z + 11, side);
+      const ox = f.x - f.tx * 11 + f.nx * (f.hw + 4);
+      const oy = f.y - f.ty * 11 + f.ny * (f.hw + 4);
+      orientedRect(world, ox, oy, f.tx, f.ty, f.nx, f.ny, 22, f.sh - 6, (u, v) => {
+        const x = Math.round(ox + f.tx * u + f.nx * v - 0.5);
+        const y = Math.round(oy + f.ty * u + f.ny * v - 0.5);
+        if (x < 0 || y < 0 || x >= w || y >= h || field.zone[y * w + x] !== ZONE_SHOULDER)
+          return null;
+        return ((u >> 1) + (v >> 1)) % 2 === 0 ? PAL.paintGoldWorn : PAL.walkShade;
+      });
     }
   }
 
-  // --- Shortcut dressing: bollards, lantern glow on the lane -------------------------------
+  // --- Shortcut dressing: the bollards that stand in the lane, lantern glow on the stones ---
   for (const ob of track.obstacles) {
     const x = Math.round(ob.x);
     const y = Math.round(ob.y);
-    world.mapDisc(x + 2, y + 2, 4, contactShade);
-    world.curHeight = 2;
-    world.stamp(x - 4, y - 4, BOLLARD, {
-      o: PAL.ink,
-      g: PAL.gold,
-      h: PAL.goldHi,
-      d: PAL.goldDim,
-      c: PAL.coral,
-    });
-    world.curHeight = -1;
+    const sp = bollardSprite(true);
+    scene.place(sp, x, y + 3);
+    scene.shadeDisc(x + 2, y + 4, 3);
   }
   for (const branch of track.branches) {
     if (branch.index === 0) continue;
@@ -342,7 +412,7 @@ export function paintStreet(
     for (let s = 56; s < branch.length - 40; s += 30) {
       const p = sampleBranch(branch, s);
       const tint = n++ % 2 === 0 ? TINT_GOLD : TINT_CORAL;
-      out.pools.push({ x: p.x, y: p.y, radii: [13, 24, 34], tint, level: 0 });
+      out.pools.push({ x: p.x, y: p.y, radii: [16, 30], tint });
       out.lights.push({
         x: Math.round(p.x),
         y: Math.round(p.y),

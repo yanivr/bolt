@@ -1,18 +1,34 @@
-import type { ControlInput } from '@bolt/shared';
+import type { ControlInput, VehicleMotionState, VehicleParams } from '@bolt/shared';
 import {
+  DIRECTION_STOP_START,
   JOYSTICK_DEAD_ZONE,
   JOYSTICK_RADIUS_PX,
   NEUTRAL_INPUT,
   angleDelta,
-  clamp,
   clampToDisc,
+  directionToControl,
   joystickToControl,
   keysToControl,
+  trailStickOrigin,
 } from '@bolt/shared';
 
 /**
- * Floating pull joystick plus keyboard, converging on one normalized control sample
+ * How the floating stick is read. `direction` (the default): point the stick where the car
+ * should go on screen. `wheel`: left and right turn the car relative to itself and pulling
+ * down brakes, as on a steering wheel.
+ */
+export type SteeringMode = 'direction' | 'wheel';
+
+/**
+ * Floating joystick plus keyboard, converging on one normalized control sample
  * (Sections 7.1 and 7.2).
+ *
+ * The world is drawn north-up and never rotates, so by default the stick is a direction: push
+ * it toward where the car should go. The shared heading controller turns that into ordinary
+ * steering and brake values for the tick about to be simulated, which is all the server ever
+ * sees. Keys stay relative to the car (left and right turn it, down brakes): two keys cannot
+ * name a direction finely enough to follow a curve, and turn-left, turn-right is what every
+ * fixed-camera racer on a keyboard has always used.
  *
  * The steering finger may land anywhere on the play surface. Only the first pointer that
  * starts on the surface itself owns the joystick; pointers that begin on a HUD button never
@@ -30,8 +46,7 @@ export class DriveInput {
   private dx = 0;
   private dy = 0;
   private keys = new Set<string>();
-  /** When true the world is drawn north-up and the stick points where the car should go. */
-  northUp = false;
+  mode: SteeringMode = 'direction';
   /** Set once the driver has demonstrated each gesture, so teaching prompts can fade. */
   steered = false;
   braked = false;
@@ -92,33 +107,30 @@ export class DriveInput {
   }
 
   /**
-   * One control sample for the next simulation tick. `screenHeading` is the car's heading
-   * relative to screen-up and is only used by the north-up mapping.
+   * One control sample for the next simulation tick, computed against the state that tick
+   * will start from.
    */
-  sample(screenHeading: number): ControlInput {
+  sample(motion: VehicleMotionState, params: VehicleParams, grip: number): ControlInput {
     if (!this.enabled) return NEUTRAL_INPUT;
     if (this.pointerId !== null) {
       let control: ControlInput;
-      if (this.northUp) {
-        // Stable-camera option: push the stick toward where the car should head on screen.
-        const magnitude = Math.hypot(this.dx, this.dy) / JOYSTICK_RADIUS_PX;
-        if (magnitude <= JOYSTICK_DEAD_ZONE) {
-          control = { steer: 0, brake: 0, coast: false };
-        } else {
-          const wanted = Math.atan2(this.dx, -this.dy);
-          const turn = angleDelta(screenHeading, wanted);
-          const reverseAsk = Math.abs(turn) > 2.3;
-          control = {
-            steer: reverseAsk ? 0 : clamp(turn / 0.7, -1, 1),
-            brake: reverseAsk ? 0.9 : 0,
-            coast: false,
-          };
-        }
+      let deliberateBrake: boolean;
+      if (this.mode === 'direction') {
+        const sx = this.dx / JOYSTICK_RADIUS_PX;
+        const sy = this.dy / JOYSTICK_RADIUS_PX;
+        control = directionToControl(sx, sy, motion, params, grip);
+        // Corner assist can brake on its own; only a stick held behind the car counts as the
+        // driver having found the brake.
+        const behind =
+          Math.hypot(sx, sy) > JOYSTICK_DEAD_ZONE &&
+          Math.abs(angleDelta(motion.headingRad, Math.atan2(sx, -sy))) > DIRECTION_STOP_START;
+        deliberateBrake = behind && control.brake > 0.5;
       } else {
         control = joystickToControl(this.dx, this.dy);
+        deliberateBrake = control.brake > 0.5;
       }
       if (Math.abs(control.steer) > 0.25) this.steered = true;
-      if (control.brake > 0.5) this.braked = true;
+      if (deliberateBrake) this.braked = true;
       return control;
     }
     const k = this.keys;
@@ -157,8 +169,16 @@ export class DriveInput {
   private onMove = (event: PointerEvent): void => {
     if (event.pointerId !== this.pointerId || !this.surface) return;
     const rect = this.surface.getBoundingClientRect();
-    this.dx = event.clientX - rect.left - this.originX;
-    this.dy = event.clientY - rect.top - this.originY;
+    let dx = event.clientX - rect.left - this.originX;
+    let dy = event.clientY - rect.top - this.originY;
+    // The origin trails a thumb that wanders, so turning back never needs a long reach.
+    const trail = trailStickOrigin(dx, dy);
+    this.originX += trail.x;
+    this.originY += trail.y;
+    dx -= trail.x;
+    dy -= trail.y;
+    this.dx = dx;
+    this.dy = dy;
     this.draw();
   };
 

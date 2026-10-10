@@ -86,25 +86,124 @@ test('a blank session reaches the home screen and starts a server-authoritative 
   expect(problems).toEqual([]);
 });
 
-test('floating joystick appears under the finger, steers, and brakes', async ({ page }) => {
+/** Heading of the local car from the debug readout, degrees clockwise from screen-up. */
+async function heading(page: Page): Promise<number> {
+  return Number(/heading (\d+) deg/.exec(await debug(page))?.[1] ?? 'NaN');
+}
+
+/** A point `distance` CSS pixels from `origin` toward a screen heading. */
+function toward(origin: { x: number; y: number }, headingDeg: number, distance: number) {
+  const rad = (headingDeg * Math.PI) / 180;
+  return { x: origin.x + Math.sin(rad) * distance, y: origin.y - Math.cos(rad) * distance };
+}
+
+test('floating joystick appears under the finger, drives, and brakes when pulled back', async ({
+  page,
+}) => {
   await startRace(page);
   const touch = new Touch(page);
   const disc = page.locator('.joy-disc');
   await expect(disc).not.toHaveClass(/is-active/);
+  await expect(page.getByText('Drag toward where you want to go. Pull back to brake.')).toBeVisible({
+    timeout: 20_000,
+  });
 
-  await touch.down({ id: 1, x: 300, y: 260 });
+  const origin = { x: 300, y: 260 };
+  await touch.down({ id: 1, ...origin });
   await expect(disc).toHaveClass(/is-active/);
   const box = await disc.boundingBox();
   expect(Math.abs(box!.x + box!.width / 2 - 300)).toBeLessThan(3);
   expect(Math.abs(box!.y + box!.height / 2 - 260)).toBeLessThan(3);
 
+  // A finger held still means go.
   await expect.poll(() => speed(page), { timeout: 20_000 }).toBeGreaterThan(25);
-  // Pulling the stick down the screen lifts the throttle and brakes to a stop.
-  await touch.move({ id: 1, x: 300, y: 260 + 42 });
-  await expect.poll(() => speed(page), { timeout: 20_000 }).toBeLessThan(3);
+  // The world is drawn north-up: pulling the stick opposite to where the car is pointing on
+  // screen brakes it to a stop, and holding it there backs the car up.
+  const nose = await heading(page);
+  expect(Number.isFinite(nose)).toBe(true);
+  await touch.move({ id: 1, ...toward(origin, nose + 180, 42) });
+  await expect(page.getByTestId('debug')).toContainText('reversing', { timeout: 20_000 });
+  // Pointing forward again drives forward again.
+  await touch.move({ id: 1, ...toward(origin, nose, 42) });
+  await expect(page.getByTestId('debug')).not.toContainText('reversing', { timeout: 20_000 });
+  await expect.poll(() => speed(page), { timeout: 20_000 }).toBeGreaterThan(25);
   await touch.up(1);
   await expect(disc).not.toHaveClass(/is-active/);
-  await expect(page.getByText('Drag to steer. Pull down to brake.')).toBeVisible();
+});
+
+test('pointing the stick turns the car toward that direction on screen', async ({ page }) => {
+  await startRace(page);
+  const touch = new Touch(page);
+  const origin = { x: 300, y: 240 };
+  await touch.down({ id: 1, ...origin });
+  await expect.poll(() => speed(page), { timeout: 20_000 }).toBeGreaterThan(20);
+  const before = await heading(page);
+  // Ask for a heading 40 degrees clockwise of the nose and hold it.
+  const wanted = (before + 40) % 360;
+  await touch.move({ id: 1, ...toward(origin, wanted, 40) });
+  const error = async () => {
+    const now = await heading(page);
+    return Math.abs(((now - wanted + 540) % 360) - 180);
+  };
+  await expect.poll(error, { timeout: 15_000 }).toBeLessThan(8);
+  await touch.up(1);
+});
+
+test('the stick origin trails a thumb that wanders, so it never gets far away', async ({ page }) => {
+  await startRace(page);
+  const touch = new Touch(page);
+  await touch.down({ id: 1, x: 250, y: 250 });
+  await touch.move({ id: 1, x: 250, y: 120 });
+  const box = await page.locator('.joy-disc').boundingBox();
+  // 42 px radius, trailing at one and a half radii: the disc has followed the thumb up.
+  expect(Math.abs(box!.y + box!.height / 2 - (120 + 63))).toBeLessThan(4);
+  expect(Math.abs(box!.x + box!.width / 2 - 250)).toBeLessThan(3);
+  await touch.up(1);
+});
+
+test('the wheel-style option steers left and right relative to the car and brakes on a pull down', async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    window.localStorage.setItem('bolt.settings.v1', JSON.stringify({ steering: 'wheel' })),
+  );
+  await startRace(page);
+  await expect(page.getByText('Drag to steer. Pull down to brake.')).toBeVisible({ timeout: 20_000 });
+  const touch = new Touch(page);
+  await touch.down({ id: 1, x: 300, y: 260 });
+  await expect.poll(() => speed(page), { timeout: 20_000 }).toBeGreaterThan(25);
+  // A little over half the stick's travel is a firm brake that holds the car at a standstill.
+  await touch.move({ id: 1, x: 300, y: 260 + 23 });
+  await expect.poll(() => speed(page), { timeout: 20_000 }).toBeLessThan(3);
+  await expect(page.getByTestId('debug')).not.toContainText('reversing');
+  // The full pull, held at a standstill, backs the car up.
+  await touch.move({ id: 1, x: 300, y: 260 + 42 });
+  await expect(page.getByTestId('debug')).toContainText('reversing', { timeout: 20_000 });
+  await touch.up(1);
+});
+
+test('the view is north-up at a whole-number scale and a stale camera setting is dropped', async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    window.localStorage.setItem(
+      'bolt.settings.v1',
+      JSON.stringify({ reducedCamera: true, drivingHand: 'right' }),
+    ),
+  );
+  await startRace(page);
+  // 844 CSS pixels at a device pixel ratio of 2 is 1688 device pixels: two per world pixel.
+  const canvas = page.locator('.race-canvas canvas');
+  await expect(canvas).toHaveAttribute('width', '1688');
+  await expect(canvas).toHaveAttribute('height', '780');
+  await page.getByRole('button', { name: 'Settings' }).tap();
+  await expect(page.getByText('Reduced Camera Motion')).toHaveCount(0);
+  await expect(page.getByText('Touch Steering')).toBeVisible();
+  await page.getByText('Left and Right').tap();
+  const stored = await page.evaluate(() => window.localStorage.getItem('bolt.settings.v1'));
+  expect(stored).toContain('"steering":"wheel"');
+  expect(stored).toContain('"drivingHand":"right"');
+  expect(stored).not.toContain('reducedCamera');
 });
 
 test('a second finger can use the menu while the first keeps steering', async ({ page }) => {

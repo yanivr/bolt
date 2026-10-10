@@ -19,8 +19,9 @@ export type CarTextureKeys = {
 /**
  * One composited vehicle on screen. It owns a sprite per layer and asks the shared
  * `layoutCar` function where each one goes, so the live race draws exactly what the garage,
- * the VS card and the art review sheets draw. The container lives in camera view space and is
- * never rotated: heading is expressed by picking one of the sixteen authored frames.
+ * the VS card and the art review sheets draw. The container sits in world space at a position
+ * the race view has already snapped to the device pixel grid, and it is never rotated: heading
+ * is expressed by picking one of the authored heading frames.
  */
 export class CarView {
   readonly container: Phaser.GameObjects.Container;
@@ -55,7 +56,7 @@ export class CarView {
     ]);
   }
 
-  /** Applies a pose. `jitterY` is a whole-pixel body offset for idle vibration. */
+  /** Applies a pose: picks the frame for every layer and places it. */
   apply(pose: CarPose): void {
     const ops = layoutCar(this.chassis, this.wheelKit, this.engineKit, pose);
     let wheel = 0;

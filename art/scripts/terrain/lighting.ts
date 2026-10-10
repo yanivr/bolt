@@ -1,10 +1,11 @@
+import { hash2 } from '@bolt/shared';
 import type { Canvas, Color } from './canvas.js';
 import { F_EMISSIVE, F_NOSHADOW } from './canvas.js';
 
 /**
- * Baked lighting shared by every biome: hard-edged cast shadows from the height plane and
- * posterized light pools. Nothing here blurs; a pool is a stack of hard rings with an optional
- * one pixel checker band between them.
+ * Baked ground lighting shared by every biome: hard-edged cast shadows and posterized light
+ * pools. Nothing here blurs. Both passes work on the flat ground plane only; raised geometry is
+ * painted afterwards, already lit by its own painter.
  */
 
 export type LightPool = {
@@ -14,22 +15,21 @@ export type LightPool = {
   radii: readonly number[];
   /** Index into the biome's tint table. 0 is the key lamp color. */
   tint: number;
-  /**
-   * 0 lights the ground plane (pixels at or below `groundHeight`); any other value lights only
-   * pixels whose id in the supplied id map equals it, so rooftop neon stays on its own roof.
-   */
-  level: number;
-  /** Vertical squash of the rings, for pools thrown along a wall. Defaults to 1. */
+  /** Vertical squash of the pool, for light thrown along a wall. Defaults to 1. */
   squashY?: number;
 };
 
 /**
- * Marks every pixel that sits in the shadow of something taller up and to the left. Shadow
- * length equals the height difference, so shadows are short, quantized and never smooth.
+ * Marks every ground pixel that sits in the shadow of something taller up and to the left.
+ * `height` holds shadow lengths in pixels, so shadows are short, quantized and never smooth.
  */
-export function castShadows(world: Canvas, maxLen: number, forced: Uint8Array | null): Uint8Array {
-  const { w, h } = world;
-  const height = world.height!;
+export function castShadows(
+  w: number,
+  h: number,
+  height: Uint8Array,
+  maxLen: number,
+  forced: Uint8Array | null,
+): Uint8Array {
   const out = new Uint8Array(w * h);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -72,54 +72,59 @@ export function applyShadows(world: Canvas, shadow: Uint8Array, shade: (c: Color
 
 export type LightPlanes = { step: Uint8Array; tint: Uint8Array };
 
-export function accumulatePools(
-  world: Canvas,
-  pools: readonly LightPool[],
-  idMap: Uint16Array,
-  groundHeight: number,
-  dither: boolean,
-): LightPlanes {
-  const { w, h } = world;
-  const height = world.height!;
+const SECTORS = 12;
+
+/**
+ * Accumulates pools into a step plane. A pool is not a ruled circle: its rim wanders in and out
+ * by sector and is evaluated on a two pixel grid, which gives an irregular stepped blob with
+ * clean pixel clusters instead of a target of concentric rings.
+ */
+export function accumulatePools(w: number, h: number, pools: readonly LightPool[]): LightPlanes {
   const step = new Uint8Array(w * h);
   const tint = new Uint8Array(w * h);
-  for (const pool of pools) {
+  pools.forEach((pool, index) => {
     const n = pool.radii.length;
-    const outer = pool.radii[n - 1]!;
+    const outer = pool.radii[n - 1]! * 1.12;
     const sq = pool.squashY ?? 1;
-    const x0 = Math.max(0, Math.floor(pool.x - outer - 2));
-    const x1 = Math.min(w - 1, Math.ceil(pool.x + outer + 2));
-    const y0 = Math.max(0, Math.floor(pool.y - outer / sq - 2));
-    const y1 = Math.min(h - 1, Math.ceil(pool.y + outer / sq + 2));
-    for (let y = y0; y <= y1; y++) {
-      for (let x = x0; x <= x1; x++) {
-        const p = y * w + x;
-        if (pool.level === 0) {
-          if (height[p]! > groundHeight) continue;
-        } else if (idMap[p] !== pool.level) continue;
-        const dx = x + 0.5 - pool.x;
-        const dy = (y + 0.5 - pool.y) * sq;
+    const wob = new Float32Array(SECTORS * n);
+    for (let k = 0; k < n; k++)
+      for (let a = 0; a < SECTORS; a++)
+        wob[k * SECTORS + a] = 1 + (hash2(a + k * 31, index, 7717) - 0.5) * 0.12;
+    const cx = Math.round(pool.x / 2) * 2;
+    const cy = Math.round(pool.y / 2) * 2;
+    const x0 = Math.max(0, (Math.floor((cx - outer - 2) / 2) * 2) | 0);
+    const x1 = Math.min(w - 2, Math.ceil(cx + outer + 2));
+    const y0 = Math.max(0, (Math.floor((cy - outer / sq - 2) / 2) * 2) | 0);
+    const y1 = Math.min(h - 2, Math.ceil(cy + outer / sq + 2));
+    for (let y = y0; y <= y1; y += 2) {
+      for (let x = x0; x <= x1; x += 2) {
+        const dx = x + 1 - cx;
+        const dy = (y + 1 - cy) * sq;
         const d = Math.sqrt(dx * dx + dy * dy);
+        if (d > outer) continue;
+        const af = ((Math.atan2(dy, dx) / (Math.PI * 2) + 1) % 1) * SECTORS;
+        const a0 = Math.floor(af) % SECTORS;
+        const a1 = (a0 + 1) % SECTORS;
+        const f = af - Math.floor(af);
         let s = 0;
         for (let k = 0; k < n; k++) {
-          const r = pool.radii[k]!;
-          if (d <= r) {
-            s = n - k;
-            break;
-          }
-          // One pixel checker band just outside each ring softens the step without blur.
-          if (dither && d <= r + 1.6 && ((x + y) & 1) === 0) {
+          const m = wob[k * SECTORS + a0]! * (1 - f) + wob[k * SECTORS + a1]! * f;
+          if (d <= pool.radii[k]! * m) {
             s = n - k;
             break;
           }
         }
-        if (s > step[p]!) {
-          step[p] = s;
-          tint[p] = pool.tint;
+        if (s === 0) continue;
+        for (let j = 0; j < 4; j++) {
+          const p = (y + (j >> 1)) * w + x + (j & 1);
+          if (s > step[p]!) {
+            step[p] = s;
+            tint[p] = pool.tint;
+          }
         }
       }
     }
-  }
+  });
   return { step, tint };
 }
 

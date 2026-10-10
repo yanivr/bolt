@@ -2,7 +2,6 @@ import { performance } from 'node:perf_hooks';
 import type { AuthContext, Client, RoomException } from '@colyseus/core';
 import { Protocol, Room, ServerError } from '@colyseus/core';
 import type {
-  ControlInput,
   DriveSession,
   ErrorCode,
   MatchPhase,
@@ -15,7 +14,6 @@ import {
   ClientMessage,
   INPUT_PACKET_HZ,
   MAX_QUEUED_INPUTS,
-  NEUTRAL_INPUT,
   SIM_HZ,
   SNAPSHOT_HZ,
   ServerMessage,
@@ -40,7 +38,7 @@ import {
   resolveCourse,
   resolveParams,
 } from './driveJoin.js';
-import { InputQueue } from './inputQueue.js';
+import { InputPacer } from './inputPacer.js';
 import { DriveState, writeDriveState } from './schema.js';
 
 /**
@@ -68,8 +66,6 @@ const STEP_MS = 1000 / SIM_HZ;
  * than replayed, so a slow tick can never snowball into a longer one.
  */
 const MAX_CATCH_UP_STEPS = 5;
-/** Ticks an old sample keeps being reused before the car falls back to a neutral coast. */
-const STALE_INPUT_TICKS = Math.round(0.5 * SIM_HZ);
 /** Messages accepted per one-second window: three times the nominal input packet rate. */
 const MAX_MESSAGES_PER_WINDOW = INPUT_PACKET_HZ * 3;
 /** A single window this far over the nominal rate is a flood, not jitter. */
@@ -97,19 +93,12 @@ function trackRuntimeFor(def: TrackDefinition): TrackRuntime {
  * rooms planned for Milestone E can hold one of these per seat.
  */
 class DrivePlayer {
-  readonly queue = new InputQueue(MAX_QUEUED_INPUTS);
-  /** The sample most recently consumed. Reused while the queue runs dry. */
-  readonly applied: ControlInput = { steer: 0, brake: 0, coast: true };
-  hasApplied = false;
+  /** Queued control samples and the policy for consuming them, one tick at a time. */
+  readonly inputs = new InputPacer(MAX_QUEUED_INPUTS);
   connected = true;
   /** Set when the server itself ends the connection, so no reconnection window is offered. */
   removed = false;
   leaveReason: 'consented' | 'requested' | 'removed' = 'consented';
-  /** Highest sequence ever queued. Survives resets and reconnects so replays stay rejected. */
-  lastQueuedSequence = -1;
-  /** Sequence of the last sample the simulation consumed. */
-  ackSequence = -1;
-  ticksSinceInput = STALE_INPUT_TICKS + 1;
   windowMessages = 0;
   floodedWindows = 0;
   malformedMessages = 0;
@@ -238,7 +227,7 @@ export function createDriveRoom(deps: DriveRoomDeps): new () => Room<DriveState>
       this.players.set(client.sessionId, player);
       // The opening phase reaches the client with its first state snapshot. MATCH_PHASE is
       // only sent for later changes, since nothing can be listening for it this early.
-      writeDriveState(this.state, session, player.ackSequence);
+      writeDriveState(this.state, session, player.inputs.ackSequence);
       this.log.info('player_joined', { guestId: auth.guestId, sessionId: client.sessionId });
     }
 
@@ -248,8 +237,7 @@ export function createDriveRoom(deps: DriveRoomDeps): new () => Room<DriveState>
       player.connected = false;
       // Whatever was queued or held belongs to a connection that no longer exists. The car
       // coasts on neutral input until its driver is back.
-      player.queue.clear();
-      player.hasApplied = false;
+      player.inputs.clear();
 
       if (consented || player.removed) {
         this.players.delete(client.sessionId);
@@ -264,7 +252,7 @@ export function createDriveRoom(deps: DriveRoomDeps): new () => Room<DriveState>
       try {
         await this.allowReconnection(client, tuning.reconnectSeconds);
         player.connected = true;
-        player.ticksSinceInput = 0;
+        player.inputs.touch();
         this.log.info('player_reconnected', { sessionId: client.sessionId });
       } catch {
         this.players.delete(client.sessionId);
@@ -316,7 +304,7 @@ export function createDriveRoom(deps: DriveRoomDeps): new () => Room<DriveState>
       for (const [sessionId, player] of this.players) {
         this.stepPlayer(player);
         if (windowEnded) this.closeMessageWindow(sessionId, player);
-        if (player.connected && player.ticksSinceInput > idleTicks) {
+        if (player.connected && player.inputs.ticksSinceInput > idleTicks) {
           this.log.info('room_idle_timeout', { sessionId });
           this.close();
           return;
@@ -326,36 +314,23 @@ export function createDriveRoom(deps: DriveRoomDeps): new () => Room<DriveState>
 
     private stepPlayer(player: DrivePlayer): void {
       const session = player.session;
-      player.ticksSinceInput += 1;
+      // The pacer runs the car once per sample, in order. On a tick with no sample the car
+      // may wait briefly and catch up afterwards; see InputPacer for why.
+      player.inputs.tick(player.connected, (control) => {
+        const result = stepDriveSession(session, control);
+        if (result.event !== 'none') this.emitProgressEvents(player, result);
 
-      let control: ControlInput = NEUTRAL_INPUT;
-      if (player.connected) {
-        const sequence = player.queue.shiftInto(player.applied);
-        if (sequence >= 0) {
-          player.ackSequence = sequence;
-          player.hasApplied = true;
-          control = player.applied;
-        } else if (player.hasApplied && player.ticksSinceInput <= STALE_INPUT_TICKS) {
-          // A late packet should not make the car twitch: hold the last known controls for
-          // a moment, without acknowledging anything new.
-          control = player.applied;
+        const impact = session.telemetry.wallImpactSpeed;
+        if (
+          impact > WALL_FORGIVE_SPEED &&
+          session.tick - player.lastWallEventTick >= WALL_EVENT_COOLDOWN_TICKS
+        ) {
+          player.lastWallEventTick = session.tick;
+          this.emit({ id: this.nextEventId++, type: 'wall', tick: session.tick, speed: impact });
         }
-      }
-
-      const result = stepDriveSession(session, control);
-      if (result.event !== 'none') this.emitProgressEvents(player, result);
-
-      const impact = session.telemetry.wallImpactSpeed;
-      if (
-        impact > WALL_FORGIVE_SPEED &&
-        session.tick - player.lastWallEventTick >= WALL_EVENT_COOLDOWN_TICKS
-      ) {
-        player.lastWallEventTick = session.tick;
-        this.emit({ id: this.nextEventId++, type: 'wall', tick: session.tick, speed: impact });
-      }
-
-      if (session.phase !== player.lastPhase) this.announcePhase(player);
-      writeDriveState(this.state, session, player.ackSequence);
+        if (session.phase !== player.lastPhase) this.announcePhase(player);
+      });
+      writeDriveState(this.state, session, player.inputs.ackSequence);
     }
 
     private emitProgressEvents(player: DrivePlayer, result: StepResult): void {
@@ -476,16 +451,8 @@ export function createDriveRoom(deps: DriveRoomDeps): new () => Room<DriveState>
         this.strike(client, player);
         return;
       }
-      let accepted = false;
-      for (const sample of parsed.data.inputs) {
-        // Packets repeat recent samples to survive loss, so duplicates and stale sequences
-        // are normal traffic and are skipped without penalty.
-        if (sample.sequence <= player.lastQueuedSequence) continue;
-        player.lastQueuedSequence = sample.sequence;
-        player.queue.push(sample);
-        accepted = true;
-      }
-      if (accepted) player.ticksSinceInput = 0;
+      // Duplicates and stale sequences are normal traffic and are skipped without penalty.
+      player.inputs.accept(parsed.data.inputs);
     }
 
     private onResetCar(client: Client, message: unknown): void {
@@ -497,15 +464,14 @@ export function createDriveRoom(deps: DriveRoomDeps): new () => Room<DriveState>
       }
       if (this.roomTick - player.lastResetTick < RESET_COOLDOWN_TICKS) return;
       player.lastResetTick = this.roomTick;
-      player.ticksSinceInput = 0;
+      player.inputs.touch();
 
       resetDriveSession(player.session);
       // Samples queued before the reset describe a car that is no longer there. The sequence
       // high-water mark is kept so none of them can be replayed afterwards.
-      player.queue.clear();
-      player.hasApplied = false;
+      player.inputs.clear();
       if (player.session.phase !== player.lastPhase) this.announcePhase(player);
-      writeDriveState(this.state, player.session, player.ackSequence);
+      writeDriveState(this.state, player.session, player.inputs.ackSequence);
       this.log.info('car_reset', { sessionId: client.sessionId });
     }
 

@@ -98,17 +98,19 @@ async function main(): Promise<void> {
       await page.screenshot({ path: join(outDir, shot) });
     }
   } else {
-    // Hold a finger down for full throttle, then pull through a sequence of steering gestures.
+    // Direction steering: hold a finger down for full throttle, then point the stick at a
+    // sequence of screen directions. The Neon Cut grid faces left, so "left" is straight on.
     const origin = { x: 210, y: 250 };
     await touch(page, 'touchStart', [{ id: 1, ...origin }]);
     await page.waitForTimeout(2200);
     await page.screenshot({ path: join(outDir, '03_touch_launch.png') });
     const script: Array<[number, number, number, string?]> = [
-      [1500, 0, 0],
-      [700, 40, 0, '04_touch_steer_right.png'],
-      [700, -40, 0, '05_touch_steer_left.png'],
-      [900, 0, 42, '06_touch_brake.png'],
-      [1200, 30, 30, '07_touch_brake_turn.png'],
+      [1500, -40, 0],
+      [900, -34, -20, '04_touch_point_up_left.png'],
+      [900, -34, 20, '05_touch_point_down_left.png'],
+      [900, -40, 0, '06_touch_straight.png'],
+      [1600, 42, 0, '07_touch_pull_back.png'],
+      [1500, -40, 0, '08_touch_forward_again.png'],
     ];
     for (const [ms, dx, dy, shot] of script) {
       await touch(page, 'touchMove', [{ id: 1, x: origin.x + dx, y: origin.y + dy }]);

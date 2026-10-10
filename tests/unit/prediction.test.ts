@@ -1,6 +1,7 @@
 import { CITY_01, DEFAULT_LOADOUT, environmentFor, resolveLoadout } from '@bolt/content';
-import type { CarSnapshot, ControlInput, DriveSession, InputSample } from '@bolt/shared';
+import type { CarSnapshot, DriveSession, InputSample } from '@bolt/shared';
 import {
+  MAX_QUEUED_INPUTS,
   buildTrack,
   countdownSeconds,
   createDriveSession,
@@ -10,6 +11,7 @@ import {
   stepDriveSession,
 } from '@bolt/shared';
 import { describe, expect, it } from 'vitest';
+import { InputPacer } from '../../apps/server/src/rooms/inputPacer.js';
 import { OfflineLink } from '../../apps/web/src/network/offlineLink.js';
 import { Predictor } from '../../apps/web/src/network/prediction.js';
 
@@ -34,33 +36,27 @@ function snapshot(s: DriveSession, ack: number): CarSnapshot {
   };
 }
 
-/** Server stand-in: consumes one queued sample per tick, like the drive room. */
+/** Server stand-in: the drive room's own input policy stepping one authoritative session. */
 function harness(delayTicks: number, drop: (tick: number) => boolean = () => false) {
   const server = createDriveSession(track, env, params);
   const predictor = new Predictor(createDriveSession(track, env, params));
   const scratch = createDriverScratch();
+  const pacer = new InputPacer(MAX_QUEUED_INPUTS);
   const wire: Array<{ at: number; sample: InputSample }> = [];
   const back: Array<{ at: number; snap: CarSnapshot }> = [];
-  const queue: InputSample[] = [];
-  let ack = -1;
-  let last: ControlInput = { steer: 0, brake: 0, coast: true };
   const run = (ticks: number, from = 0) => {
     for (let tick = from; tick < from + ticks; tick++) {
       const control = driveCenterline(track, predictor.session.motion, params, env, scratch);
       const { sample } = predictor.step(control);
       if (!drop(tick)) wire.push({ at: tick + delayTicks, sample });
-      while (wire.length > 0 && wire[0]!.at <= tick) queue.push(wire.shift()!.sample);
-      const next = queue.shift();
-      if (next) {
-        ack = next.sequence;
-        last = next;
-      }
-      stepDriveSession(server, last);
-      if (tick % 2 === 0) back.push({ at: tick + delayTicks, snap: snapshot(server, ack) });
+      while (wire.length > 0 && wire[0]!.at <= tick) pacer.accept([wire.shift()!.sample]);
+      pacer.tick(true, (input) => stepDriveSession(server, input));
+      if (tick % 2 === 0)
+        back.push({ at: tick + delayTicks, snap: snapshot(server, pacer.ackSequence) });
       while (back.length > 0 && back[0]!.at <= tick) predictor.reconcile(back.shift()!.snap);
     }
   };
-  return { server, predictor, run };
+  return { server, predictor, pacer, run };
 }
 
 describe('client prediction and reconciliation (Section 15.4)', () => {
@@ -77,8 +73,9 @@ describe('client prediction and reconciliation (Section 15.4)', () => {
     run(30 * 25);
     expect(predictor.pendingCount).toBeGreaterThan(3);
     expect(predictor.pendingCount).toBeLessThan(12);
-    // After the input queue fills at GO, prediction and authority agree to rounding error.
-    expect(predictor.maxCorrection).toBeLessThan(0.5);
+    // The server runs each sample exactly once, so prediction and authority agree to
+    // rounding error from the first tick.
+    expect(predictor.maxCorrection).toBeLessThan(1e-6);
   });
 
   it('recovers from lost packets without a teleport and converges again', () => {
@@ -87,8 +84,11 @@ describe('client prediction and reconciliation (Section 15.4)', () => {
       (tick) => tick > 200 && tick < 900 && tick % 20 === 0,
     );
     run(30 * 30);
+    // A lost sample is replaced on the server by the one before it, so the only disagreement
+    // is the difference between two neighbouring samples: a fraction of a pixel, not a tick
+    // of travel.
     expect(predictor.corrections).toBeGreaterThan(0);
-    expect(predictor.maxCorrection).toBeLessThan(40);
+    expect(predictor.maxCorrection).toBeLessThan(2);
     // Run on a clean link: the visual error decays and both cars keep lapping.
     run(30 * 5, 30 * 30);
     for (let i = 0; i < 60; i++) predictor.decayError(1 / 60);

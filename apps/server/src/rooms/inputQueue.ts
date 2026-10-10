@@ -52,6 +52,11 @@ export class InputQueue {
     return this.sequences[slot]!;
   }
 
+  /** Sequence number of the oldest pending sample, or -1 when empty. */
+  peekSequence(): number {
+    return this.count === 0 ? -1 : this.sequences[this.head]!;
+  }
+
   clear(): void {
     this.head = 0;
     this.count = 0;
