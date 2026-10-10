@@ -21,7 +21,7 @@ function fourCylinder(): EngineArt {
       tag: 'pipe',
       noShadow: true,
     },
-    { shape: lid, material: 'steelDark', z0: 11, z1: 11.7, bevel: 1.2, tag: 'lid' },
+    { shape: lid, material: 'steelDark', z0: 11, z1: 11.7, bevel: 1.2, tag: 'lid', floor: 10.4 },
     {
       shape: circle(0, -2.3, 1.9),
       material: 'copper',
@@ -29,6 +29,7 @@ function fourCylinder(): EngineArt {
       z1: 13,
       bevel: 1.4,
       tag: 'intake',
+      floor: 11.4,
     },
   ];
   const decals: Decal[] = [

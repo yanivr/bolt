@@ -22,8 +22,8 @@ export type CarDrawOp = {
   kind: CarLayerKind;
   /** Which sheet to draw from: a chassis, wheel kit or engine id. */
   sheetId: string;
-  column: number;
-  row: number;
+  /** Linear frame index in the sheet, counted row by row. */
+  frame: number;
   /** Offset of the frame centre from the car origin, in sprite pixels. */
   dx: number;
   dy: number;
@@ -69,7 +69,7 @@ export function layoutCar(
   const bx = Math.round(shift.x);
   const by = Math.round(shift.y);
 
-  ops.push({ kind: 'shadow', sheetId: chassis.id, column: frame, row: 0, dx: 2, dy: 3 });
+  ops.push({ kind: 'shadow', sheetId: chassis.id, frame, dx: 2, dy: 3 });
 
   const rollRow =
     ((Math.floor(pose.roll) % wheels.rollFrames) + wheels.rollFrames) % wheels.rollFrames;
@@ -79,29 +79,27 @@ export function layoutCar(
     ops.push({
       kind: 'wheel',
       sheetId: wheels.id,
-      column: headingFrame(snapped + yaw, WHEEL_HEADINGS),
-      row: rollRow,
+      frame: rollRow * WHEEL_HEADINGS + headingFrame(snapped + yaw, WHEEL_HEADINGS),
       dx: Math.round(p.x),
       dy: Math.round(p.y),
     });
   }
 
-  ops.push({ kind: 'body', sheetId: chassis.id, column: frame, row: 0, dx: bx, dy: by });
+  ops.push({ kind: 'body', sheetId: chassis.id, frame, dx: bx, dy: by });
 
   const e = rotated(chassis.engineAnchor, snapped);
   ops.push({
     kind: 'engine',
     sheetId: engine.id,
-    column: frame,
-    row: 0,
+    frame,
     dx: Math.round(e.x) + bx,
     dy: Math.round(e.y) + by,
   });
 
   if (pose.headlights)
-    ops.push({ kind: 'headlight', sheetId: chassis.id, column: frame, row: 0, dx: bx, dy: by });
+    ops.push({ kind: 'headlight', sheetId: chassis.id, frame, dx: bx, dy: by });
   if (pose.braking)
-    ops.push({ kind: 'brake', sheetId: chassis.id, column: frame, row: 0, dx: bx, dy: by });
+    ops.push({ kind: 'brake', sheetId: chassis.id, frame, dx: bx, dy: by });
   return ops;
 }
 

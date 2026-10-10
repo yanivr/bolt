@@ -7,29 +7,29 @@
         "file": "chassis_beetle_body.png",
         "frameWidth": 96,
         "frameHeight": 96,
-        "columns": 16,
-        "rows": 1
+        "columns": 8,
+        "rows": 8
       },
       "shadow": {
         "file": "chassis_beetle_shadow.png",
         "frameWidth": 96,
         "frameHeight": 96,
-        "columns": 16,
-        "rows": 1
+        "columns": 8,
+        "rows": 8
       },
       "brakeLights": {
         "file": "chassis_beetle_brake.png",
         "frameWidth": 96,
         "frameHeight": 96,
-        "columns": 16,
-        "rows": 1
+        "columns": 8,
+        "rows": 8
       },
       "headlights": {
         "file": "chassis_beetle_head.png",
         "frameWidth": 96,
         "frameHeight": 96,
-        "columns": 16,
-        "rows": 1
+        "columns": 8,
+        "rows": 8
       },
       "paintKey": [
         "#2b0a1f",
@@ -106,29 +106,29 @@
         "file": "chassis_arrow_body.png",
         "frameWidth": 96,
         "frameHeight": 96,
-        "columns": 16,
-        "rows": 1
+        "columns": 8,
+        "rows": 8
       },
       "shadow": {
         "file": "chassis_arrow_shadow.png",
         "frameWidth": 96,
         "frameHeight": 96,
-        "columns": 16,
-        "rows": 1
+        "columns": 8,
+        "rows": 8
       },
       "brakeLights": {
         "file": "chassis_arrow_brake.png",
         "frameWidth": 96,
         "frameHeight": 96,
-        "columns": 16,
-        "rows": 1
+        "columns": 8,
+        "rows": 8
       },
       "headlights": {
         "file": "chassis_arrow_head.png",
         "frameWidth": 96,
         "frameHeight": 96,
-        "columns": 16,
-        "rows": 1
+        "columns": 8,
+        "rows": 8
       },
       "paintKey": [
         "#2b0a1f",
@@ -205,29 +205,29 @@
         "file": "chassis_turtle_body.png",
         "frameWidth": 96,
         "frameHeight": 96,
-        "columns": 16,
-        "rows": 1
+        "columns": 8,
+        "rows": 8
       },
       "shadow": {
         "file": "chassis_turtle_shadow.png",
         "frameWidth": 96,
         "frameHeight": 96,
-        "columns": 16,
-        "rows": 1
+        "columns": 8,
+        "rows": 8
       },
       "brakeLights": {
         "file": "chassis_turtle_brake.png",
         "frameWidth": 96,
         "frameHeight": 96,
-        "columns": 16,
-        "rows": 1
+        "columns": 8,
+        "rows": 8
       },
       "headlights": {
         "file": "chassis_turtle_head.png",
         "frameWidth": 96,
         "frameHeight": 96,
-        "columns": 16,
-        "rows": 1
+        "columns": 8,
+        "rows": 8
       },
       "paintKey": [
         "#2b0a1f",
@@ -304,29 +304,29 @@
         "file": "chassis_spider_body.png",
         "frameWidth": 96,
         "frameHeight": 96,
-        "columns": 16,
-        "rows": 1
+        "columns": 8,
+        "rows": 8
       },
       "shadow": {
         "file": "chassis_spider_shadow.png",
         "frameWidth": 96,
         "frameHeight": 96,
-        "columns": 16,
-        "rows": 1
+        "columns": 8,
+        "rows": 8
       },
       "brakeLights": {
         "file": "chassis_spider_brake.png",
         "frameWidth": 96,
         "frameHeight": 96,
-        "columns": 16,
-        "rows": 1
+        "columns": 8,
+        "rows": 8
       },
       "headlights": {
         "file": "chassis_spider_head.png",
         "frameWidth": 96,
         "frameHeight": 96,
-        "columns": 16,
-        "rows": 1
+        "columns": 8,
+        "rows": 8
       },
       "paintKey": [
         "#2b0a1f",
@@ -430,8 +430,8 @@
         "file": "engine_four_cylinder.png",
         "frameWidth": 40,
         "frameHeight": 40,
-        "columns": 16,
-        "rows": 1
+        "columns": 8,
+        "rows": 8
       },
       "exhaustStyle": "puff"
     }

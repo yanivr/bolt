@@ -2,7 +2,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { CHASSIS, CITY_01, ENGINES, PAINTS, TIRES } from '@bolt/content';
 import type { CarAtlasManifest, SpriteSheetRef, TerrainManifest, VfxManifest } from '@bolt/shared';
-import { CAR_HEADINGS, WHEEL_HEADINGS } from '@bolt/shared';
+import { CAR_HEADINGS, CAR_SHEET_COLUMNS, WHEEL_HEADINGS } from '@bolt/shared';
 import { describe, expect, it } from 'vitest';
 import { PixelBuffer, decodePng, encodePng, readPng } from '../../art/scripts/lib/pixels.js';
 
@@ -72,12 +72,16 @@ describe('car atlases match the catalog', () => {
   });
 
   it.each(Object.values(cars.chassis))(
-    '$id has sixteen non-empty heading frames in every layer',
+    '$id has a non-empty frame for every heading in every layer',
     (entry) => {
       for (const ref of [entry.body, entry.shadow, entry.brakeLights, entry.headlights]) {
-        expect(ref.columns).toBe(CAR_HEADINGS);
+        expect(ref.columns).toBe(CAR_SHEET_COLUMNS);
+        expect(ref.columns * ref.rows).toBe(CAR_HEADINGS);
         const image = expectSheet(carsDir, ref);
-        for (let h = 0; h < CAR_HEADINGS; h++) expect(frameIsEmpty(image, ref, h, 0)).toBe(false);
+        // Lamps can be hidden behind the bodywork at some headings in the tilted view.
+        if (ref === entry.brakeLights || ref === entry.headlights) continue;
+        for (let h = 0; h < CAR_HEADINGS; h++)
+          expect(frameIsEmpty(image, ref, h % ref.columns, Math.floor(h / ref.columns))).toBe(false);
       }
       const def = CHASSIS[entry.id]!;
       expect(entry.wheelAnchors.map((w) => [w.id, w.x, w.y, w.steers])).toEqual(
@@ -92,13 +96,15 @@ describe('car atlases match the catalog', () => {
       const image = readPng(join(carsDir, entry.body.file));
       const { frameWidth: fw, frameHeight: fh } = entry.body;
       for (let h = 0; h < CAR_HEADINGS; h++) {
+        const x0 = (h % entry.body.columns) * fw;
+        const y0 = Math.floor(h / entry.body.columns) * fh;
         for (let i = 0; i < fw; i++) {
-          expect(image.alphaAt(h * fw + i, 0)).toBe(0);
-          expect(image.alphaAt(h * fw + i, fh - 1)).toBe(0);
+          expect(image.alphaAt(x0 + i, y0)).toBe(0);
+          expect(image.alphaAt(x0 + i, y0 + fh - 1)).toBe(0);
         }
         for (let j = 0; j < fh; j++) {
-          expect(image.alphaAt(h * fw, j)).toBe(0);
-          expect(image.alphaAt(h * fw + fw - 1, j)).toBe(0);
+          expect(image.alphaAt(x0, y0 + j)).toBe(0);
+          expect(image.alphaAt(x0 + fw - 1, y0 + j)).toBe(0);
         }
       }
     },
@@ -144,7 +150,7 @@ describe('car atlases match the catalog', () => {
           expect(frameIsEmpty(image, w.sheet, c, r)).toBe(false);
     }
     for (const e of Object.values(cars.engines)) {
-      expect(e.sheet.columns).toBe(CAR_HEADINGS);
+      expect(e.sheet.columns * e.sheet.rows).toBe(CAR_HEADINGS);
       expectSheet(carsDir, e.sheet);
     }
   });

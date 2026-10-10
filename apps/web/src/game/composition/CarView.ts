@@ -67,28 +67,28 @@ export class CarView {
       switch (op.kind) {
         case 'shadow':
           target = this.shadow;
-          frame = op.column;
+          frame = op.frame;
           break;
         case 'wheel':
           target = this.wheels[wheel++]!;
-          frame = op.row * this.wheelKit.sheet.columns + op.column;
+          frame = op.frame;
           break;
         case 'body':
           target = this.body;
-          frame = op.column;
+          frame = op.frame;
           break;
         case 'engine':
           target = this.engine;
-          frame = op.column;
+          frame = op.frame;
           break;
         case 'headlight':
           target = this.head;
-          frame = op.column;
+          frame = op.frame;
           target.setVisible(true);
           break;
         default:
           target = this.brake;
-          frame = op.column;
+          frame = op.frame;
           target.setVisible(true);
           break;
       }

@@ -105,6 +105,7 @@ export function CarTurntable({ manifests, chassisId, engineId, tireKitId, paintI
             let image: CanvasImageSource = body;
             let fw = chassis.body.frameWidth;
             let fh = chassis.body.frameHeight;
+            let columns = chassis.body.columns;
             if (op.kind === 'shadow') image = shadow;
             else if (op.kind === 'headlight') image = head;
             else if (op.kind === 'brake') continue;
@@ -112,15 +113,17 @@ export function CarTurntable({ manifests, chassisId, engineId, tireKitId, paintI
               image = wheelSheet;
               fw = wheels.sheet.frameWidth;
               fh = wheels.sheet.frameHeight;
+              columns = wheels.sheet.columns;
             } else if (op.kind === 'engine') {
               image = engineSheet;
               fw = engine.sheet.frameWidth;
               fh = engine.sheet.frameHeight;
+              columns = engine.sheet.columns;
             }
             ctx.drawImage(
               image,
-              op.column * fw,
-              op.row * fh,
+              (op.frame % columns) * fw,
+              Math.floor(op.frame / columns) * fh,
               fw,
               fh,
               Math.round(size / 2 + op.dx - fw / 2),
@@ -130,7 +133,7 @@ export function CarTurntable({ manifests, chassisId, engineId, tireKitId, paintI
             );
           }
           frame = (frame + 1) % CAR_HEADINGS;
-          timer = window.setTimeout(draw, 170);
+          timer = window.setTimeout(draw, 60);
         };
         draw();
       })

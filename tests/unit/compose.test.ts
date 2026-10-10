@@ -29,11 +29,11 @@ const base: CarPose = {
 };
 
 describe('vehicle compositor (Section 14.1)', () => {
-  it('snaps headings to sixteen frames and wraps correctly', () => {
+  it('snaps headings to the authored frames and wraps correctly', () => {
     expect(headingFrame(0)).toBe(0);
     expect(headingFrame(TAU)).toBe(0);
     expect(headingFrame(-TAU / CAR_HEADINGS)).toBe(CAR_HEADINGS - 1);
-    expect(headingFrame(Math.PI)).toBe(8);
+    expect(headingFrame(Math.PI)).toBe(CAR_HEADINGS / 2);
     expect(headingFrame((TAU / CAR_HEADINGS) * 0.49)).toBe(0);
     expect(headingFrame((TAU / CAR_HEADINGS) * 0.51)).toBe(1);
   });
@@ -61,16 +61,10 @@ describe('vehicle compositor (Section 14.1)', () => {
             braking: true,
             headlights: true,
           })) {
-            const sheet =
-              op.kind === 'wheel'
-                ? wheels.sheet
-                : op.kind === 'engine'
-                  ? engine.sheet
-                  : chassis.body;
-            expect(op.column).toBeGreaterThanOrEqual(0);
-            expect(op.column).toBeLessThan(sheet.columns);
-            expect(op.row).toBeGreaterThanOrEqual(0);
-            expect(op.row).toBeLessThan(sheet.rows);
+            const sheet = op.kind === 'wheel' ? wheels.sheet : op.kind === 'engine' ? engine.sheet : chassis.body;
+            expect(Number.isInteger(op.frame)).toBe(true);
+            expect(op.frame).toBeGreaterThanOrEqual(0);
+            expect(op.frame).toBeLessThan(sheet.columns * sheet.rows);
             expect(Number.isInteger(op.dx) && Number.isInteger(op.dy)).toBe(true);
           }
         }
@@ -85,10 +79,10 @@ describe('vehicle compositor (Section 14.1)', () => {
     );
     chassis.wheelAnchors.forEach((anchor, i) => {
       if (anchor.steers) {
-        expect(right[i]!.column).toBe(headingFrame(MAX_WHEEL_YAW_RAD, WHEEL_HEADINGS));
-        expect(right[i]!.column).not.toBe(straight[i]!.column);
+        expect(right[i]!.frame).toBe(headingFrame(MAX_WHEEL_YAW_RAD, WHEEL_HEADINGS));
+        expect(right[i]!.frame).not.toBe(straight[i]!.frame);
       } else {
-        expect(right[i]!.column).toBe(straight[i]!.column);
+        expect(right[i]!.frame).toBe(straight[i]!.frame);
       }
     });
   });

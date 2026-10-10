@@ -70,7 +70,13 @@ export type TerrainManifest = {
 
 // --- Vehicles ----------------------------------------------------------------------------------
 
-export const CAR_HEADINGS = 16;
+/**
+ * Authored headings per chassis. Sixty-four frames put 5.6 degrees between neighbours, so a
+ * turning car reads as rotating rather than snapping (the specification's sixteen is a floor).
+ */
+export const CAR_HEADINGS = 64;
+/** Heading frames are packed in a grid this many columns wide to stay inside texture limits. */
+export const CAR_SHEET_COLUMNS = 8;
 export const WHEEL_HEADINGS = 32;
 
 export type AnchorPoint = { x: number; y: number };
@@ -86,7 +92,7 @@ export type SpriteSheetRef = {
 
 export type ChassisSpriteManifest = {
   id: string;
-  /** 16 heading frames in one row, heading 0 first, clockwise. */
+  /** One frame per heading, heading 0 first, clockwise, packed row by row. */
   body: SpriteSheetRef;
   shadow: SpriteSheetRef;
   brakeLights: SpriteSheetRef;
@@ -110,7 +116,7 @@ export type WheelSpriteManifest = {
 
 export type EngineSpriteManifest = {
   id: string;
-  /** 16 heading frames in one row. Drawn at the chassis engine anchor. */
+  /** One frame per heading, packed row by row. Drawn at the chassis engine anchor. */
   sheet: SpriteSheetRef;
   exhaustStyle: 'puff' | 'flame' | 'none';
 };

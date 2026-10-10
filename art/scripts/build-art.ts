@@ -10,15 +10,14 @@ import type {
   VfxManifest,
   WheelSpriteManifest,
 } from '@bolt/shared';
-import { CAR_HEADINGS, TAU, WHEEL_HEADINGS, layoutCar } from '@bolt/shared';
+import { CAR_HEADINGS, CAR_SHEET_COLUMNS, TAU, WHEEL_HEADINGS, layoutCar } from '@bolt/shared';
 import { BEETLE_ART } from './cars/beetle.js';
 import { ARROW_ART, SPIDER_ART, TURTLE_ART } from './cars/benchmarks.js';
 import { FOUR_CYLINDER_ART } from './cars/engines.js';
 import { CAR_MATERIALS, PAINTS, PAINT_KEY, PAINT_OUTLINE_KEY } from './cars/materials.js';
 import type { ChassisArt, EngineArt, WheelArt } from './cars/types.js';
 import { STREET_WHEEL_ART } from './cars/wheels.js';
-import type { Model } from './lib/model.js';
-import { addGlow, renderModel, silhouette } from './lib/model.js';
+import { addGlow, extractTagged, footprintShadow, renderModel, silhouette } from './lib/model.js';
 import type { RGBA } from './lib/pixels.js';
 import { PixelBuffer, hex, readPng, writePng } from './lib/pixels.js';
 import { bakeTerrain } from './terrain/index.js';
@@ -57,12 +56,6 @@ function sheet(frames: PixelBuffer[], columns: number): PixelBuffer {
   return out;
 }
 
-function withMaterials(model: Model, overrides: Record<string, string>): Model {
-  const materials = { ...model.materials };
-  for (const [from, to] of Object.entries(overrides)) materials[from] = model.materials[to]!;
-  return { ...model, materials };
-}
-
 type Baked = {
   files: Map<string, PixelBuffer>;
   manifest: CarAtlasManifest;
@@ -72,9 +65,18 @@ type Baked = {
       { body: PixelBuffer[]; shadow: PixelBuffer[]; brake: PixelBuffer[]; head: PixelBuffer[] }
     >;
     wheels: Record<string, PixelBuffer[][]>;
+    wheelFeet: Record<string, PixelBuffer[]>;
     engines: Record<string, PixelBuffer[]>;
   };
 };
+
+/**
+ * Camera for every vehicle sprite: seen from the south at an angle, as in the product owner's
+ * reference. Heights are exaggerated a little so roofs, fenders and weapons read at game size.
+ */
+const CAR_TILT = 0.62;
+const CAR_Z_SCALE = 1.3;
+const view = (heading: number, cell: number) => ({ heading, width: cell, height: cell, tilt: CAR_TILT, zScale: CAR_Z_SCALE });
 
 function bakeChassis(art: ChassisArt, wheelArt: WheelArt, baked: Baked): void {
   const def = CHASSIS[art.id];
@@ -83,62 +85,44 @@ function bakeChassis(art: ChassisArt, wheelArt: WheelArt, baked: Baked): void {
   const shadow: PixelBuffer[] = [];
   const brake: PixelBuffer[] = [];
   const head: PixelBuffer[] = [];
-  const brakeModel = withMaterials(art.model, { tailOff: 'tailOn' });
-  const headModel = withMaterials(art.model, { lampOff: 'lampOn' });
-  const wheelFrames = baked.frames.wheels[wheelArt.id]!;
+  const wheelFeet = baked.frames.wheelFeet[wheelArt.id]!;
+  const lampOn = CAR_MATERIALS.lampOn!.ramp[2];
+  const tailOn = CAR_MATERIALS.tailOn!.ramp[2];
 
   for (let h = 0; h < CAR_HEADINGS; h++) {
     const heading = (h * TAU) / CAR_HEADINGS;
-    const base = renderModel(art.model, { heading, width: art.cell, height: art.cell });
+    const base = renderModel(art.model, view(heading, art.cell));
     body.push(base.image);
 
-    // The shadow is the silhouette of the whole assembly, wheels included.
-    const assembled = new PixelBuffer(art.cell, art.cell);
+    // The shadow is where the whole assembly stands on the ground, wheels included.
+    const feet = footprintShadow(base, SHADOW);
     for (const anchor of def.wheelAnchors) {
       const c = Math.cos(heading);
       const s = Math.sin(heading);
       const wx = Math.round(anchor.x * c - anchor.y * s);
       const wy = Math.round(anchor.x * s + anchor.y * c);
-      const wheel = wheelFrames[0]![(h * WHEEL_HEADINGS) / CAR_HEADINGS]!;
-      assembled.blit(
-        wheel,
-        art.cell / 2 + wx - wheel.width / 2,
-        art.cell / 2 + wy - wheel.height / 2,
-      );
+      const wheel = wheelFeet[Math.round((h * WHEEL_HEADINGS) / CAR_HEADINGS) % WHEEL_HEADINGS]!;
+      feet.blit(wheel, art.cell / 2 + wx - wheel.width / 2, art.cell / 2 + wy - wheel.height / 2);
     }
-    assembled.blit(base.image, 0, 0);
-    shadow.push(silhouette(assembled, SHADOW, SHADOW_RIM));
+    shadow.push(silhouette(feet, SHADOW, SHADOW_RIM));
 
-    const b = renderModel(brakeModel, {
-      heading,
-      width: art.cell,
-      height: art.cell,
-      outline: false,
-      onlyTags: ['taillight'],
-    });
-    brake.push(addGlow(b.image, [244, 107, 88, 120]));
-    const hl = renderModel(headModel, {
-      heading,
-      width: art.cell,
-      height: art.cell,
-      outline: false,
-      onlyTags: ['headlight'],
-    });
-    head.push(addGlow(hl.image, [246, 195, 91, 110]));
+    // Lit lamps reuse the body's own pixels, so they can never drift from the bodywork.
+    brake.push(addGlow(extractTagged(base, art.model, ['taillight'], tailOn), [244, 107, 88, 120]));
+    head.push(addGlow(extractTagged(base, art.model, ['headlight'], lampOn), [246, 195, 91, 110]));
   }
 
   baked.frames.chassis[art.id] = { body, shadow, brake, head };
-  baked.files.set(`${art.id}_body.png`, sheet(body, CAR_HEADINGS));
-  baked.files.set(`${art.id}_shadow.png`, sheet(shadow, CAR_HEADINGS));
-  baked.files.set(`${art.id}_brake.png`, sheet(brake, CAR_HEADINGS));
-  baked.files.set(`${art.id}_head.png`, sheet(head, CAR_HEADINGS));
+  baked.files.set(`${art.id}_body.png`, sheet(body, CAR_SHEET_COLUMNS));
+  baked.files.set(`${art.id}_shadow.png`, sheet(shadow, CAR_SHEET_COLUMNS));
+  baked.files.set(`${art.id}_brake.png`, sheet(brake, CAR_SHEET_COLUMNS));
+  baked.files.set(`${art.id}_head.png`, sheet(head, CAR_SHEET_COLUMNS));
 
   const ref = (suffix: string) => ({
     file: `${art.id}_${suffix}.png`,
     frameWidth: art.cell,
     frameHeight: art.cell,
-    columns: CAR_HEADINGS,
-    rows: 1,
+    columns: CAR_SHEET_COLUMNS,
+    rows: CAR_HEADINGS / CAR_SHEET_COLUMNS,
   });
   const entry: ChassisSpriteManifest = {
     id: art.id,
@@ -159,21 +143,20 @@ function bakeChassis(art: ChassisArt, wheelArt: WheelArt, baked: Baked): void {
 function bakeWheels(art: WheelArt, baked: Baked): void {
   const rows: PixelBuffer[][] = [];
   const flat: PixelBuffer[] = [];
+  const feet: PixelBuffer[] = [];
   for (let r = 0; r < art.rollFrames; r++) {
     const model = art.model(r);
     const row: PixelBuffer[] = [];
     for (let h = 0; h < WHEEL_HEADINGS; h++) {
-      const frame = renderModel(model, {
-        heading: (h * TAU) / WHEEL_HEADINGS,
-        width: art.cell,
-        height: art.cell,
-      }).image;
-      row.push(frame);
-      flat.push(frame);
+      const result = renderModel(model, view((h * TAU) / WHEEL_HEADINGS, art.cell));
+      row.push(result.image);
+      flat.push(result.image);
+      if (r === 0) feet.push(footprintShadow(result, SHADOW));
     }
     rows.push(row);
   }
   baked.frames.wheels[art.id] = rows;
+  baked.frames.wheelFeet[art.id] = feet;
   baked.files.set(`${art.id}.png`, sheet(flat, WHEEL_HEADINGS));
   const entry: WheelSpriteManifest = {
     id: art.id,
@@ -192,24 +175,18 @@ function bakeWheels(art: WheelArt, baked: Baked): void {
 function bakeEngine(art: EngineArt, baked: Baked): void {
   const frames: PixelBuffer[] = [];
   for (let h = 0; h < CAR_HEADINGS; h++) {
-    frames.push(
-      renderModel(art.model, {
-        heading: (h * TAU) / CAR_HEADINGS,
-        width: art.cell,
-        height: art.cell,
-      }).image,
-    );
+    frames.push(renderModel(art.model, view((h * TAU) / CAR_HEADINGS, art.cell)).image);
   }
   baked.frames.engines[art.id] = frames;
-  baked.files.set(`${art.id}.png`, sheet(frames, CAR_HEADINGS));
+  baked.files.set(`${art.id}.png`, sheet(frames, CAR_SHEET_COLUMNS));
   const entry: EngineSpriteManifest = {
     id: art.id,
     sheet: {
       file: `${art.id}.png`,
       frameWidth: art.cell,
       frameHeight: art.cell,
-      columns: CAR_HEADINGS,
-      rows: 1,
+      columns: CAR_SHEET_COLUMNS,
+      rows: CAR_HEADINGS / CAR_SHEET_COLUMNS,
     },
     exhaustStyle: art.exhaustStyle,
   };
@@ -221,7 +198,7 @@ function writeLineup(baked: Baked): void {
   const ids = Object.keys(baked.manifest.chassis);
   const cell = 96;
   const paints = ['paint_signal', 'paint_cobalt', 'paint_mint', 'paint_sunflare'];
-  const headings = [0, 2, 4, 6, 9, 13];
+  const headings = [0, 6, 16, 26, 36, 52];
   const sheet = new PixelBuffer(cell * headings.length, cell * ids.length);
   sheet.fill(hex('#3a4257'));
   const dark = new PixelBuffer(cell * ids.length, cell);
@@ -282,18 +259,18 @@ function composeCar(
   );
   for (const op of ops) {
     let frame: PixelBuffer;
-    if (op.kind === 'wheel') frame = baked.frames.wheels[op.sheetId]![op.row]![op.column]!;
-    else if (op.kind === 'engine') frame = baked.frames.engines[op.sheetId]![op.column]!;
+    if (op.kind === 'wheel') frame = baked.frames.wheels[op.sheetId]![Math.floor(op.frame / WHEEL_HEADINGS)]![op.frame % WHEEL_HEADINGS]!;
+    else if (op.kind === 'engine') frame = baked.frames.engines[op.sheetId]![op.frame]!;
     else {
       const set = baked.frames.chassis[op.sheetId]!;
       frame =
         op.kind === 'body'
-          ? set.body[op.column]!
+          ? set.body[op.frame]!
           : op.kind === 'shadow'
-            ? set.shadow[op.column]!
+            ? set.shadow[op.frame]!
             : op.kind === 'brake'
-              ? set.brake[op.column]!
-              : set.head[op.column]!;
+              ? set.brake[op.frame]!
+              : set.head[op.frame]!;
     }
     if (op.kind === 'body') frame = repaint(frame, paintId);
     out.blit(
@@ -344,15 +321,15 @@ function writePreviews(baked: Baked): void {
   };
 
   // Sheet 1: all sixteen headings, at game size and at 4x.
-  const row = new PixelBuffer(cell * CAR_HEADINGS, cell);
+  const row = new PixelBuffer(cell * 16, cell);
   row.fill(bg);
-  for (let h = 0; h < CAR_HEADINGS; h++) {
+  for (let h = 0; h < 16; h++) {
     const car = composeCar(
       baked,
       'chassis_beetle',
       'tires_street',
       'engine_four_cylinder',
-      { ...basePose, headingRad: (h * TAU) / CAR_HEADINGS },
+      { ...basePose, headingRad: (h * TAU) / 16 },
       'paint_signal',
     );
     row.blit(car, h * cell, 0);
@@ -395,7 +372,7 @@ function writePreviews(baked: Baked): void {
         'chassis_beetle',
         'tires_street',
         'engine_four_cylinder',
-        { ...basePose, ...pose, headingRad: (3 * TAU) / CAR_HEADINGS },
+        { ...basePose, ...pose, headingRad: (3 * TAU) / 16 },
         paint,
       ),
       i * cell,
@@ -437,7 +414,7 @@ function writePreviews(baked: Baked): void {
         'engine_four_cylinder',
         {
           ...basePose,
-          headingRad: (h * TAU) / CAR_HEADINGS,
+          headingRad: (h * TAU) / 16,
           headlights: true,
           braking: i === 1,
           steer: i === 3 ? 0.8 : 0,
@@ -457,7 +434,7 @@ function bakeCars(): Baked {
   const baked: Baked = {
     files: new Map(),
     manifest: { version: 1, chassis: {}, wheels: {}, engines: {}, paints: {} },
-    frames: { chassis: {}, wheels: {}, engines: {} },
+    frames: { chassis: {}, wheels: {}, wheelFeet: {}, engines: {} },
   };
   for (const [id, paint] of Object.entries(PAINTS)) {
     baked.manifest.paints[id] = {

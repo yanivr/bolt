@@ -166,6 +166,8 @@ export type Solid = {
   profile?: 'round' | 'linear';
   /** Optional custom height, replacing the bevel profile. `d` is the signed distance (negative). */
   height?: (x: number, y: number, d: number) => number;
+  /** Height this part rests at when it sits on another sprite layer; no side is drawn below it. */
+  floor?: number;
   /** Free-form label used to target decals and to extract overlay layers. */
   tag?: string;
   /** Solids that do not throw shadows (lights, glass, thin trim). */
@@ -193,6 +195,10 @@ export type RenderOptions = {
   heading: number;
   width: number;
   height: number;
+  /** Camera tilt: pixels a point rises on screen per unit of height. 0 looks straight down. */
+  tilt?: number;
+  /** Exaggerates part heights so the tilted view reads clearly at small sizes. */
+  zScale?: number;
   /** Supersampling grid per pixel edge. */
   samples?: number;
   /** Where the model origin lands in the image. Defaults to the image centre. */
@@ -209,6 +215,8 @@ export type RenderResult = {
   image: PixelBuffer;
   /** Index of the winning solid per pixel, or -1. Used for layer extraction and validation. */
   solidIndex: Int16Array;
+  /** 1 where the part stands on the ground, regardless of what is drawn there. */
+  footprint: Uint8Array;
 };
 
 // Upper-left key light, raised. A flat top lands on the base ramp step.
@@ -294,10 +302,19 @@ function heightOf(solid: Solid, x: number, y: number): number {
   return solidHeight(solid, x, y, d);
 }
 
-/** Renders one model at one heading. */
+/**
+ * Renders one model at one heading.
+ *
+ * The camera looks down from the south at an angle: a point at height z is drawn `tilt * z`
+ * pixels up the image. Parts are sampled on a fine ground grid and painted north to south, so
+ * nearer geometry covers what stands behind it and the south-facing sides of tall parts
+ * become visible walls. With `tilt` 0 this is a straight-down view.
+ */
 export function renderModel(model: Model, opts: RenderOptions): RenderResult {
   const { width, height } = opts;
-  const n = opts.samples ?? 4;
+  const n = opts.samples ?? 3;
+  const tilt = opts.tilt ?? 0;
+  const zScale = opts.zScale ?? 1;
   const ox = opts.originX ?? width / 2;
   const oy = opts.originY ?? height / 2;
   const cos = Math.cos(opts.heading);
@@ -305,9 +322,14 @@ export function renderModel(model: Model, opts: RenderOptions): RenderResult {
   const solids = model.solids;
   const active = solids.map((s) => !(opts.skipTags && s.tag && opts.skipTags.includes(s.tag)));
 
-  const image = new PixelBuffer(width, height);
-  const solidIndex = new Int16Array(width * height).fill(-1);
-  const materialAt: string[] = new Array<string>(width * height).fill('');
+  const names = Object.keys(model.materials);
+  const nameIndex = new Map(names.map((name, i) => [name, i]));
+  const sw = width * n;
+  const sh = height * n;
+  const cellMat = new Int16Array(sw * sh).fill(-1);
+  const cellSolid = new Int16Array(sw * sh).fill(-1);
+  const cellShade = new Float32Array(sw * sh);
+  const ground = new Uint8Array(sw * sh);
 
   // The light is fixed in screen space, so bring it into model space once per frame.
   const lx = LIGHT[0] * cos + LIGHT[1] * sin;
@@ -320,87 +342,159 @@ export function renderModel(model: Model, opts: RenderOptions): RenderResult {
 
   const hit: Hit = { solid: -1, z: 0 };
   const probe: Hit = { solid: -1, z: 0 };
-  const total = n * n;
-  const keys = new Map<
-    string,
-    { count: number; shade: number; solid: number; material: string; delta: number }
-  >();
   const eps = 0.3;
+  const stackSolid: number[] = [];
+  const stackZ: number[] = [];
 
-  for (let py = 0; py < height; py++) {
-    for (let px = 0; px < width; px++) {
-      keys.clear();
-      let covered = 0;
-      for (let j = 0; j < n; j++) {
-        for (let i = 0; i < n; i++) {
-          const sxp = px + (i + 0.5) / n - ox;
-          const syp = py + (j + 0.5) / n - oy;
-          // Screen to model: undo the clockwise heading rotation.
-          const mx = sxp * cos + syp * sin;
-          const my = -sxp * sin + syp * cos;
-          if (!topSolid(solids, active, mx, my, hit)) continue;
-          covered++;
-          const solid = solids[hit.solid]!;
-          let material = solid.material;
-          let delta = 0;
-          for (const decal of model.decals) {
-            if (decal.on && !(solid.tag && decal.on.includes(solid.tag))) continue;
-            const dbox = boundsOf(decal.shape);
-            if (mx < dbox.x0 || mx > dbox.x1 || my < dbox.y0 || my > dbox.y1) continue;
-            if (decal.shape(mx, my) > 0) continue;
-            if (decal.material) material = decal.material;
-            if (decal.shade) delta += decal.shade;
-          }
-          const mat = model.materials[material];
-          if (!mat) throw new Error(`Unknown material ${material}`);
-          let shade = LIGHT[2];
+  const put = (gx: number, row: number, mat: number, solid: number, shade: number) => {
+    if (row < 0 || row >= sh) return;
+    const i = row * sw + gx;
+    cellMat[i] = mat;
+    cellSolid[i] = solid;
+    cellShade[i] = shade;
+  };
+
+  for (let gy = 0; gy < sh; gy++) {
+    for (let gx = 0; gx < sw; gx++) {
+      const px = (gx + 0.5) / n - ox;
+      const py = (gy + 0.5) / n - oy;
+      // Screen-aligned ground position to model space: undo the clockwise heading rotation.
+      const mx = px * cos + py * sin;
+      const my = -px * sin + py * cos;
+
+      // Every solid standing on this ground point, lowest first.
+      stackSolid.length = 0;
+      stackZ.length = 0;
+      for (let i = 0; i < solids.length; i++) {
+        if (!active[i]) continue;
+        const s = solids[i]!;
+        const box = boundsOf(s.shape);
+        if (mx < box.x0 || mx > box.x1 || my < box.y0 || my > box.y1) continue;
+        const d = s.shape(mx, my);
+        if (d > 0) continue;
+        const z = solidHeight(s, mx, my, d);
+        let at = stackZ.length;
+        while (at > 0 && stackZ[at - 1]! > z) at--;
+        stackZ.splice(at, 0, z);
+        stackSolid.splice(at, 0, i);
+      }
+      const count = stackZ.length;
+      if (count === 0) continue;
+      ground[gy * sw + gx] = 1;
+
+      // Sides first, from the ground up: each band belongs to the lowest part that reaches it.
+      if (tilt > 0) {
+        let from = 0;
+        for (let k = 0; k < count; k++) {
+          const z = stackZ[k]! * zScale;
+          if (z <= from) continue;
+          const solid = solids[stackSolid[k]!]!;
+          const mat = model.materials[solid.material];
+          if (!mat) throw new Error(`Unknown material ${solid.material}`);
+          let level = 2;
           if (!mat.flat) {
-            const gx = (heightOf(solid, mx + eps, my) - heightOf(solid, mx - eps, my)) / (2 * eps);
-            const gy = (heightOf(solid, mx, my + eps) - heightOf(solid, mx, my - eps)) / (2 * eps);
-            const nl = Math.hypot(gx, gy, 1);
-            shade = (-gx * lx - gy * ly + lz) / nl;
-            // Cast shadow: march toward the light and see whether anything stands in the way.
-            for (const step of [1.4, 2.8, 4.4]) {
-              const qx = mx + sx * step;
-              const qy = my + sy * step;
-              if (topSolid(solids, active, qx, qy, probe) && !solids[probe.solid]!.noShadow) {
-                if (probe.z - hit.z > step * slope + 0.6) {
-                  shade -= 0.26;
-                  break;
-                }
-              }
+            const gx2 = solid.shape(mx + eps, my) - solid.shape(mx - eps, my);
+            const gy2 = solid.shape(mx, my + eps) - solid.shape(mx, my - eps);
+            const gl = Math.hypot(gx2, gy2) || 1;
+            const facing = (gx2 * lx + gy2 * ly) / gl;
+            level = facing > 0.38 ? 2 : facing > -0.1 ? 1 : 0;
+          }
+          level = Math.max(0, Math.min(4, level + (mat.bias ?? 0)));
+          // A part that rides on another (an engine lid on a deck) has no side below its floor.
+          const lo = Math.max(from, (solid.floor ?? 0) * zScale);
+          const top = gy - Math.floor(tilt * z * n);
+          const bottom = gy - Math.floor(tilt * Math.min(lo, z) * n);
+          const m = nameIndex.get(solid.material)!;
+          for (let row = bottom; row > top; row--) put(gx, row, m, stackSolid[k]!, level);
+          from = z;
+        }
+      }
+
+      // Then the visible top.
+      hit.solid = stackSolid[count - 1]!;
+      hit.z = stackZ[count - 1]!;
+      const solid = solids[hit.solid]!;
+      let material = solid.material;
+      let delta = 0;
+      for (const decal of model.decals) {
+        if (decal.on && !(solid.tag && decal.on.includes(solid.tag))) continue;
+        const dbox = boundsOf(decal.shape);
+        if (mx < dbox.x0 || mx > dbox.x1 || my < dbox.y0 || my > dbox.y1) continue;
+        if (decal.shape(mx, my) > 0) continue;
+        if (decal.material) material = decal.material;
+        if (decal.shade) delta += decal.shade;
+      }
+      const mat = model.materials[material];
+      if (!mat) throw new Error(`Unknown material ${material}`);
+      let level = 2;
+      if (!mat.flat) {
+        const gxh = (heightOf(solid, mx + eps, my) - heightOf(solid, mx - eps, my)) / (2 * eps);
+        const gyh = (heightOf(solid, mx, my + eps) - heightOf(solid, mx, my - eps)) / (2 * eps);
+        const nl = Math.hypot(gxh, gyh, 1);
+        let shade = (-gxh * lx - gyh * ly + lz) / nl;
+        // Cast shadow: march toward the light and see whether anything stands in the way.
+        for (const step of [1.4, 2.8, 4.4]) {
+          if (topSolid(solids, active, mx + sx * step, my + sy * step, probe) && !solids[probe.solid]!.noShadow) {
+            if (probe.z - hit.z > step * slope + 0.6) {
+              shade -= 0.26;
+              break;
             }
           }
-          const key = material;
-          const slot = keys.get(key);
+        }
+        level = quantize(shade);
+      }
+      level = Math.max(0, Math.min(4, level + delta + (mat.bias ?? 0)));
+      put(gx, gy - Math.floor(tilt * hit.z * zScale * n), nameIndex.get(material)!, hit.solid, level);
+    }
+  }
+
+  // Resolve each pixel from its sub-cells: majority material, average shade.
+  const image = new PixelBuffer(width, height);
+  const solidIndex = new Int16Array(width * height).fill(-1);
+  const footprint = new Uint8Array(width * height);
+  const materialAt: string[] = new Array<string>(width * height).fill('');
+  const tally = new Map<number, { count: number; shade: number; solid: number }>();
+  const total = n * n;
+  for (let py = 0; py < height; py++) {
+    for (let px = 0; px < width; px++) {
+      tally.clear();
+      let covered = 0;
+      let grounded = 0;
+      for (let j = 0; j < n; j++) {
+        for (let i = 0; i < n; i++) {
+          const c = (py * n + j) * sw + px * n + i;
+          if (ground[c]) grounded++;
+          const m = cellMat[c]!;
+          if (m < 0) continue;
+          covered++;
+          const slot = tally.get(m);
           if (slot) {
             slot.count++;
-            slot.shade += shade;
-            slot.delta += delta;
+            slot.shade += cellShade[c]!;
           } else {
-            keys.set(key, { count: 1, shade, solid: hit.solid, material, delta });
+            tally.set(m, { count: 1, shade: cellShade[c]!, solid: cellSolid[c]! });
           }
         }
       }
+      if (grounded * 2 >= total) footprint[py * width + px] = 1;
       if (covered * 2 < total) continue;
-      let win: {
-        count: number;
-        shade: number;
-        solid: number;
-        material: string;
-        delta: number;
-      } | null = null;
-      for (const slot of keys.values()) if (!win || slot.count > win.count) win = slot;
-      if (!win) continue;
-      const mat = model.materials[win.material]!;
-      let idx = mat.flat ? 2 : quantize(win.shade / win.count);
-      idx += Math.round(win.delta / win.count) + (mat.bias ?? 0);
-      idx = Math.max(0, Math.min(4, idx));
-      const winSolid = solids[win.solid]!;
+      let win = -1;
+      let best: { count: number; shade: number; solid: number } | null = null;
+      for (const [m, slot] of tally) {
+        if (!best || slot.count > best.count) {
+          best = slot;
+          win = m;
+        }
+      }
+      if (!best) continue;
+      const winSolid = solids[best.solid]!;
       if (opts.onlyTags && !(winSolid.tag && opts.onlyTags.includes(winSolid.tag))) continue;
+      const name = names[win]!;
+      const mat = model.materials[name]!;
+      const idx = Math.max(0, Math.min(4, Math.round(best.shade / best.count)));
       image.set(px, py, mat.ramp[idx]!);
-      solidIndex[py * width + px] = win.solid;
-      materialAt[py * width + px] = win.material;
+      solidIndex[py * width + px] = best.solid;
+      materialAt[py * width + px] = name;
     }
   }
 
@@ -431,7 +525,32 @@ export function renderModel(model: Model, opts: RenderOptions): RenderResult {
     }
     image.blit(edge, 0, 0);
   }
-  return { image, solidIndex };
+  return { image, solidIndex, footprint };
+}
+
+/**
+ * Pulls the pixels of tagged parts out of a finished render and recolors them, for emissive
+ * overlays such as lit headlights. Uses the same pixels as the body, so overlays always align.
+ */
+export function extractTagged(result: RenderResult, model: Model, tags: string[], color: RGBA): PixelBuffer {
+  const { image, solidIndex } = result;
+  const out = new PixelBuffer(image.width, image.height);
+  for (let i = 0; i < solidIndex.length; i++) {
+    const s = solidIndex[i]!;
+    if (s < 0) continue;
+    const tag = model.solids[s]!.tag;
+    if (tag && tags.includes(tag)) out.set(i % image.width, Math.floor(i / image.width), color);
+  }
+  return out;
+}
+
+/** Flat ground shadow from the footprint of a render: where the part actually stands. */
+export function footprintShadow(result: RenderResult, color: RGBA): PixelBuffer {
+  const out = new PixelBuffer(result.image.width, result.image.height);
+  for (let i = 0; i < result.footprint.length; i++) {
+    if (result.footprint[i]) out.set(i % out.width, Math.floor(i / out.width), color);
+  }
+  return out;
 }
 
 /** Flat silhouette of a rendered sprite, for ground shadows. */
