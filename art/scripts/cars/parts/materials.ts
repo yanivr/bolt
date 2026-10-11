@@ -4,16 +4,21 @@ import { CAR_MATERIALS, PAINT_KEY, PAINT_OUTLINE_KEY } from '../materials.js';
 
 /**
  * Materials for mounted parts, on top of the shared vehicle ramps. Three families so a
- * category reads at a glance: weapons are gunmetal with warm tips, defenses are pale armor
- * steel with hazard or ivory edging, utilities are blue-black housings with mint, cyan and
+ * category reads at a glance: weapons are pale gunmetal with warm tips, defenses are pale
+ * armor steel with hazard or ivory edging, utilities are blue housings with mint, cyan and
  * gold working parts. Mounted parts never use `paint`: their sheets are not repainted, and
  * no color here may equal a paint key color.
+ *
+ * Weapon metal is lighter and cooler than the midtone of every paint (the brightest are Mint
+ * `#3cc79a` and Sunflare `#e89b2a`), so a gun stands off red, cobalt, mint and sunflare
+ * bodywork alike; `mount`, the dark base a part bolts down with, stays dark so the part has
+ * its own contrast inside its near-black outline.
  */
 const EXTRA: Record<string, Material> = {
   // Weapons.
-  gunmetal: ramp('#434f69', '#55627f', '#6c7a98', '#98a6c0', '#d2dcec', '#141926'),
-  iron: ramp('#62718d', '#8493ad', '#a9b7cd', '#dfe8f4', '#ffffff', '#1c2435'),
-  mount: ramp('#161b2a', '#222a3e', '#323d55', '#4a5873', '#6e7e9c', '#0a0d17'),
+  gunmetal: ramp('#4f5b79', '#7482a2', '#a2afc9', '#cdd7ea', '#f4f8fd', '#141926'),
+  iron: ramp('#7584a3', '#a0aec8', '#cbd6e8', '#edf2fa', '#ffffff', '#1c2435'),
+  mount: ramp('#1b2233', '#293248', '#3b4761', '#56647f', '#7c8ba8', '#0a0d17'),
   amber: ramp('#a65814', '#d47a1c', '#f69e2c', '#ffca60', '#fff2b8', '#4a240a'),
   coral: ramp('#8a1b20', '#ba2b28', '#e44434', '#ff7858', '#ffbda5', '#3c0c12'),
   brass: ramp('#7a5c18', '#a07e22', '#c49e34', '#e8ca62', '#fff4b2', '#2e1f0a'),
@@ -28,14 +33,14 @@ const EXTRA: Record<string, Material> = {
   rope: ramp('#6e5830', '#917642', '#b08f56', '#d9bd82', '#f5e6b4', '#2c2213'),
   blade: ramp('#7887a2', '#9aa8bf', '#bcc8da', '#e6edf6', '#ffffff', '#1d2536'),
   // Defenses.
-  armor: ramp('#5a6377', '#6f798d', '#8b96a9', '#b7c0cf', '#eaeff5', '#1b1f2c'),
+  armor: ramp('#606a80', '#808ba1', '#a5b0c3', '#cdd5e2', '#f3f6fa', '#1b1f2c'),
   armorDark: ramp('#2a3040', '#394154', '#4c566b', '#6a7589', '#96a0b3', '#0e1119'),
   hazard: ramp('#a8780c', '#cf9c12', '#f1c11a', '#ffe05c', '#fff7ba', '#3c2a06'),
   pad: ramp('#4d6338', '#637b47', '#7f9859', '#aac680', '#e1f1b9', '#182113'),
   foil: ramp('#9a781c', '#bc962a', '#dcb23a', '#ffe078', '#fffad0', '#35280a'),
   // Utilities.
-  tire: ramp('#232a3c', '#30384e', '#424b64', '#5c6784', '#8490ac', '#0a0d17'),
-  housing: ramp('#1b2440', '#253156', '#33416c', '#4d5d8e', '#7b8bb9', '#0a0d1b'),
+  tire: ramp('#2a3247', '#3a4560', '#525e7c', '#727f9f', '#9ca9c6', '#0a0d17'),
+  housing: ramp('#343f6b', '#4c5c90', '#6f80b8', '#99a9d8', '#cdd7f3', '#0a0d1b'),
   mint: ramp('#158e78', '#20b792', '#2edfae', '#8bffd9', '#e1fff5', '#073032'),
   mintGlow: ramp('#2edfae', '#2edfae', '#5cf0c2', '#b4ffe6', '#ffffff', '#158e78', {
     flat: true,

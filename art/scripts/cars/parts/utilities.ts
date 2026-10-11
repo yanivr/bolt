@@ -15,7 +15,14 @@ import { Kit, annulus, bar, corners, stripes } from './kit.js';
  * The twenty utility systems of Section 11.7, in blue-black housings with mint, cyan and gold
  * working parts. None of them can be turned, so each is modelled for rotation 0: sensors and
  * intakes look forward (negative Y), the booster nozzle points back (positive Y).
+ *
+ * Hero pass: utilities are drawn about an eighth larger than written (`U`), and the small
+ * ones that are recognised by a shape on an arm (mine detector) more. Nothing stands more than 16 units
+ * above its mount once finished: that is the room the garage overview has over a roof.
  */
+
+/** How much larger than written a utility is drawn. */
+const U = 1.12;
 
 /** Spare Wheel: a real tire lying on a carrier, bright hub, gold strap buckles at each end. */
 function spare(): PartArt {
@@ -29,10 +36,12 @@ function spare(): PartArt {
     tire,
     { shade: 2 },
   );
-  const hub = k.post(0, 0, 2, 1.2, 3.8, 'iron', { bevel: 0.7 });
-  k.decal(circle(0, 0, 0.9), hub, { material: 'mint' });
+  // A whitewall: the one bright ring that says "tire" at three pixels to the pixel.
+  k.decal(annulus(0, 0, 3.3, 2.7), tire, { material: 'ivory' });
+  const hub = k.post(0, 0, 2.2, 1.2, 4.2, 'iron', { bevel: 0.7 });
+  k.decal(circle(0, 0, 1.1), hub, { material: 'mint' });
   for (const y of [-4.9, 4.9]) k.block(0, y, 1.5, 0.7, 1.2, 3.6, 'gold', { r: 0.3 });
-  return k.done('utility_spare', 28);
+  return k.done('utility_spare', 26, { scale: U });
 }
 
 /** Repair Kit: a white toolbox with a green band, gold latches and a green wrench on the lid. */
@@ -51,14 +60,14 @@ function repair(): PartArt {
   );
   k.decal(wrench, lid, { material: 'mintBox' });
   for (const x of [-2.1, 2.1]) k.block(x, 3.1, 0.7, 0.45, 1.6, 4.4, 'gold', { r: 0.2 });
-  return k.done('utility_repair', 28);
+  return k.done('utility_repair', 26, { scale: U });
 }
 
 /** Cooling Fan: three broad mint blades spinning in a square shroud. */
 function fan(): PartArt {
   const k = new Kit();
   const frame = subtract(roundRect(0, 0, 3.9, 3.9, 1.3), circle(0, 0, 3.3));
-  k.add(frame, 'housing', 0, 4.8, { bevel: 0.4, tag: 'shroud' });
+  k.add(frame, 'iron', 0, 4.8, { bevel: 0.4, tag: 'shroud' });
   const disc = k.post(0, 0, 3.35, 0, 4.2, 'mount', { tag: 'fan' });
   k.decal(
     intersect(circle(0, 0, 3.2), (x, y) => {
@@ -69,7 +78,7 @@ function fan(): PartArt {
     { material: 'mint' },
   );
   k.post(0, 0, 1.2, 4.2, 5.4, 'iron', { bevel: 0.8, floor: 4 });
-  return k.done('utility_fan', 28);
+  return k.done('utility_fan', 26, { scale: U });
 }
 
 /** Racing Radiator: a wide finned core leaning back between two end tanks, cyan hose caps. */
@@ -80,7 +89,7 @@ function radiator(): PartArt {
   const core = k.ramp(shape, 'iron', -2.8, 2.2, 2.8, 6.4, { tag: 'core' });
   k.decal(intersect(shape, stripes(2.4, 1.2, 1, 0, 0.6)), core, { material: 'gunmetal' });
   for (const x of [-6.1, 6.1]) k.post(x, 1.2, 0.95, 6.8, 8, 'cyan', { floor: 6.6 });
-  return k.done('utility_radiator', 32);
+  return k.done('utility_radiator', 36, { scale: 1.08 });
 }
 
 /** Extra Battery: a cell block with a bright mint lid, a dark bolt mark and two terminals. */
@@ -106,7 +115,7 @@ function battery(): PartArt {
   );
   k.post(-1.9, -3.2, 1.05, 5.4, 7.2, 'gold', { floor: 5.2 });
   k.post(1.9, -3.2, 1.05, 5.4, 7.2, 'iron', { floor: 5.2 });
-  return k.done('utility_battery', 28);
+  return k.done('utility_battery', 32, { scale: U });
 }
 
 /** Auxiliary Generator: finned engine block under a gold fuel tank, round pull-cord housing. */
@@ -127,7 +136,7 @@ function generator(): PartArt {
   const recoil = k.post(0, -2.9, 2.7, 1.2, 4.8, 'housing', { bevel: 0.9 });
   k.decal(annulus(0, -2.9, 2, 1.2), recoil, { material: 'mint' });
   k.block(0, -2.9, 1.5, 0.5, 4.8, 5.6, 'ivory', { floor: 4.6, r: 0.2, tag: 'cord' });
-  return k.done('utility_generator', 28);
+  return k.done('utility_generator', 32, { scale: U });
 }
 
 /** Burst Capacitor: a gold-banded cylinder standing upright with a glowing cyan cap. */
@@ -144,7 +153,7 @@ function capacitor(): PartArt {
   ]);
   const cap = k.post(0, 0, 3, 8, 10, 'cyan', { bevel: 3, floor: 7.8, tag: 'glow' });
   k.decal(circle(-0.4, -0.5, 1.5), cap, { material: 'cyanGlow' });
-  return k.done('utility_capacitor', 28);
+  return k.done('utility_capacitor', 30, { scale: U });
 }
 
 /** Nitro Tank: a blue bottle lying in two saddles, steel neck and a gold valve wheel. */
@@ -166,7 +175,7 @@ function nitro(): PartArt {
   );
   k.tube(0, -4.6, 0, -5.8, 1.4, 3.8, 3.8, 'iron', { tag: 'neck' });
   k.tube(-2.4, -6.3, 2.4, -6.3, 0.75, 4.4, 4.4, 'gold', { round: true, tag: 'valve' });
-  return k.done('utility_nitro', 32);
+  return k.done('utility_nitro', 36, { scale: U });
 }
 
 /** Emergency Booster: a small rocket pod, round nose forward, gold bell nozzle to the rear. */
@@ -200,7 +209,7 @@ function overdrive(): PartArt {
     { material: 'hot' },
   );
   for (const x of [-3.4, 3.4]) k.block(x, 2.6, 0.5, 1.6, 1.6, 6.4, 'iron', { floor: 1.4, r: 0.2 });
-  return k.done('utility_overdrive', 32);
+  return k.done('utility_overdrive', 34, { scale: U });
 }
 
 /** Traction Computer: a black box with three indicator lights, heat-sink fins, a whip aerial. */
@@ -227,7 +236,7 @@ function traction(): PartArt {
   });
   k.post(2.5, 2.4, 0.6, 4, 8.6, 'iron');
   k.post(2.5, 2.4, 0.95, 8.6, 9.8, 'mintGlow', { floor: 8.4, noShadow: true });
-  return k.done('utility_traction', 32);
+  return k.done('utility_traction', 36, { scale: U });
 }
 
 /** Gyro Stabilizer: a gold gimbal ring between two yokes, a steel rotor ball on its spindle. */
@@ -240,7 +249,7 @@ function gyro(): PartArt {
   k.decal(annulus(0, 0, 2, 1.3), rotor, { material: 'cyan' });
   k.post(0, 0, 0.75, 7.2, 8.4, 'mintGlow', { floor: 7, noShadow: true });
   k.add(annulus(0, 0, 3.9, 2.9), 'gold', 4.6, 5.8, { floor: 4.2, bevel: 0.4, tag: 'gimbal' });
-  return k.done('utility_gyro', 28);
+  return k.done('utility_gyro', 30, { scale: U });
 }
 
 /** Radar: a white dish with a steel rim tilted toward the front on a mast, mint feed horn. */
@@ -258,7 +267,7 @@ function radar(): PartArt {
   k.decal(annulus(0, 0, 3.9, 2.9), dish, { material: 'iron' });
   k.decal(circle(0, -0.4, 1.5), dish, { material: 'housing' });
   k.post(0, -0.4, 0.9, 12.2, 13.4, 'mintGlow', { floor: 11.6, tag: 'feed', noShadow: true });
-  return k.done('utility_radar', 36);
+  return k.done('utility_radar', 46, { scale: 1.12 });
 }
 
 /** Mine Detector: a flat gold search coil held out front on a short arm, lit control box. */
@@ -273,7 +282,7 @@ function minesensor(): PartArt {
     bevel: 0.5,
     tag: 'coil',
   });
-  return k.done('utility_minesensor', 28);
+  return k.done('utility_minesensor', 34, { scale: 1.3 });
 }
 
 /** Decoy Drone: a small white quadcopter with mint rotors docked on a marked pad. */
@@ -292,7 +301,7 @@ function decoy(): PartArt {
   for (const [x, y] of corners(2.4, 3)) {
     k.post(x, y, 1.45, 4.4, 5, 'mint', { floor: 4.2, tag: 'rotor', noShadow: true });
   }
-  return k.done('utility_decoy', 28);
+  return k.done('utility_decoy', 28, { scale: U });
 }
 
 /** Jump Pad: a fat hydraulic ram in the middle of a base frame, a coil spring at each corner. */
@@ -332,7 +341,7 @@ function jump(): PartArt {
   );
   const piston = k.post(0, 0, 2.4, 6, 8.4, 'iron', { bevel: 0.8, floor: 5.8, tag: 'piston' });
   k.decal(circle(0, 0, 1.2), piston, { material: 'mintGlow' });
-  return k.done('utility_jump', 32);
+  return k.done('utility_jump', 34, { scale: 1.06 });
 }
 
 /** Recovery Winch: a cable drum between two cheek plates, fairlead roller and a gold hook. */
@@ -353,7 +362,7 @@ function winch(): PartArt {
     3,
     { tag: 'hook' },
   );
-  return k.done('utility_winch', 28);
+  return k.done('utility_winch', 32, { scale: U });
 }
 
 /** Sliding Ballast: a heavy gold counterweight riding two steel rails between end stops. */
@@ -379,7 +388,7 @@ function ballast(): PartArt {
     top,
     { material: 'mount' },
   );
-  return k.done('utility_ballast', 28);
+  return k.done('utility_ballast', 30, { scale: U });
 }
 
 /** Active Wing: a real wing high on two struts, mint end plates, gold centre stripe. */
@@ -402,7 +411,7 @@ function spoiler(): PartArt {
     { shade: 1 },
   );
   for (const x of [-7.5, 7.5]) k.block(x, 0, 0.5, 2.9, 8.6, 12.4, 'mint', { floor: 8.4, r: 0.2 });
-  return k.done('utility_spoiler', 44);
+  return k.done('utility_spoiler', 46, { scale: 1.06 });
 }
 
 /** Turret Computer: a sight unit with a cyan-lensed scope beside a mint crosshair display. */
@@ -414,7 +423,7 @@ function targeting(): PartArt {
   k.block(-1.6, 0.6, 0.9, 1.6, 3.8, 4.8, 'mount', { floor: 3.6 });
   k.tube(-1.6, 3.4, -1.6, -2.2, 1.6, 5.6, 5.6, 'iron', { tag: 'scope' });
   k.tube(-1.6, -2, -1.6, -3.8, 1.9, 5.6, 5.6, 'cyanGlow', { tag: 'lens' });
-  return k.done('utility_targeting', 28);
+  return k.done('utility_targeting', 32, { scale: U });
 }
 
 /** Solar Panel: a framed grid of blue cells tilted up toward the rear on two legs. */
@@ -429,7 +438,7 @@ function solar(): PartArt {
     panel,
     { material: 'cyan' },
   );
-  return k.done('utility_solar', 32);
+  return k.done('utility_solar', 34, { scale: 1.06 });
 }
 
 export const UTILITY_ART: PartArt[] = [

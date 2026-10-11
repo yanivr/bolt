@@ -6,13 +6,7 @@ import type {
   PartCategory,
   VehicleBlueprint,
 } from '@bolt/shared';
-import {
-  accessoryMounts,
-  allowedRotations,
-  mountAccepts,
-  own,
-  rotatedFootprint,
-} from '@bolt/shared';
+import { accessoryMounts, fitsMountBox, mountAccepts, own } from '@bolt/shared';
 import type { InstallPlan, Slot } from './buildSession.js';
 import { issueText, partsOnMount, planInstall } from './buildSession.js';
 
@@ -47,15 +41,11 @@ export type SlotOptions = {
   drawable?: ReadonlySet<string>;
 };
 
-/** Whether a part can physically go on a mount in some allowed orientation. */
+/** Whether a part can physically go on a mount: the mount takes its kind and has the room. */
 export function fitsMount(mount: MountPoint, part: AnyPartDefinition): boolean {
   if (part.category === 'chassis' || part.category === 'engine' || part.category === 'tires')
     return false;
-  if (!mountAccepts(mount, part)) return false;
-  return allowedRotations(mount, part).some((turns) => {
-    const size = rotatedFootprint(part.footprint, turns);
-    return size.w <= mount.maxFootprint.w && size.h <= mount.maxFootprint.h;
-  });
+  return mountAccepts(mount, part) && fitsMountBox(mount, part);
 }
 
 export function slotKey(slot: Slot): string {

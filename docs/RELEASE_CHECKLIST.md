@@ -44,7 +44,7 @@ phone, and the art has not been reviewed by a person.
 
 Data and rules (verified by the automated suite, see `docs/TEST_PLAN.md`):
 
-- [x] 105-part catalog: engines, wheel kits, weapons, defenses and utilities with exact Section 11 ids, names, prices and masses, card copy, footprints, mounts and typed parameters. Catalog 0.4.0.
+- [x] 105-part catalog: engines, wheel kits, weapons, defenses and utilities with exact Section 11 ids, names, prices and masses, card copy, footprints, mounts and typed parameters. Catalog 0.5.0 (facing as part data, DECISIONS 99).
 - [x] Five chassis, by product-owner decision of October 11, 2026 (Beetle, Arrow, Pickup, Spider, Trike), with wheel anchors and mounts, tuned as a set so each has one clear strength and one clear cost (`docs/BALANCE_CHANGELOG.md` 0.4.0).
 - [x] Blueprint format, canonical serializer, SHA-256 build hash, strict schema.
 - [x] Validation with issue codes and approved player copy, shared by client and server.

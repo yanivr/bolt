@@ -207,6 +207,12 @@ export type RenderOptions = {
   originX?: number;
   originY?: number;
   outline?: boolean;
+  /**
+   * One color for the whole outline, all the way round, in place of the selective outline
+   * that takes the color family of the part it borders. Mounted parts use it so that they
+   * stand off the bodywork whatever paint is under them.
+   */
+  outlineColor?: RGBA;
   /** Keep only pixels whose winning solid has one of these tags. */
   onlyTags?: string[];
   /** Skip solids with these tags entirely. */
@@ -530,7 +536,11 @@ export function renderModel(model: Model, opts: RenderOptions): RenderResult {
           const name = materialAt[qy * width + qx];
           if (!name) continue;
           const mat = model.materials[name]!;
-          edge.set(px, py, lit ? mix(mat.outline, mat.ramp[1], 0.32) : mat.outline);
+          edge.set(
+            px,
+            py,
+            opts.outlineColor ?? (lit ? mix(mat.outline, mat.ramp[1], 0.32) : mat.outline),
+          );
           break;
         }
       }

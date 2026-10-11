@@ -5,6 +5,11 @@ import type { CarAtlasManifest, SpriteSheetRef, TerrainManifest, VfxManifest } f
 import {
   CAR_HEADINGS,
   CAR_SHEET_COLUMNS,
+  CAR_TILT,
+  CAR_Z_SCALE,
+  TAU,
+  occupiedFootprint,
+  partAnchorOffset,
   FALLBACK_ENGINE_SPRITE,
   FALLBACK_TIRE_SPRITE,
   WHEEL_HEADINGS,
@@ -207,6 +212,174 @@ describe('car atlases match the catalog', () => {
       }
     },
   );
+
+  it.each(Object.values(cars.parts ?? {}))(
+    '$id fits its cell at every heading with a clear margin, outline and contact shadow included',
+    (entry) => {
+      const { frameWidth: fw, frameHeight: fh, columns, rows } = entry.sheet;
+      expect(columns).toBe(CAR_SHEET_COLUMNS);
+      expect(columns * rows).toBe(CAR_HEADINGS);
+      const image = expectSheet(carsDir, entry.sheet);
+      for (let h = 0; h < CAR_HEADINGS; h++) {
+        const x0 = (h % columns) * fw;
+        const y0 = Math.floor(h / columns) * fh;
+        expect(frameIsEmpty(image, entry.sheet, h % columns, Math.floor(h / columns))).toBe(false);
+        // Two clear pixels on every side: nothing is clipped, and an animation frame of the
+        // combat milestone has a pixel to move in.
+        for (const inset of [0, 1]) {
+          for (let i = 0; i < fw; i++) {
+            expect(image.alphaAt(x0 + i, y0 + inset), `${entry.id} heading ${h}`).toBe(0);
+            expect(image.alphaAt(x0 + i, y0 + fh - 1 - inset), `${entry.id} heading ${h}`).toBe(0);
+          }
+          for (let j = 0; j < fh; j++) {
+            expect(image.alphaAt(x0 + inset, y0 + j), `${entry.id} heading ${h}`).toBe(0);
+            expect(image.alphaAt(x0 + fw - 1 - inset, y0 + j), `${entry.id} heading ${h}`).toBe(0);
+          }
+        }
+      }
+    },
+  );
+
+  it('draws every part larger than the base the rules give it, and outlines it all round in one dark color', () => {
+    const outline = [0x0a, 0x0d, 0x18];
+    const contact = [0x1b, 0x21, 0x34];
+    for (const entry of Object.values(cars.parts ?? {})) {
+      const def = CATALOG.parts[entry.id]!;
+      const image = readPng(join(carsDir, entry.sheet.file));
+      const { frameWidth: fw, frameHeight: fh } = entry.sheet;
+      // Heading 0, the first frame.
+      let left = fw;
+      let right = -1;
+      let top = fh;
+      let bottom = -1;
+      let rim = 0;
+      let edge = 0;
+      for (let y = 0; y < fh; y++)
+        for (let x = 0; x < fw; x++) {
+          if (image.alphaAt(x, y) === 0) continue;
+          left = Math.min(left, x);
+          right = Math.max(right, x);
+          top = Math.min(top, y);
+          bottom = Math.max(bottom, y);
+          const open =
+            image.alphaAt(x - 1, y) === 0 ||
+            image.alphaAt(x + 1, y) === 0 ||
+            image.alphaAt(x, y - 1) === 0 ||
+            image.alphaAt(x, y + 1) === 0;
+          if (!open) continue;
+          // Every pixel on the boundary of the drawing is the outline or the contact shadow
+          // that falls outside it, down and to the right.
+          edge++;
+          const c = image.get(x, y);
+          const is = (rgb: number[]) => c[0] === rgb[0] && c[1] === rgb[1] && c[2] === rgb[2];
+          expect(is(outline) || is(contact), `${entry.id} boundary pixel ${x},${y}`).toBe(true);
+          if (is(outline)) rim++;
+        }
+      expect(rim / edge, `${entry.id} outline`).toBeGreaterThan(0.5);
+      // Wider than the base across the car, outline included.
+      const base = occupiedFootprint(def, 0);
+      expect(right - left + 1, `${entry.id} width`).toBeGreaterThanOrEqual(base.w);
+      if (def.category === 'weapon' && def.facing === 'free')
+        // A weapon the player aims reaches well past its square base along its barrel.
+        expect(bottom - top + 1, `${entry.id} length`).toBeGreaterThanOrEqual(base.h * 1.6);
+    }
+  });
+
+  it('gives every weapon at least one muzzle anchor that lies on its drawing at every heading', () => {
+    const weapons = Object.values(CATALOG.parts).filter((p) => p.category === 'weapon');
+    expect(weapons).toHaveLength(20);
+    for (const def of weapons) {
+      const entry = cars.parts![def.id]!;
+      expect(entry.muzzles?.length, def.id).toBeGreaterThanOrEqual(1);
+      const image = readPng(join(carsDir, entry.sheet.file));
+      const { frameWidth: fw, frameHeight: fh, columns } = entry.sheet;
+      const anchors = [...entry.muzzles!, ...(entry.pivot ? [entry.pivot] : [])];
+      for (const anchor of anchors) {
+        for (const v of [anchor.x, anchor.y, anchor.z])
+          expect(Number.isFinite(v), def.id).toBe(true);
+        expect(anchor.z, def.id).toBeGreaterThan(0);
+        for (let h = 0; h < CAR_HEADINGS; h++) {
+          const at = partAnchorOffset(anchor, (h * TAU) / CAR_HEADINGS);
+          const px = Math.round(fw / 2 + at.x - 0.5);
+          const py = Math.round(fh / 2 + at.y - 0.5);
+          // Inside the frame, with the margin, and within two pixels of something drawn.
+          expect(px, `${def.id} heading ${h}`).toBeGreaterThanOrEqual(2);
+          expect(py, `${def.id} heading ${h}`).toBeGreaterThanOrEqual(2);
+          expect(px, `${def.id} heading ${h}`).toBeLessThan(fw - 2);
+          expect(py, `${def.id} heading ${h}`).toBeLessThan(fh - 2);
+          const x0 = (h % columns) * fw;
+          const y0 = Math.floor(h / columns) * fh;
+          let near = false;
+          for (let dy = -2; dy <= 2 && !near; dy++)
+            for (let dx = -2; dx <= 2 && !near; dx++) {
+              const qx = px + dx;
+              const qy = py + dy;
+              if (qx < 0 || qy < 0 || qx >= fw || qy >= fh) continue;
+              near = image.alphaAt(x0 + qx, y0 + qy) !== 0;
+            }
+          expect(near, `${def.id} heading ${h} anchor off the drawing`).toBe(true);
+        }
+      }
+      // A weapon the player aims fires forward: its muzzle is ahead of its centre, past its base.
+      if (def.facing !== 'none')
+        for (const muzzle of entry.muzzles!)
+          expect(-muzzle.y, def.id).toBeGreaterThan(occupiedFootprint(def, 0).h / 2);
+    }
+    // The turret is the one part with a head that turns, and says where its axis is.
+    expect(
+      Object.values(cars.parts!)
+        .filter((p) => p.pivot)
+        .map((p) => p.id),
+    ).toEqual(['weapon_turret']);
+    // Twin-barrel weapons have a muzzle per barrel.
+    expect(cars.parts!.weapon_front_mg!.muzzles).toHaveLength(2);
+    expect(cars.parts!.weapon_homing!.muzzles).toHaveLength(2);
+    // Defenses and utilities fire nothing.
+    for (const def of Object.values(CATALOG.parts).filter((p) => p.category !== 'weapon'))
+      expect(cars.parts![def.id]!.muzzles, def.id).toBeUndefined();
+  });
+
+  it('places an anchor on screen the way the baker draws the part', () => {
+    const muzzle = { x: 2, y: -10, z: 5 };
+    const lift = CAR_TILT * CAR_Z_SCALE * 5;
+    // Heading 0: forward is up the screen. A quarter turn clockwise: forward is to the right.
+    expect(partAnchorOffset(muzzle, 0).x).toBeCloseTo(2, 9);
+    expect(partAnchorOffset(muzzle, 0).y).toBeCloseTo(-10 - lift, 9);
+    expect(partAnchorOffset(muzzle, Math.PI / 2).x).toBeCloseTo(10, 9);
+    expect(partAnchorOffset(muzzle, Math.PI / 2).y).toBeCloseTo(2 - lift, 9);
+    expect(partAnchorOffset(muzzle, Math.PI).y).toBeCloseTo(10 - lift, 9);
+  });
+
+  it('fills the icon tiles: every part icon reaches within two pixels of its tile on its longer side', () => {
+    for (const sheet of cars.icons ?? []) {
+      const image = readPng(join(carsDir, sheet.file));
+      for (const id of Object.keys(CATALOG.parts)) {
+        const cell = sheet.index[id]!;
+        const x0 = (cell % sheet.columns) * sheet.size;
+        const y0 = Math.floor(cell / sheet.columns) * sheet.size;
+        let left = sheet.size;
+        let right = -1;
+        let top = sheet.size;
+        let bottom = -1;
+        for (let y = 0; y < sheet.size; y++)
+          for (let x = 0; x < sheet.size; x++) {
+            if (image.alphaAt(x0 + x, y0 + y) === 0) continue;
+            left = Math.min(left, x);
+            right = Math.max(right, x);
+            top = Math.min(top, y);
+            bottom = Math.max(bottom, y);
+          }
+        const where = `${id} at ${sheet.size}`;
+        // Never clipped: a clear pixel all round.
+        expect(Math.min(left, top), where).toBeGreaterThanOrEqual(1);
+        expect(Math.max(right, bottom), where).toBeLessThanOrEqual(sheet.size - 2);
+        // And large: the longer side takes all but about two pixels at each end.
+        expect(Math.max(right - left + 1, bottom - top + 1), where).toBeGreaterThanOrEqual(
+          sheet.size - 5,
+        );
+      }
+    }
+  });
 
   it('bakes bodies in the paint key and keeps that key out of every other layer', () => {
     const keyOf = (hex: string) => parseInt(hex.slice(1), 16);

@@ -4,6 +4,69 @@ Catalog and balance data use semantic versions (`CATALOG_VERSION` in
 `packages/content/src/catalog.ts`). Every change to a price, mass, coefficient or track is
 listed here with the measurement that motivated it.
 
+## 0.5.0 (facing is the player's choice, October 11, 2026)
+
+No price, mass or coefficient changed, and the measured table of every shipped build below
+is unchanged. What changed is what a part's footprint means, so the version moved: a
+blueprint stamped 0.4.0 is flagged as out of date and its `Repair Build` turns parts to a
+legal facing and removes none (`refaceBlueprint`). See `docs/DECISIONS.md` entry 99.
+
+**The rule.** A part says how its direction is decided (`facing`: `free`, `fixed` or `none`).
+A free part occupies a square base, the smaller side of its footprint, at every quarter
+turn; the mount says which ways it may face. A fixed part or one with no facing occupies its
+footprint as it lies.
+
+**Mount facings (free parts).**
+
+| Mounts | 0.4.0 | 0.5.0 |
+| :-- | :-- | :-- |
+| Front (Beetle, Arrow and Trike nose) | front, left, right | front |
+| Rear (Beetle and Arrow tail, Pickup tailgate, Trike rear pair) | rear, left, right | rear |
+| Pickup bed rails `left_bed`, `right_bed` | rear, left, right | rear, outward |
+| Left and right (Spider flanks) | outward, front, rear | unchanged |
+| Roof, universal (Pickup bed), utility | all four | unchanged |
+
+**Part data.**
+
+| Part | 0.4.0 | 0.5.0 |
+| :-- | :-- | :-- |
+| 13 weapons, Light Plates, Heavy Plating | rotatable | `free` |
+| Swivel Turret | rotatable | `none`: it tracks all round, so its rest direction means nothing |
+| Road Mine, Oil Slick | not rotatable, kept at turn 0 | `fixed`, turn 2 (they drop behind) |
+| Rear Guard | not rotatable, turn 0 | `fixed`, turn 2 |
+| Crash Bumper, Mine Sweeper | not rotatable, turn 0 | `fixed`, turn 0 |
+| Side Saw | not rotatable, turn 0, footprint 6 x 14 | `fixed` outward, footprint 14 x 6 at turn 0 (6 x 14 on a flank, as before) |
+| Side Shields | not rotatable, turn 0, footprint 5 x 14 | `fixed` outward, footprint 14 x 5 at turn 0 (5 x 14 on a flank, as before) |
+| Everything else | not rotatable | `none` |
+
+**Legality.** Every one of the 884 combinations of chassis, mount and part that could be
+installed under 0.4.0 can still be installed (`tests/unit/facing.test.ts` holds the list,
+generated before the change). Thirty-two new ones can, all because a long part now stands on
+its base and lets its barrel overhang:
+
+| Part (footprint, base) | Newly fits |
+| :-- | :-- |
+| Needle Railgun (8 x 18, base 8) | Beetle hood and roof; Arrow nose and rear roof; Pickup cab roof; both Spider roofs; Trike nose and roof. Before, only the Arrow spine and the Pickup bed. |
+| Straight Rocket, Frost Cannon, Grapple Harpoon (8 x 14, base 8) | Arrow rear roof; Pickup bed rails; Trike rear pair |
+| Flame Spitter (8 x 14, base 8) | Pickup bed rails; Trike rear pair |
+| Seeker Missile (10 x 14, base 10) | Arrow rear roof |
+| Crash Hammer (12 x 16, base 12) | Arrow nose |
+| Side Saw, Side Shields | Pickup bed rack (`bed_front`), where they work backward like everything fixed on the bed |
+
+The railgun is the one to watch: it was the Arrow's own weapon (0.4.0 lengthened the spine
+for it) and now goes on four frames. Its price (and the Trike's load limit) are what hold it
+back; nothing was retuned in this version.
+
+**Facing a part can no longer take.** A free part on a nose mount could face left or right,
+and on a tail mount sideways; several only fitted that way (a 12-wide plate on the Trike's
+10-wide nose). Those now face forward or backward. A turret could be turned; it no longer
+is.
+
+**Templates.** Three shipped builds carried a fixed part at turn 0 and now carry it at turn
+2: Packhorse (Rear Guard), Iron Mule (Oil Slick), Back-Alley Trap (Road Mine). Nothing else
+in any template moved, and their build hashes changed only by that turn and the catalog
+stamp.
+
 ## 0.4.0 (five chassis, by product-owner decision of October 11, 2026)
 
 The catalog is 105 parts: 5 chassis, 20 engines, 20 wheel kits, 20 weapons, 20 defenses and

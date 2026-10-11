@@ -432,7 +432,7 @@ function Garage({ manifests }: { manifests: GameManifests }) {
       locked={locked}
       onReplace={() => actions.targetMount(selectedPart.mount.id)}
       onNudge={(dx, dy) => actions.nudge(selectedPart.instance.instanceId, dx, dy)}
-      onRotate={() => actions.rotate(selectedPart.instance.instanceId)}
+      onFace={(turn) => actions.face(selectedPart.instance.instanceId, turn)}
       onFire={(choice) => actions.setFire(selectedPart.instance.instanceId, choice)}
       onRemove={() => actions.remove(selectedPart.instance.instanceId)}
     />

@@ -370,29 +370,36 @@ export function Workbench({
     };
   }, [sprite, selectedPart, dragged, frame, frameSize, scale]);
 
-  // Which way the selected part faces, as a chevron just ahead of it on the car.
+  // Which way the selected part faces: a short arrow on the line from its middle along its
+  // facing, starting just past the far end of the drawing so it never covers the part, and
+  // lying on the bodywork under it. It is projected like the part, so it turns with the view
+  // and always agrees with the direction picker.
   const facing = useMemo(() => {
     if (!sprite || !selectedPart) return null;
     const { def, instance, mount } = selectedPart;
-    if (def.category !== 'weapon' && !def.rotatable) return null;
+    if (def.facing === 'none') return null;
     const live = dragged?.instanceId === instance.instanceId ? dragged : null;
     const cx = live ? mount.x + live.offsetX : selectedPart.x;
     const cy = live ? mount.y + live.offsetY : selectedPart.y;
     const [fx, fy] = FACING[instance.rotationQuarterTurns] ?? FACING[0]!;
-    const reach = (fx !== 0 ? selectedPart.w : selectedPart.h) / 2;
-    const z = mountHeight(sprite, mount.id) + 2;
+    // How far the drawing reaches forward: to its muzzle where it has one.
+    const muzzles = manifests.cars.parts?.[def.id]?.muzzles ?? [];
+    const reach = Math.max(def.footprint.h * 0.58, ...muzzles.map((m) => -m.y));
+    const tail = reach + 3;
+    const tip = tail + 8;
+    const z = mountHeight(sprite, mount.id);
     const at = projectPoints(sprite, frame, [
-      { id: 'tip', x: cx + fx * (reach + 6), y: cy + fy * (reach + 6), z },
-      { id: 'l', x: cx + fx * (reach + 2) - fy * 3, y: cy + fy * (reach + 2) + fx * 3, z },
-      { id: 'r', x: cx + fx * (reach + 2) + fy * 3, y: cy + fy * (reach + 2) - fx * 3, z },
+      { id: 'tail', x: cx + fx * tail, y: cy + fy * tail, z },
+      { id: 'tip', x: cx + fx * tip, y: cy + fy * tip, z },
+      { id: 'l', x: cx + fx * (tip - 4) - fy * 3.5, y: cy + fy * (tip - 4) + fx * 3.5, z },
+      { id: 'r', x: cx + fx * (tip - 4) + fy * 3.5, y: cy + fy * (tip - 4) - fx * 3.5, z },
     ]);
-    return ['l', 'tip', 'r']
-      .map((id) => {
-        const p = at.get(id);
-        return `${(frameSize / 2 + (p?.dx ?? 0)) * scale},${(frameSize / 2 + (p?.dy ?? 0)) * scale}`;
-      })
-      .join(' ');
-  }, [sprite, selectedPart, dragged, frame, frameSize, scale]);
+    const xy = (id: string) => {
+      const p = at.get(id);
+      return `${(frameSize / 2 + (p?.dx ?? 0)) * scale},${(frameSize / 2 + (p?.dy ?? 0)) * scale}`;
+    };
+    return { shaft: `${xy('tail')} ${xy('tip')}`, head: `${xy('l')} ${xy('tip')} ${xy('r')}` };
+  }, [sprite, selectedPart, dragged, frame, frameSize, scale, manifests]);
 
   // The engine has no outline of its own to trace: in focus it is boxed like an empty socket.
   const engineBox =
@@ -646,9 +653,15 @@ export function Workbench({
                 />
               )}
               {facing && (
-                <g className="facing" data-testid="part-facing-mark">
-                  <polyline className="facing-edge" points={facing} />
-                  <polyline className="facing-line" points={facing} />
+                <g
+                  className="facing"
+                  data-testid="part-facing-mark"
+                  data-facing={selectedPart?.instance.rotationQuarterTurns}
+                >
+                  <polyline className="facing-edge" points={facing.shaft} />
+                  <polyline className="facing-edge" points={facing.head} />
+                  <polyline className="facing-line facing-shaft" points={facing.shaft} />
+                  <polyline className="facing-line facing-head" points={facing.head} />
                 </g>
               )}
             </svg>

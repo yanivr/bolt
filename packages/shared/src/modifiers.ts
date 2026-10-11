@@ -298,11 +298,11 @@ export function applyModifier(
   }
 }
 
-/** The arc a mounted part faces: its rotation when it can turn, else where its mount sits. */
+/** The arc a mounted part faces: its quarter turn when it has a facing, else where its mount sits. */
 export function partArc(part: PlacedPart): CarArc {
-  return part.def.rotatable
-    ? rotationArc(part.instance.rotationQuarterTurns)
-    : mountArc(part.mount);
+  return part.def.facing === 'none'
+    ? mountArc(part.mount)
+    : rotationArc(part.instance.rotationQuarterTurns);
 }
 
 /** Totals for a whole car: chassis, engine, wheel kit scaled to the wheel count, and parts. */

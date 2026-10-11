@@ -2,8 +2,10 @@ import type {
   AccessoryDefinition,
   ActivePrimitive,
   MountCategory,
+  PartFacing,
   PartModifier,
   PartParams,
+  QuarterTurn,
   TriggerMode,
 } from '@bolt/shared';
 
@@ -15,8 +17,10 @@ import type {
  * primitives for Milestone C.
  *
  * Armor plate (everything flagged `armorPlate`) counts against the chassis armor allowance.
- * A plate protects the arc it faces: rotation 0 faces forward. Parts that cannot rotate
- * protect the side of the car their mount is on.
+ * A plate protects the arc it faces: quarter turn 0 faces forward. The two plates have a
+ * `free` facing, within what their mount allows. The bumpers, the mine sweeper and the side
+ * shields have a `fixed` one (front, back, front, outward). Everything else has no facing and
+ * protects the side of the car its mount is on.
  */
 
 /** Internal systems: a utility bay, the roof, or behind any armor-capable panel. */
@@ -30,7 +34,9 @@ type DefenseRow = {
   footprint: [number, number];
   mounts: MountCategory[];
   use?: 'full' | 'shared';
-  rotatable?: boolean;
+  /** Defaults to `none`. */
+  facing?: PartFacing;
+  fixedTurn?: QuarterTurn | 'outward';
   height?: 0 | 1 | 2;
   maxPerCar?: number;
   armorPlate: boolean;
@@ -63,11 +69,12 @@ function defense(row: DefenseRow): AccessoryDefinition {
     triggerMode: row.trigger ?? 'passive',
     params: { armorPlate: row.armorPlate, ...row.params },
     hardpointUse: row.use ?? 'full',
-    rotatable: row.rotatable ?? false,
+    facing: row.facing ?? 'none',
     heightLevel: row.height ?? 0,
     powerDraw: row.powerDraw ?? 0,
     heatEffect: 0,
   };
+  if (row.fixedTurn !== undefined) def.fixedTurn = row.fixedTurn;
   if (row.actions) def.actions = row.actions;
   if (row.maxPerCar !== undefined) def.maxPerCar = row.maxPerCar;
   return def;
@@ -81,7 +88,7 @@ export const DEFENSE_LIST: AccessoryDefinition[] = [
     massKg: 45,
     footprint: [12, 4],
     mounts: ['ARMOR'],
-    rotatable: true,
+    facing: 'free',
     maxPerCar: 4,
     armorPlate: true,
     behaviorId: 'armor_plate',
@@ -97,7 +104,7 @@ export const DEFENSE_LIST: AccessoryDefinition[] = [
     massKg: 145,
     footprint: [14, 6],
     mounts: ['ARMOR'],
-    rotatable: true,
+    facing: 'free',
     maxPerCar: 4,
     armorPlate: true,
     behaviorId: 'armor_plate',
@@ -112,6 +119,8 @@ export const DEFENSE_LIST: AccessoryDefinition[] = [
     price: 65,
     massKg: 90,
     footprint: [14, 5],
+    facing: 'fixed',
+    fixedTurn: 0,
     mounts: ['FRONT'],
     maxPerCar: 1,
     armorPlate: true,
@@ -127,6 +136,8 @@ export const DEFENSE_LIST: AccessoryDefinition[] = [
     price: 55,
     massKg: 75,
     footprint: [14, 5],
+    facing: 'fixed',
+    fixedTurn: 2,
     mounts: ['REAR'],
     maxPerCar: 1,
     armorPlate: true,
@@ -141,7 +152,9 @@ export const DEFENSE_LIST: AccessoryDefinition[] = [
     displayName: 'Side Shields',
     price: 70,
     massKg: 95,
-    footprint: [5, 14],
+    footprint: [14, 5],
+    facing: 'fixed',
+    fixedTurn: 'outward',
     mounts: ['LEFT', 'RIGHT'],
     maxPerCar: 1,
     armorPlate: true,
@@ -316,6 +329,8 @@ export const DEFENSE_LIST: AccessoryDefinition[] = [
     price: 105,
     massKg: 91,
     footprint: [12, 6],
+    facing: 'fixed',
+    fixedTurn: 0,
     mounts: ['FRONT'],
     maxPerCar: 1,
     armorPlate: false,

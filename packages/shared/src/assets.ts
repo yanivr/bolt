@@ -138,14 +138,45 @@ export type EngineSpriteManifest = {
 };
 
 /**
+ * A point on a mounted part in the part's own space at heading 0: `x` to the car's right and
+ * `y` toward its rear (so a muzzle that points forward has a negative `y`), both in sprite
+ * pixels from the part's centre, and `z` up from the mount surface in authored height units,
+ * the same units as `mountHeights`.
+ */
+export type PartAnchor = { x: number; y: number; z: number };
+
+/**
  * A mounted weapon, defense or utility. One frame per heading, packed row by row like a
- * chassis, sized to hold the part's catalog footprint at every heading. Drawn at the part's
- * position on the chassis (mount plus offset), turned by its quarter-turn rotation.
+ * chassis. The cell holds the whole drawing at every heading; the drawing is larger than the
+ * part's base and may reach past its mount. Drawn at the part's position on the chassis
+ * (mount plus offset), turned by its quarter-turn rotation.
  */
 export type PartSpriteManifest = {
   id: string;
   sheet: SpriteSheetRef;
+  /**
+   * Where shots and muzzle flashes start, one per barrel in firing order. Present on every
+   * weapon. Place one on screen with `partAnchorOffset`.
+   */
+  muzzles?: PartAnchor[];
+  /** The axis a self-aiming head turns about (turrets). */
+  pivot?: PartAnchor;
 };
+
+/**
+ * Where a part anchor is drawn, in sprite pixels from the centre of the part's frame, for a
+ * part whose frame shows it at `headingRad` (the car's heading plus the part's quarter turns,
+ * clockwise from up). The same arithmetic as the sprite baker: turn on the ground plane, then
+ * lift by the tilted camera. Add the result to where the compositor put the part.
+ */
+export function partAnchorOffset(anchor: PartAnchor, headingRad: number): AnchorPoint {
+  const c = Math.cos(headingRad);
+  const s = Math.sin(headingRad);
+  return {
+    x: anchor.x * c - anchor.y * s,
+    y: anchor.x * s + anchor.y * c - CAR_TILT * CAR_Z_SCALE * anchor.z,
+  };
+}
 
 /** Square part icons packed in one sheet per size; `index` maps a part id to its cell. */
 export type IconSheetManifest = {

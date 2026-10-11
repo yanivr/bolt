@@ -1173,71 +1173,135 @@
       "id": "weapon_front_mg",
       "sheet": {
         "file": "weapon_front_mg.png",
-        "frameWidth": 32,
-        "frameHeight": 32,
+        "frameWidth": 44,
+        "frameHeight": 44,
         "columns": 8,
         "rows": 8
-      }
+      },
+      "muzzles": [
+        {
+          "x": -2.71,
+          "y": -11.09,
+          "z": 5.78
+        },
+        {
+          "x": 0.59,
+          "y": -11.09,
+          "z": 5.78
+        }
+      ]
     },
     "weapon_rear_mg": {
       "id": "weapon_rear_mg",
       "sheet": {
         "file": "weapon_rear_mg.png",
-        "frameWidth": 28,
-        "frameHeight": 28,
+        "frameWidth": 40,
+        "frameHeight": 40,
         "columns": 8,
         "rows": 8
-      }
+      },
+      "muzzles": [
+        {
+          "x": 0,
+          "y": -9.44,
+          "z": 5.31
+        }
+      ]
     },
     "weapon_turret": {
       "id": "weapon_turret",
       "sheet": {
         "file": "weapon_turret.png",
-        "frameWidth": 32,
-        "frameHeight": 32,
+        "frameWidth": 52,
+        "frameHeight": 52,
         "columns": 8,
         "rows": 8
+      },
+      "muzzles": [
+        {
+          "x": 0,
+          "y": -11.86,
+          "z": 8.66
+        }
+      ],
+      "pivot": {
+        "x": 0,
+        "y": 1.37,
+        "z": 3.42
       }
     },
     "weapon_shotgun": {
       "id": "weapon_shotgun",
       "sheet": {
         "file": "weapon_shotgun.png",
-        "frameWidth": 28,
-        "frameHeight": 28,
+        "frameWidth": 40,
+        "frameHeight": 40,
         "columns": 8,
         "rows": 8
-      }
+      },
+      "muzzles": [
+        {
+          "x": 0,
+          "y": -8.73,
+          "z": 5.9
+        }
+      ]
     },
     "weapon_railshot": {
       "id": "weapon_railshot",
       "sheet": {
         "file": "weapon_railshot.png",
-        "frameWidth": 36,
-        "frameHeight": 36,
+        "frameWidth": 46,
+        "frameHeight": 46,
         "columns": 8,
         "rows": 8
-      }
+      },
+      "muzzles": [
+        {
+          "x": 0,
+          "y": -14.11,
+          "z": 5.26
+        }
+      ]
     },
     "weapon_rocket": {
       "id": "weapon_rocket",
       "sheet": {
         "file": "weapon_rocket.png",
-        "frameWidth": 32,
-        "frameHeight": 32,
+        "frameWidth": 40,
+        "frameHeight": 40,
         "columns": 8,
         "rows": 8
-      }
+      },
+      "muzzles": [
+        {
+          "x": 0,
+          "y": -5.43,
+          "z": 6.61
+        }
+      ]
     },
     "weapon_homing": {
       "id": "weapon_homing",
       "sheet": {
         "file": "weapon_homing.png",
-        "frameWidth": 40,
-        "frameHeight": 40,
+        "frameWidth": 50,
+        "frameHeight": 50,
         "columns": 8,
         "rows": 8
-      }
+      },
+      "muzzles": [
+        {
+          "x": -3.42,
+          "y": -8.21,
+          "z": 10.49
+        },
+        {
+          "x": 3.42,
+          "y": -8.21,
+          "z": 10.49
+        }
+      ]
     },
     "weapon_mine": {
       "id": "weapon_mine",
@@ -1247,134 +1311,230 @@
         "frameHeight": 28,
         "columns": 8,
         "rows": 8
-      }
+      },
+      "muzzles": [
+        {
+          "x": 0,
+          "y": -5.24,
+          "z": 1.37
+        }
+      ]
     },
     "weapon_oil": {
       "id": "weapon_oil",
       "sheet": {
         "file": "weapon_oil.png",
-        "frameWidth": 28,
-        "frameHeight": 28,
+        "frameWidth": 36,
+        "frameHeight": 36,
         "columns": 8,
         "rows": 8
-      }
+      },
+      "muzzles": [
+        {
+          "x": 0,
+          "y": -5.47,
+          "z": 1.82
+        }
+      ]
     },
     "weapon_foam": {
       "id": "weapon_foam",
       "sheet": {
         "file": "weapon_foam.png",
-        "frameWidth": 36,
-        "frameHeight": 36,
+        "frameWidth": 42,
+        "frameHeight": 42,
         "columns": 8,
         "rows": 8
-      }
+      },
+      "muzzles": [
+        {
+          "x": 0,
+          "y": -8.21,
+          "z": 5.02
+        }
+      ]
     },
     "weapon_emp": {
       "id": "weapon_emp",
       "sheet": {
         "file": "weapon_emp.png",
-        "frameWidth": 32,
-        "frameHeight": 32,
+        "frameWidth": 38,
+        "frameHeight": 38,
         "columns": 8,
         "rows": 8
-      }
+      },
+      "muzzles": [
+        {
+          "x": 0,
+          "y": 0,
+          "z": 14.56
+        }
+      ]
     },
     "weapon_tesla": {
       "id": "weapon_tesla",
       "sheet": {
         "file": "weapon_tesla.png",
-        "frameWidth": 32,
-        "frameHeight": 32,
+        "frameWidth": 44,
+        "frameHeight": 44,
         "columns": 8,
         "rows": 8
-      }
+      },
+      "muzzles": [
+        {
+          "x": -2.78,
+          "y": 0,
+          "z": 15.08
+        },
+        {
+          "x": 2.78,
+          "y": 0,
+          "z": 15.08
+        }
+      ]
     },
     "weapon_flame": {
       "id": "weapon_flame",
       "sheet": {
         "file": "weapon_flame.png",
-        "frameWidth": 32,
-        "frameHeight": 32,
+        "frameWidth": 44,
+        "frameHeight": 44,
         "columns": 8,
         "rows": 8
-      }
+      },
+      "muzzles": [
+        {
+          "x": 0,
+          "y": -11.86,
+          "z": 4.56
+        }
+      ]
     },
     "weapon_frost": {
       "id": "weapon_frost",
       "sheet": {
         "file": "weapon_frost.png",
-        "frameWidth": 32,
-        "frameHeight": 32,
+        "frameWidth": 42,
+        "frameHeight": 42,
         "columns": 8,
         "rows": 8
-      }
+      },
+      "muzzles": [
+        {
+          "x": 0,
+          "y": -10.49,
+          "z": 5.47
+        }
+      ]
     },
     "weapon_hammer": {
       "id": "weapon_hammer",
       "sheet": {
         "file": "weapon_hammer.png",
-        "frameWidth": 40,
-        "frameHeight": 40,
+        "frameWidth": 46,
+        "frameHeight": 46,
         "columns": 8,
         "rows": 8
-      }
+      },
+      "muzzles": [
+        {
+          "x": 0,
+          "y": -9.9,
+          "z": 7.48
+        }
+      ]
     },
     "weapon_saw": {
       "id": "weapon_saw",
       "sheet": {
         "file": "weapon_saw.png",
-        "frameWidth": 32,
-        "frameHeight": 32,
+        "frameWidth": 34,
+        "frameHeight": 34,
         "columns": 8,
         "rows": 8
-      }
+      },
+      "muzzles": [
+        {
+          "x": 0,
+          "y": -9.9,
+          "z": 3.3
+        }
+      ]
     },
     "weapon_harpoon": {
       "id": "weapon_harpoon",
       "sheet": {
         "file": "weapon_harpoon.png",
-        "frameWidth": 36,
-        "frameHeight": 36,
+        "frameWidth": 42,
+        "frameHeight": 42,
         "columns": 8,
         "rows": 8
-      }
+      },
+      "muzzles": [
+        {
+          "x": 0,
+          "y": -12.08,
+          "z": 5.02
+        }
+      ]
     },
     "weapon_air": {
       "id": "weapon_air",
       "sheet": {
         "file": "weapon_air.png",
-        "frameWidth": 36,
-        "frameHeight": 36,
+        "frameWidth": 44,
+        "frameHeight": 44,
         "columns": 8,
         "rows": 8
-      }
+      },
+      "muzzles": [
+        {
+          "x": 0,
+          "y": -7.84,
+          "z": 6.05
+        }
+      ]
     },
     "weapon_boomerang": {
       "id": "weapon_boomerang",
       "sheet": {
         "file": "weapon_boomerang.png",
-        "frameWidth": 32,
-        "frameHeight": 32,
+        "frameWidth": 40,
+        "frameHeight": 40,
         "columns": 8,
         "rows": 8
-      }
+      },
+      "muzzles": [
+        {
+          "x": 0,
+          "y": -5.59,
+          "z": 8.09
+        }
+      ]
     },
     "weapon_mortar": {
       "id": "weapon_mortar",
       "sheet": {
         "file": "weapon_mortar.png",
-        "frameWidth": 44,
-        "frameHeight": 44,
+        "frameWidth": 52,
+        "frameHeight": 52,
         "columns": 8,
         "rows": 8
-      }
+      },
+      "muzzles": [
+        {
+          "x": 0,
+          "y": -7.34,
+          "z": 13.18
+        }
+      ]
     },
     "defense_light_plate": {
       "id": "defense_light_plate",
       "sheet": {
         "file": "defense_light_plate.png",
-        "frameWidth": 28,
-        "frameHeight": 28,
+        "frameWidth": 32,
+        "frameHeight": 32,
         "columns": 8,
         "rows": 8
       }
@@ -1383,8 +1543,8 @@
       "id": "defense_heavy_plate",
       "sheet": {
         "file": "defense_heavy_plate.png",
-        "frameWidth": 36,
-        "frameHeight": 36,
+        "frameWidth": 38,
+        "frameHeight": 38,
         "columns": 8,
         "rows": 8
       }
@@ -1393,8 +1553,8 @@
       "id": "defense_front_bumper",
       "sheet": {
         "file": "defense_front_bumper.png",
-        "frameWidth": 32,
-        "frameHeight": 32,
+        "frameWidth": 36,
+        "frameHeight": 36,
         "columns": 8,
         "rows": 8
       }
@@ -1403,8 +1563,8 @@
       "id": "defense_rear_bumper",
       "sheet": {
         "file": "defense_rear_bumper.png",
-        "frameWidth": 32,
-        "frameHeight": 32,
+        "frameWidth": 36,
+        "frameHeight": 36,
         "columns": 8,
         "rows": 8
       }
@@ -1413,8 +1573,8 @@
       "id": "defense_side_panels",
       "sheet": {
         "file": "defense_side_panels.png",
-        "frameWidth": 32,
-        "frameHeight": 32,
+        "frameWidth": 36,
+        "frameHeight": 36,
         "columns": 8,
         "rows": 8
       }
@@ -1423,8 +1583,8 @@
       "id": "defense_wheel_cage",
       "sheet": {
         "file": "defense_wheel_cage.png",
-        "frameWidth": 32,
-        "frameHeight": 32,
+        "frameWidth": 34,
+        "frameHeight": 34,
         "columns": 8,
         "rows": 8
       }
@@ -1433,8 +1593,8 @@
       "id": "defense_engine_case",
       "sheet": {
         "file": "defense_engine_case.png",
-        "frameWidth": 32,
-        "frameHeight": 32,
+        "frameWidth": 34,
+        "frameHeight": 34,
         "columns": 8,
         "rows": 8
       }
@@ -1453,8 +1613,8 @@
       "id": "defense_breakaway",
       "sheet": {
         "file": "defense_breakaway.png",
-        "frameWidth": 28,
-        "frameHeight": 28,
+        "frameWidth": 30,
+        "frameHeight": 30,
         "columns": 8,
         "rows": 8
       }
@@ -1473,8 +1633,8 @@
       "id": "defense_energy_shield",
       "sheet": {
         "file": "defense_energy_shield.png",
-        "frameWidth": 32,
-        "frameHeight": 32,
+        "frameWidth": 36,
+        "frameHeight": 36,
         "columns": 8,
         "rows": 8
       }
@@ -1483,8 +1643,8 @@
       "id": "defense_faraday",
       "sheet": {
         "file": "defense_faraday.png",
-        "frameWidth": 32,
-        "frameHeight": 32,
+        "frameWidth": 34,
+        "frameHeight": 34,
         "columns": 8,
         "rows": 8
       }
@@ -1493,8 +1653,8 @@
       "id": "defense_heatguard",
       "sheet": {
         "file": "defense_heatguard.png",
-        "frameWidth": 28,
-        "frameHeight": 28,
+        "frameWidth": 26,
+        "frameHeight": 26,
         "columns": 8,
         "rows": 8
       }
@@ -1503,8 +1663,8 @@
       "id": "defense_antimissile",
       "sheet": {
         "file": "defense_antimissile.png",
-        "frameWidth": 36,
-        "frameHeight": 36,
+        "frameWidth": 44,
+        "frameHeight": 44,
         "columns": 8,
         "rows": 8
       }
@@ -1523,8 +1683,8 @@
       "id": "defense_fireproof",
       "sheet": {
         "file": "defense_fireproof.png",
-        "frameWidth": 28,
-        "frameHeight": 28,
+        "frameWidth": 30,
+        "frameHeight": 30,
         "columns": 8,
         "rows": 8
       }
@@ -1543,8 +1703,8 @@
       "id": "defense_damper",
       "sheet": {
         "file": "defense_damper.png",
-        "frameWidth": 28,
-        "frameHeight": 28,
+        "frameWidth": 32,
+        "frameHeight": 32,
         "columns": 8,
         "rows": 8
       }
@@ -1553,8 +1713,8 @@
       "id": "defense_steer_assist",
       "sheet": {
         "file": "defense_steer_assist.png",
-        "frameWidth": 28,
-        "frameHeight": 28,
+        "frameWidth": 26,
+        "frameHeight": 26,
         "columns": 8,
         "rows": 8
       }
@@ -1573,8 +1733,8 @@
       "id": "utility_spare",
       "sheet": {
         "file": "utility_spare.png",
-        "frameWidth": 28,
-        "frameHeight": 28,
+        "frameWidth": 26,
+        "frameHeight": 26,
         "columns": 8,
         "rows": 8
       }
@@ -1583,8 +1743,8 @@
       "id": "utility_repair",
       "sheet": {
         "file": "utility_repair.png",
-        "frameWidth": 28,
-        "frameHeight": 28,
+        "frameWidth": 26,
+        "frameHeight": 26,
         "columns": 8,
         "rows": 8
       }
@@ -1593,8 +1753,8 @@
       "id": "utility_fan",
       "sheet": {
         "file": "utility_fan.png",
-        "frameWidth": 28,
-        "frameHeight": 28,
+        "frameWidth": 26,
+        "frameHeight": 26,
         "columns": 8,
         "rows": 8
       }
@@ -1603,8 +1763,8 @@
       "id": "utility_radiator",
       "sheet": {
         "file": "utility_radiator.png",
-        "frameWidth": 32,
-        "frameHeight": 32,
+        "frameWidth": 36,
+        "frameHeight": 36,
         "columns": 8,
         "rows": 8
       }
@@ -1613,8 +1773,8 @@
       "id": "utility_battery",
       "sheet": {
         "file": "utility_battery.png",
-        "frameWidth": 28,
-        "frameHeight": 28,
+        "frameWidth": 32,
+        "frameHeight": 32,
         "columns": 8,
         "rows": 8
       }
@@ -1623,8 +1783,8 @@
       "id": "utility_generator",
       "sheet": {
         "file": "utility_generator.png",
-        "frameWidth": 28,
-        "frameHeight": 28,
+        "frameWidth": 32,
+        "frameHeight": 32,
         "columns": 8,
         "rows": 8
       }
@@ -1633,8 +1793,8 @@
       "id": "utility_capacitor",
       "sheet": {
         "file": "utility_capacitor.png",
-        "frameWidth": 28,
-        "frameHeight": 28,
+        "frameWidth": 30,
+        "frameHeight": 30,
         "columns": 8,
         "rows": 8
       }
@@ -1643,8 +1803,8 @@
       "id": "utility_nitro",
       "sheet": {
         "file": "utility_nitro.png",
-        "frameWidth": 32,
-        "frameHeight": 32,
+        "frameWidth": 36,
+        "frameHeight": 36,
         "columns": 8,
         "rows": 8
       }
@@ -1653,8 +1813,8 @@
       "id": "utility_overdrive",
       "sheet": {
         "file": "utility_overdrive.png",
-        "frameWidth": 32,
-        "frameHeight": 32,
+        "frameWidth": 34,
+        "frameHeight": 34,
         "columns": 8,
         "rows": 8
       }
@@ -1663,8 +1823,8 @@
       "id": "utility_traction",
       "sheet": {
         "file": "utility_traction.png",
-        "frameWidth": 32,
-        "frameHeight": 32,
+        "frameWidth": 36,
+        "frameHeight": 36,
         "columns": 8,
         "rows": 8
       }
@@ -1673,8 +1833,8 @@
       "id": "utility_gyro",
       "sheet": {
         "file": "utility_gyro.png",
-        "frameWidth": 28,
-        "frameHeight": 28,
+        "frameWidth": 30,
+        "frameHeight": 30,
         "columns": 8,
         "rows": 8
       }
@@ -1683,8 +1843,8 @@
       "id": "utility_radar",
       "sheet": {
         "file": "utility_radar.png",
-        "frameWidth": 36,
-        "frameHeight": 36,
+        "frameWidth": 46,
+        "frameHeight": 46,
         "columns": 8,
         "rows": 8
       }
@@ -1693,8 +1853,8 @@
       "id": "utility_minesensor",
       "sheet": {
         "file": "utility_minesensor.png",
-        "frameWidth": 28,
-        "frameHeight": 28,
+        "frameWidth": 34,
+        "frameHeight": 34,
         "columns": 8,
         "rows": 8
       }
@@ -1713,8 +1873,8 @@
       "id": "utility_jump",
       "sheet": {
         "file": "utility_jump.png",
-        "frameWidth": 32,
-        "frameHeight": 32,
+        "frameWidth": 34,
+        "frameHeight": 34,
         "columns": 8,
         "rows": 8
       }
@@ -1723,8 +1883,8 @@
       "id": "utility_winch",
       "sheet": {
         "file": "utility_winch.png",
-        "frameWidth": 28,
-        "frameHeight": 28,
+        "frameWidth": 32,
+        "frameHeight": 32,
         "columns": 8,
         "rows": 8
       }
@@ -1733,8 +1893,8 @@
       "id": "utility_ballast",
       "sheet": {
         "file": "utility_ballast.png",
-        "frameWidth": 28,
-        "frameHeight": 28,
+        "frameWidth": 30,
+        "frameHeight": 30,
         "columns": 8,
         "rows": 8
       }
@@ -1743,8 +1903,8 @@
       "id": "utility_spoiler",
       "sheet": {
         "file": "utility_spoiler.png",
-        "frameWidth": 44,
-        "frameHeight": 44,
+        "frameWidth": 46,
+        "frameHeight": 46,
         "columns": 8,
         "rows": 8
       }
@@ -1753,8 +1913,8 @@
       "id": "utility_targeting",
       "sheet": {
         "file": "utility_targeting.png",
-        "frameWidth": 28,
-        "frameHeight": 28,
+        "frameWidth": 32,
+        "frameHeight": 32,
         "columns": 8,
         "rows": 8
       }
@@ -1763,8 +1923,8 @@
       "id": "utility_solar",
       "sheet": {
         "file": "utility_solar.png",
-        "frameWidth": 32,
-        "frameHeight": 32,
+        "frameWidth": 34,
+        "frameHeight": 34,
         "columns": 8,
         "rows": 8
       }

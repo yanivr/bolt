@@ -10,12 +10,14 @@ import {
 import type { BlueprintPart, QuarterTurn, VehicleBlueprint } from '@bolt/shared';
 import {
   SIM_DT,
+  allowedRotations,
   buildHash,
   buildTrack,
   canonicalizeBlueprint,
   computeBuildStats,
   createDriveSession,
   deriveVehicleParams,
+  fitsMountBox,
   installPart,
   mulberry32,
   repairBlueprint,
@@ -58,9 +60,12 @@ function independentlyLegal(bp: VehicleBlueprint): string | null {
     const mount = chassis.mounts.find((m) => m.id === instance.mountId)!;
     cost += part.price;
     load += part.massKg;
+    // A part the player aims stands on a square base, the smaller side of its footprint; any
+    // other part takes its footprint, turned with it.
     const sideways = instance.rotationQuarterTurns % 2 === 1;
-    const w = sideways ? part.footprint.h : part.footprint.w;
-    const h = sideways ? part.footprint.w : part.footprint.h;
+    const base = Math.min(part.footprint.w, part.footprint.h);
+    const w = part.facing === 'free' ? base : sideways ? part.footprint.h : part.footprint.w;
+    const h = part.facing === 'free' ? base : sideways ? part.footprint.w : part.footprint.h;
     const x = mount.x + instance.offsetX;
     const y = mount.y + instance.offsetY;
     boxes.push([x - w / 2, y - h / 2, x + w / 2, y + h / 2]);
@@ -196,8 +201,7 @@ describe('blueprint fuzz', () => {
           (p) =>
             (mount.categories.includes('UNIVERSAL') ||
               p.compatibleMounts.some((c) => mount.categories.includes(c))) &&
-            p.footprint.w <= mount.maxFootprint.w &&
-            p.footprint.h <= mount.maxFootprint.h,
+            fitsMountBox(mount, p),
         );
         const part = !wild && fitting.length > 0 ? pick(rng, fitting) : pick(rng, PARTS);
         const instance: BlueprintPart = {
@@ -209,9 +213,7 @@ describe('blueprint fuzz', () => {
           offsetY: wild ? Math.round((rng() - 0.5) * 16) : 0,
           rotationQuarterTurns: (wild
             ? Math.floor(rng() * 4)
-            : part.rotatable
-              ? mount.allowedQuarterTurns[0]!
-              : 0) as QuarterTurn,
+            : (allowedRotations(mount, part)[0] ?? 0)) as QuarterTurn,
         };
         if (part.category === 'weapon' && part.triggerMode !== 'automatic' && rng() < 0.7)
           instance.assignedActionSlot = rng() < 0.5 ? 0 : 1;

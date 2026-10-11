@@ -24,8 +24,10 @@ import { ALL_CHASSIS_ART } from './cars/registry-chassis.js';
 import { ALL_ENGINE_ART } from './cars/registry-engines.js';
 import { ALL_PART_ART } from './cars/registry-parts.js';
 import { ALL_WHEEL_ART } from './cars/registry-wheels.js';
+import { renderPartFrame } from './cars/parts/frame.js';
 import { CAR_MATERIALS, PAINTS, PAINT_KEY, PAINT_OUTLINE_KEY } from './cars/materials.js';
 import type { ChassisArt, EngineArt, PartArt, WheelArt } from './cars/types.js';
+import { renderIcon } from './lib/icon.js';
 import type { Model } from './lib/model.js';
 import { addGlow, extractTagged, footprintShadow, renderModel, silhouette } from './lib/model.js';
 import type { RGBA } from './lib/pixels.js';
@@ -227,7 +229,7 @@ function bakeEngine(art: EngineArt, baked: Baked): void {
 function bakePart(art: PartArt, baked: Baked): void {
   const frames: PixelBuffer[] = [];
   for (let h = 0; h < CAR_HEADINGS; h++) {
-    frames.push(renderModel(art.model, view((h * TAU) / CAR_HEADINGS, art.cell)).image);
+    frames.push(renderPartFrame(art, (h * TAU) / CAR_HEADINGS));
   }
   baked.frames.parts[art.id] = frames;
   baked.files.set(`${art.id}.png`, sheet(frames, CAR_SHEET_COLUMNS));
@@ -240,29 +242,13 @@ function bakePart(art: PartArt, baked: Baked): void {
       columns: CAR_SHEET_COLUMNS,
       rows: CAR_HEADINGS / CAR_SHEET_COLUMNS,
     },
+    ...(art.muzzles ? { muzzles: art.muzzles } : {}),
+    ...(art.pivot ? { pivot: art.pivot } : {}),
   };
 }
 
-/**
- * Catalog icons at 32 and 24 pixels, rendered straight from each part's model at icon scale
- * (never by shrinking a sprite), turned to a three-quarter pose so the shape reads.
- */
+/** Catalog icons at 32 and 24 pixels; `lib/icon.ts` frames each model to fill its tile. */
 const ICON_COLUMNS = 16;
-const ICON_HEADING = (-3 * TAU) / 32;
-function modelExtent(model: Model): number {
-  let extent = 4;
-  for (let y = -64; y <= 64; y += 1) {
-    for (let x = -64; x <= 64; x += 1) {
-      for (const solid of model.solids) {
-        if (solid.shape(x, y) <= 0) {
-          extent = Math.max(extent, Math.hypot(x, y) + (solid.z1 * CAR_Z_SCALE * CAR_TILT) / 2);
-          break;
-        }
-      }
-    }
-  }
-  return extent;
-}
 function bakeIcons(models: Array<{ id: string; model: Model }>, baked: Baked): void {
   const sheets: IconSheetManifest[] = [];
   for (const size of [32, 24]) {
@@ -270,17 +256,11 @@ function bakeIcons(models: Array<{ id: string; model: Model }>, baked: Baked): v
     const out = new PixelBuffer(ICON_COLUMNS * size, rows * size);
     const index: Record<string, number> = {};
     models.forEach(({ id, model }, i) => {
-      const scale = (size / 2 - 2) / modelExtent(model);
-      const icon = renderModel(model, {
-        heading: ICON_HEADING,
-        width: size,
-        height: size,
-        tilt: CAR_TILT,
-        zScale: CAR_Z_SCALE,
-        scale,
-        originY: size / 2 + 1,
-      }).image;
-      out.blit(icon, (i % ICON_COLUMNS) * size, Math.floor(i / ICON_COLUMNS) * size);
+      out.blit(
+        renderIcon(model, size),
+        (i % ICON_COLUMNS) * size,
+        Math.floor(i / ICON_COLUMNS) * size,
+      );
       index[id] = i;
     });
     baked.files.set(`icons_${size}.png`, out);

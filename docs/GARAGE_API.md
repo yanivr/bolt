@@ -30,20 +30,44 @@ Contents: [Geometry](#geometry) · [Blueprints](#blueprints) · [Catalog](#the-c
 - **Chassis-local coordinates.** Origin at the body centre. **Front is negative Y, right is
   positive X.** Units are world pixels, the same pixels the track and the sprites use. The
   Beetle body is 34 x 58.
-- **Footprint.** `{ w, h }` in world pixels at rotation 0: `w` across the car, `h` along it.
-  For a weapon, rotation 0 points the muzzle at the front of the car.
-- **Rotation** is in quarter turns clockwise seen from above: `0` forward, `1` right, `2`
-  rear, `3` left. Odd turns swap the footprint: a part 8 x 12 at rotation 1 occupies 12 x 8.
-  `rotatedFootprint(footprint, turns)` does this.
+- **Footprint.** `{ w, h }` in world pixels with the part at quarter turn 0, facing the front
+  of the car: `w` across the car, `h` along it. It is the size the part is modelled at. The
+  room a part takes once it is mounted is its occupied footprint, below.
+- **Facing** is in quarter turns clockwise seen from above: `0` front, `1` right, `2` rear,
+  `3` left (`rotationQuarterTurns` on an installed part). The compositor draws a part with the
+  sheet frame of the car's heading plus a quarter turn a step, and a weapon fires along that
+  same heading: `partHeadingRad(carHeadingRad, turns)` gives it in radians clockwise from up,
+  wrapped to (-PI, PI], and `partDirection(carHeadingRad, turns)` as a unit vector in world
+  space.
+- **Who decides the facing** is data on the part, `facing` (catalog 0.5.0):
+  - `free`: the player chooses, among the ways the mount allows. Thirteen weapons and the two
+    plates.
+  - `fixed`: the part decides, wherever it is mounted. `fixedTurn` is the turn it always has
+    (Road Mine and Oil Slick `2`, Rear Guard `2`, Crash Bumper and Mine Sweeper `0`) or
+    `'outward'`, away from the centre line of the car, for the Side Saw and the Side Shields
+    (`outwardTurn(mount)`: 3 on a left mount, 1 on a right one).
+  - `none`: direction means nothing; the part stays at turn 0 and the garage shows no
+    direction picker. The four weapons that find their own target all round (Swivel Turret,
+    EMP Pulse, Tesla Arc, Arc Mortar), sixteen defenses and every utility.
+- **Occupied footprint.** `occupiedFootprint(part, turns)` is the room a part takes in the
+  car's frame, and every fit, overlap, wheel and nudge check uses it. A `free` part stands on
+  a **square base** whose side is the smaller side of its footprint (`partBase(part)`; the
+  Base column of the part table), the same at every turn. So a free part that fits a mount
+  can point any way that mount allows: an 8 x 12 Road Shotgun stands on 8 x 8 and faces
+  forward, backward or sideways on the Trike's 14 x 10 roof. Its barrel, nozzle or rails
+  reach past the base and may reach past the mount; that overhang is drawing only. A `fixed`
+  part takes its footprint turned with it (odd turns swap `w` and `h`: the 14 x 6 Side Saw
+  takes 6 x 14 on a flank), and a part with no facing takes its footprint as written.
 - **Mount.** A named hardpoint with a centre `(x, y)`, a `maxFootprint` and an installation
-  region `regionHalfW`, `regionHalfH`. A part fits when its rotated footprint is no larger
-  than `maxFootprint` in either direction.
+  region `regionHalfW`, `regionHalfH`. A part fits when its occupied footprint is no larger
+  than `maxFootprint` in either direction: `fitsMountBox(mount, part)`, one answer per part
+  and mount.
 - **Offset.** `offsetX`, `offsetY` on an installed part move it from the mount centre, in
   whole pixels, by at most the region half-extents. The part's centre is
   `(mount.x + offsetX, mount.y + offsetY)` and its mass sits there.
-- **Part box.** The centre plus and minus half the rotated footprint. `placePart` and
+- **Part box.** The centre plus and minus half the occupied footprint. `placePart` and
   `installedParts(blueprint, catalog)` return it as `rect: { x0, y0, x1, y1 }` with the
-  centre in `x`, `y` and the rotated size in `w`, `h`.
+  centre in `x`, `y` and the occupied size in `w`, `h`.
 - **Clearance.** Two part boxes conflict when they are closer than 2 px on both axes. The
   same rule applies between a part box and a wheel well.
 - **Wheel well.** An 8 x 14 box centred on each wheel anchor, whatever wheel kit is fitted.
@@ -55,11 +79,15 @@ Contents: [Geometry](#geometry) · [Blueprints](#blueprints) · [Catalog](#the-c
   nudged toward the other.
 - **The engine** sits inside the body at `engine_bay`, below deck level. Accessory mounts may
   be above it, and an engine never conflicts with a mounted part. Any engine fits any chassis.
-- **Allowed rotations.** `mount.allowedQuarterTurns` lists the orientations a rotatable part
-  may take there, default first. Front mounts allow `0 3 1`, rear mounts `2 3 1`, left mounts
-  `3 0 2`, right mounts `1 0 2` (never back across the cabin); roof, utility and universal
-  mounts allow all four. A part with `rotatable: false`
-  must stay at rotation 0. `allowedRotations(mount, part)` gives the list for a pair.
+- **Allowed facings.** `mount.allowedQuarterTurns` lists the ways a `free` part may point
+  there, default first. It is a statement about the car and has nothing to do with room.
+  Front mounts allow `0` only and rear mounts `2` only; left mounts `3 0 2` and right mounts
+  `1 0 2` (outward first, then along the flank, never inward across the cabin); roof,
+  universal (the Pickup's bed) and utility mounts allow all four. One deliberate exception:
+  the Pickup's two bed rails are rear mounts on a side wall and allow backward and outward
+  (`2 3` and `2 1`). `allowedRotations(mount, part)` gives the list for a pair: the mount's
+  list for a free part, the part's one turn for a fixed part, `[0]` for a part with no
+  facing. Anything else is refused as `BAD_ROTATION`.
 - **Which mount takes which part.** `mountAccepts(mount, part)`: a `UNIVERSAL` mount takes any
   accessory (the Pickup's bed); a mount with `acceptsAnyWeapon` takes any weapon (no chassis
   has one since the five-chassis decision); otherwise
@@ -145,7 +173,7 @@ partCard(part, wheelCount?);          // what a card shows
 Further fields on the definitions themselves: `footprint`, `compatibleMounts`, `soundKey`,
 `behaviorId`, `params` (every number of the part's effect, flat), `actions` (the same effect
 as Section 11.8 active primitives, for Milestone C), `modifiers` (passive primitives), and for
-accessories `hardpointUse`, `rotatable`, `heightLevel`. Chassis add `wheelAnchors`, `mounts`,
+accessories `hardpointUse`, `facing`, `fixedTurn`, `heightLevel`. Chassis add `wheelAnchors`, `mounts`,
 `bodyHalfWidth`, `bodyHalfLength`, `recommendedLoadKg`, `maxLoadKg`, `baseIntegrity`,
 `stabilityThreshold`, `armorLoadShare`, `defaultEngineId` and `handling`. Engines add
 `forceIndex`, `heatPerSecond`, `powerDraw` and `curve`. Wheel kits add `grip` and `powerDraw`.
@@ -202,8 +230,8 @@ touched instead.
 | `DUPLICATE_INSTANCE` | error | This part is listed twice. | Two parts share an `instanceId`. |
 | `UNKNOWN_MOUNT` | error | No compatible mount | The chassis has no mount of that id. |
 | `NO_COMPATIBLE_MOUNT` | error | No compatible mount | The mount does not take this part, or the car has nowhere for it. |
-| `PART_TOO_LARGE` | error | Too large for this mount. | Rotated footprint exceeds `maxFootprint`. `detail` has `w`, `h`, `maxW`, `maxH`. |
-| `BAD_ROTATION` | error | This part can't face that way here. | Rotation not allowed on this mount, or the part cannot rotate. |
+| `PART_TOO_LARGE` | error | Too large for this mount. | Occupied footprint exceeds `maxFootprint`. `detail` has `w`, `h`, `maxW`, `maxH`. |
+| `BAD_ROTATION` | error | This part can't face that way here. | The quarter turn is not one `allowedRotations(mount, part)` lists: the mount does not face that way, or the part has a fixed facing or none. |
 | `OUT_OF_REGION` | error | Too far from the mount. | Offset beyond the installation region. |
 | `MOUNT_OCCUPIED` | error | This mount is full. | A full-hardpoint part shares its mount, or a rack is over capacity. |
 | `PART_BLOCKS_ANOTHER` | error | This part blocks another attachment. | Two part boxes closer than 2 px. When the blocked part is a Swivel Turret the message is `This part blocks your turret`. |
@@ -250,7 +278,8 @@ toward legality one edit at a time. `spend` always shows new spend and refund se
 | `installPart(bp, catalog, partId, placement?: Partial<Placement>)` | Buys and installs. With no placement, uses `suggestMount`. With only `mountId`, picks the first legal rotation and offset on that mount. With a full placement, uses it exactly. A manual or hybrid weapon takes the first free fire button; with both taken a hybrid goes automatic and a manual weapon is installed inactive. `instanceId` in the result is the new part. |
 | `removePart(bp, catalog, instanceId)` | Sells the part for its full price. |
 | `movePart(bp, catalog, instanceId, to: Partial<Placement>)` | Moves within the region, to another mount, or both. A change of mount resets the offset and, when the current rotation is not allowed or does not fit there, picks the first that does. Costs nothing. |
-| `rotatePart(bp, catalog, instanceId, turns?)` | Sets a rotation, or with no argument steps to the next one that is legal where the part is. |
+| `rotatePart(bp, catalog, instanceId, turns?)` | Points a part front (0), right (1), rear (2) or left (3), or with no argument steps clockwise to the next facing its mount allows. Free. Refused with `BAD_ROTATION` for a facing the mount does not have and for a part whose facing is fixed or none. |
+| `refaceBlueprint(bp, catalog): VehicleBlueprint` | Gives every part a facing today's rules allow and changes nothing else: a legal turn is kept, otherwise the part takes its fixed turn or its mount's default. The migration from catalogs before 0.5.0; `repairBlueprint` runs it first, so a repair turns parts and removes none for their facing. Returns the same object when nothing needed turning. |
 | `swapChassis(bp, catalog, chassisId)` | One atomic step. Each part goes to the mount of the same id if it fits, else the nearest mount of the same category, else any mount that takes it; parts with nowhere to go, and armor over the new allowance, are removed, refunded and listed in `removed`. The wheel kit is re-priced for the new wheel count. Refused whole (`NOT_ENOUGH_CREDITS` or `TOO_HEAVY`) if the result would be over budget or over weight. |
 | `swapEngine(bp, catalog, engineId)` | Replaces the engine. |
 | `swapTires(bp, catalog, tireKitId)` | Replaces the whole wheel kit, priced for the chassis wheel count. |
@@ -258,7 +287,7 @@ toward legality one edit at a time. `spend` always shows new spend and refund se
 | `setPaint(bp, catalog, paintId)`, `renameBlueprint(bp, catalog, name)` | Cosmetic. Free, and the build hash does not change. |
 | `suggestMount(bp, catalog, partId): Placement \| null` | The best free mount with a legal offset and rotation, or `null` when the car has nowhere for the part. Prefers the mount categories the part lists first, then the smallest mount that fits, and shares a rack only when nothing else is free. A suggestion is always accepted by `installPart`. |
 | `compareCost(before, after, catalog): SpendBreakdown` | New spend and refund between any two blueprints. |
-| `repairBlueprint(bp, catalog, options?): RepairResult` | The auto-repair of Section 15.6. Re-stamps the catalog version, then removes optional parts until the build is legal: parts an error points at first, otherwise any part, always the most expensive first. Never touches the engine or wheel kit, nor the chassis, with one exception: a blueprint whose chassis has left the catalog (a retired frame) is moved onto `options.fallbackChassisId` when one is given, keeping the engine, wheel kit, paint and name, re-buying every part that still has a home there (most expensive first, wherever `suggestMount` puts it, with its fire button kept where legal) and listing the rest in `removed`. The garage passes the Beetle. Returns `{ ok, blueprint, removed, spend }`, or `{ ok: false, blueprint, removed, issues }` when the essentials themselves are illegal. The input is untouched: save the result as a new revision. |
+| `repairBlueprint(bp, catalog, options?): RepairResult` | The auto-repair of Section 15.6. Re-stamps the catalog version, gives every part a legal facing (`refaceBlueprint`), then removes optional parts until the build is legal: parts an error points at first, otherwise any part, always the most expensive first. Never touches the engine or wheel kit, nor the chassis, with one exception: a blueprint whose chassis has left the catalog (a retired frame) is moved onto `options.fallbackChassisId` when one is given, keeping the engine, wheel kit, paint and name, re-buying every part that still has a home there (most expensive first, wherever `suggestMount` puts it, with its fire button kept where legal) and listing the rest in `removed`. The garage passes the Beetle. Returns `{ ok, blueprint, removed, spend }`, or `{ ok: false, blueprint, removed, issues }` when the essentials themselves are illegal. The input is untouched: save the result as a new revision. |
 | `installedParts(bp, catalog): PlacedPart[]` | Installed parts in canonical order with their mount, centre, rotated size and box, for drawing the workbench. |
 | `nextInstanceId(bp)` | The id the next install will use. |
 
@@ -291,7 +320,8 @@ const b = installPart(a.blueprint, CATALOG, 'weapon_saw');
 
 // Nudge, then turn.
 const c = movePart(a.blueprint, CATALOG, 'p1', { offsetX: 2 });
-const d = rotatePart(c.blueprint, CATALOG, 'p1');          // next allowed orientation: 1
+const d = rotatePart(c.blueprint, CATALOG, 'p1');          // steps clockwise to the next allowed facing
+const f = rotatePart(c.blueprint, CATALOG, 'p1', 2);       // or names it: face the rear
 
 // Swap frames. Everything that fits is carried over; the rest comes back refunded.
 const e = swapChassis(d.blueprint, CATALOG, 'chassis_arrow');
@@ -404,8 +434,10 @@ milliseconds.
   data).
 - At most six weapons. At most two on fire buttons. One spare wheel, two repair kits, three
   repair units in all. Parts with `maxPerCar` are limited to that many.
-- Plates mount on `ARMOR`-capable mounts and protect the arc they face (rotation). Side
-  Shields protect both sides from either side mount. Bumpers go front or rear only.
+- Plates mount on `ARMOR`-capable mounts and protect the arc they face (their quarter turn).
+  Side Shields face outward from whichever side mount they are on. Bumpers go front or rear
+  only and face that way.
+- A part's facing must be one `allowedRotations(mount, part)` lists. Turning a part is free.
 - Five chassis, by product-owner decision (DECISIONS 87): Beetle, Arrow, Pickup, Spider,
   Trike. Chassis specials: the Pickup's bed is two `UNIVERSAL` mounts, a rack (`bed_front`)
   with capacity 2 and the bed floor (`bed_rear`), the largest mount in the game and the only
@@ -419,9 +451,20 @@ milliseconds.
   manifest under `chassis`, `engines` and `wheels`, as today. Mounted parts go under the new
   optional `parts` record (`PartSpriteManifest` in `packages/shared/src/assets.ts`): one
   frame per heading, packed like a chassis sheet.
-- Size a mounted part's art to its footprint in the table below at heading 0, `w` across and
-  `h` along the car, muzzle or leading edge toward the top of the frame. Connectors, bolts
-  and cables may spill a pixel or two outside; the footprint is what the rules keep clear.
+- Model a mounted part at its footprint in the table below at heading 0, `w` across and `h`
+  along the car, muzzle or leading edge toward the top of the frame (negative Y), then finish
+  it larger (`Kit.done(id, cell, { scale })`): weapons about 15 to 20 percent, defenses and
+  utilities about a tenth. Barrels, nozzles, rails and blades run well past the base and may
+  overhang the mount. A part with a fixed facing is modelled the same way and turned by it.
+- Every weapon marks its muzzles (`Kit.muzzle`), and the turret its pivot (`Kit.pivot`).
+  They are written to the manifest as `muzzles` and `pivot` on `PartSpriteManifest`: points
+  in the part's own space at heading 0, `x` right and `y` toward the rear in sprite pixels
+  from the part's centre, `z` up from the mount surface in the units of `mountHeights`.
+  `partAnchorOffset(anchor, headingRad)` places one on screen relative to where the
+  compositor drew the part.
+- A part cell holds the whole drawing at every heading with two clear pixels all round, and
+  the sheet is outlined in one near-black cool color with a one pixel contact shadow down and
+  to the right (`art/scripts/cars/parts/frame.ts`).
 - Model each chassis around its mounts and wheel anchors in the layout tables. A part must
   look attached at the mount centre and still look attached when nudged to the edge of the
   mount's region.
@@ -438,183 +481,185 @@ milliseconds.
 
 Generated by `npx tsx tests/tools/catalogTables.ts`; `tests/unit/docs.test.ts` fails when
 this table and the catalog disagree. Hardpoint: `full` takes the whole mount, `shared` may
-share a rack. Turns: whether the part can be rotated. Height: 0 flush, 1 raised, 2 tall.
+share a rack. Facing: `free` (the player aims it), `fixed` and the way it always points, or
+`none`. Base: the side of the square a free part stands on. Height: 0 flush, 1 raised, 2
+tall.
 
 <!-- BEGIN PART TABLE -->
-| Part id | Name | Footprint w x h | Compatible mounts | Hardpoint | Turns | Height | Trigger | Max per car |
-| :-- | :-- | :-- | :-- | :-- | :-- | --: | :-- | --: |
-| `chassis_beetle` | Beetle | 34 x 58 | body | n/a | n/a | n/a | passive | n/a |
-| `chassis_arrow` | Arrow | 28 x 62 | body | n/a | n/a | n/a | passive | n/a |
-| `chassis_pickup` | Pickup | 38 x 74 | body | n/a | n/a | n/a | passive | n/a |
-| `chassis_spider` | Spider | 48 x 68 | body | n/a | n/a | n/a | passive | n/a |
-| `chassis_trike` | Trike | 26 x 48 | body | n/a | n/a | n/a | passive | n/a |
-| `engine_mini_electric` | Mini Electric | 12 x 10 | ENGINE | n/a | n/a | n/a | passive | n/a |
-| `engine_four_cylinder` | Four-Cylinder | 18 x 14 | ENGINE | n/a | n/a | n/a | passive | n/a |
-| `engine_v6` | V6 | 18 x 14 | ENGINE | n/a | n/a | n/a | passive | n/a |
-| `engine_v8` | V8 | 20 x 16 | ENGINE | n/a | n/a | n/a | passive | n/a |
-| `engine_v12` | V12 | 20 x 18 | ENGINE | n/a | n/a | n/a | passive | n/a |
-| `engine_small_turbo` | Small Turbo | 16 x 14 | ENGINE | n/a | n/a | n/a | passive | n/a |
-| `engine_twin_turbo` | Twin Turbo | 20 x 16 | ENGINE | n/a | n/a | n/a | passive | n/a |
-| `engine_supercharger` | Supercharger | 20 x 16 | ENGINE | n/a | n/a | n/a | passive | n/a |
-| `engine_diesel` | Torque Diesel | 20 x 16 | ENGINE | n/a | n/a | n/a | passive | n/a |
-| `engine_electric_sport` | Sport Electric | 18 x 12 | ENGINE | n/a | n/a | n/a | passive | n/a |
-| `engine_electric_eco` | Eco Electric | 16 x 12 | ENGINE | n/a | n/a | n/a | passive | n/a |
-| `engine_hybrid` | Hybrid | 18 x 16 | ENGINE | n/a | n/a | n/a | passive | n/a |
-| `engine_rotary` | Rotary | 14 x 12 | ENGINE | n/a | n/a | n/a | passive | n/a |
-| `engine_turbine` | Turbine | 16 x 18 | ENGINE | n/a | n/a | n/a | passive | n/a |
-| `engine_rocket` | Rocket Engine | 16 x 18 | ENGINE | n/a | n/a | n/a | passive | n/a |
-| `engine_twin` | Twin Drive | 22 x 16 | ENGINE | n/a | n/a | n/a | passive | n/a |
-| `engine_spring` | Spring Drive | 16 x 14 | ENGINE | n/a | n/a | n/a | passive | n/a |
-| `engine_offroad` | Trail Engine | 18 x 16 | ENGINE | n/a | n/a | n/a | passive | n/a |
-| `engine_resilient` | Ironheart | 18 x 16 | ENGINE | n/a | n/a | n/a | passive | n/a |
-| `engine_experimental` | Wildcard Motor | 16 x 14 | ENGINE | n/a | n/a | n/a | passive | n/a |
-| `tires_slick` | Slicks | 8 x 14 | WHEEL | n/a | n/a | n/a | passive | n/a |
-| `tires_street` | Street Tires | 8 x 14 | WHEEL | n/a | n/a | n/a | passive | n/a |
-| `tires_rain` | Rain Runners | 8 x 14 | WHEEL | n/a | n/a | n/a | passive | n/a |
-| `tires_sand` | Sand Paddles | 8 x 14 | WHEEL | n/a | n/a | n/a | passive | n/a |
-| `tires_mud` | Mud Claws | 8 x 14 | WHEEL | n/a | n/a | n/a | passive | n/a |
-| `tires_snow` | Snow Treads | 8 x 14 | WHEEL | n/a | n/a | n/a | passive | n/a |
-| `tires_ice` | Ice Spikes | 8 x 14 | WHEEL | n/a | n/a | n/a | passive | n/a |
-| `tires_soft` | Soft Compound | 8 x 14 | WHEEL | n/a | n/a | n/a | passive | n/a |
-| `tires_hard` | Hard Compound | 8 x 14 | WHEEL | n/a | n/a | n/a | passive | n/a |
-| `tires_drift` | Drift Rings | 8 x 14 | WHEEL | n/a | n/a | n/a | passive | n/a |
-| `tires_armored` | Armored Tires | 8 x 14 | WHEEL | n/a | n/a | n/a | passive | n/a |
-| `tires_solid` | Solid Core | 8 x 14 | WHEEL | n/a | n/a | n/a | passive | n/a |
-| `tires_balloon` | Balloon Tires | 8 x 14 | WHEEL | n/a | n/a | n/a | passive | n/a |
-| `tires_monster` | Monster Wheels | 8 x 14 | WHEEL | n/a | n/a | n/a | passive | n/a |
-| `tires_micro` | Micro Wheels | 8 x 14 | WHEEL | n/a | n/a | n/a | passive | n/a |
-| `tires_halftrack` | Half Tracks | 8 x 14 | WHEEL | n/a | n/a | n/a | passive | n/a |
-| `tires_track` | Full Tracks | 8 x 14 | WHEEL | n/a | n/a | n/a | passive | n/a |
-| `tires_magnetic` | Magnetic Rollers | 8 x 14 | WHEEL | n/a | n/a | n/a | passive | n/a |
-| `tires_adaptive` | Adaptive Tires | 8 x 14 | WHEEL | n/a | n/a | n/a | passive | n/a |
-| `tires_blades` | Razor Wheels | 8 x 14 | WHEEL | n/a | n/a | n/a | passive | n/a |
-| `weapon_front_mg` | Front Machine Gun | 8 x 12 | FRONT, ROOF, LEFT, RIGHT, REAR | shared | yes | 0 | manual | n/a |
-| `weapon_rear_mg` | Rear Sentry | 8 x 10 | REAR, ROOF, LEFT, RIGHT | shared | yes | 0 | automatic | n/a |
-| `weapon_turret` | Swivel Turret | 12 x 12 | ROOF, FRONT, REAR | full | yes | 2 | hybrid | n/a |
-| `weapon_shotgun` | Road Shotgun | 8 x 12 | FRONT, ROOF, LEFT, RIGHT, REAR | shared | yes | 0 | manual | n/a |
-| `weapon_railshot` | Needle Railgun | 8 x 18 | FRONT, ROOF | full | yes | 1 | hybrid | n/a |
-| `weapon_rocket` | Straight Rocket | 8 x 14 | FRONT, ROOF, LEFT, RIGHT, REAR | full | yes | 0 | manual | n/a |
-| `weapon_homing` | Seeker Missile | 10 x 14 | ROOF, REAR, FRONT | full | yes | 1 | hybrid | n/a |
-| `weapon_mine` | Road Mine | 10 x 8 | REAR, UTILITY | shared | no | 0 | manual | n/a |
-| `weapon_oil` | Oil Slick | 10 x 8 | REAR, UTILITY | shared | no | 0 | manual | n/a |
-| `weapon_foam` | Sticky Foam | 10 x 12 | FRONT, ROOF, LEFT, RIGHT | full | yes | 0 | manual | n/a |
-| `weapon_emp` | EMP Pulse | 12 x 12 | ROOF, UTILITY | full | no | 1 | manual | 1 |
-| `weapon_tesla` | Tesla Arc | 8 x 8 | ROOF, LEFT, RIGHT, FRONT, REAR | shared | no | 1 | automatic | n/a |
-| `weapon_flame` | Flame Spitter | 8 x 14 | FRONT, LEFT, RIGHT, REAR | full | yes | 0 | manual | n/a |
-| `weapon_frost` | Frost Cannon | 8 x 14 | FRONT, ROOF, LEFT, RIGHT, REAR | full | yes | 0 | manual | n/a |
-| `weapon_hammer` | Crash Hammer | 12 x 16 | FRONT, LEFT, RIGHT | full | yes | 1 | manual | n/a |
-| `weapon_saw` | Side Saw | 6 x 14 | LEFT, RIGHT | full | no | 0 | automatic | n/a |
-| `weapon_harpoon` | Grapple Harpoon | 8 x 14 | FRONT, ROOF, LEFT, RIGHT, REAR | full | yes | 0 | manual | 1 |
-| `weapon_air` | Air Cannon | 10 x 12 | FRONT, ROOF, LEFT, RIGHT, REAR | full | yes | 0 | manual | n/a |
-| `weapon_boomerang` | Steel Boomerang | 12 x 8 | FRONT, ROOF, LEFT, RIGHT | full | yes | 0 | manual | n/a |
-| `weapon_mortar` | Arc Mortar | 16 x 16 | ROOF, REAR | full | no | 2 | hybrid | n/a |
-| `defense_light_plate` | Light Plates | 12 x 4 | ARMOR | full | yes | 0 | passive | 4 |
-| `defense_heavy_plate` | Heavy Plating | 14 x 6 | ARMOR | full | yes | 0 | passive | 4 |
-| `defense_front_bumper` | Crash Bumper | 14 x 5 | FRONT | full | no | 0 | passive | 1 |
-| `defense_rear_bumper` | Rear Guard | 14 x 5 | REAR | full | no | 0 | passive | 1 |
-| `defense_side_panels` | Side Shields | 5 x 14 | LEFT, RIGHT | full | no | 0 | passive | 1 |
-| `defense_wheel_cage` | Wheel Cage | 8 x 10 | UTILITY, ROOF, ARMOR | full | no | 0 | passive | 1 |
-| `defense_engine_case` | Engine Shell | 8 x 12 | UTILITY, ROOF, ARMOR | full | no | 0 | passive | 1 |
-| `defense_ceramic` | Ceramic Panels | 8 x 12 | UTILITY, ROOF, ARMOR | full | no | 0 | passive | 1 |
-| `defense_breakaway` | Breakaway Armor | 8 x 10 | UTILITY, ROOF, ARMOR | full | no | 0 | automatic | 1 |
-| `defense_composite` | Composite Shell | 8 x 12 | UTILITY, ROOF, ARMOR | full | no | 0 | passive | 1 |
-| `defense_energy_shield` | Energy Shield | 10 x 10 | ROOF, UTILITY | full | no | 1 | automatic | 1 |
-| `defense_faraday` | Faraday Cage | 8 x 10 | UTILITY, ROOF, ARMOR | full | no | 0 | passive | 1 |
-| `defense_heatguard` | Heat Guard | 8 x 8 | UTILITY, ROOF, ARMOR | shared | no | 0 | passive | 1 |
-| `defense_antimissile` | Missile Interceptor | 10 x 10 | ROOF | full | no | 1 | automatic | 1 |
-| `defense_minesweeper` | Mine Sweeper | 12 x 6 | FRONT | full | no | 0 | automatic | 1 |
-| `defense_fireproof` | Fireproof Lining | 8 x 8 | UTILITY, ROOF, ARMOR | shared | no | 0 | passive | 1 |
-| `defense_oilproof` | Grip Coating | 8 x 8 | UTILITY, ROOF, ARMOR | shared | no | 0 | passive | 1 |
-| `defense_damper` | Shock Dampers | 8 x 10 | UTILITY, ROOF, ARMOR | full | no | 0 | passive | 1 |
-| `defense_steer_assist` | Steering Stabilizer | 8 x 8 | UTILITY, ROOF, ARMOR | shared | no | 0 | passive | 1 |
-| `defense_reactive` | Reactive Foam | 8 x 12 | UTILITY, ROOF, ARMOR | full | no | 0 | automatic | 1 |
-| `utility_spare` | Spare Wheel | 8 x 12 | UTILITY, ROOF, REAR, LEFT, RIGHT | shared | no | 0 | manual | 1 |
-| `utility_repair` | Repair Kit | 8 x 8 | UTILITY, ROOF, REAR, LEFT, RIGHT | shared | no | 0 | manual | 2 |
-| `utility_fan` | Cooling Fan | 8 x 8 | UTILITY, ROOF, FRONT, REAR, LEFT, RIGHT | shared | no | 0 | passive | 2 |
-| `utility_radiator` | Racing Radiator | 14 x 6 | FRONT, UTILITY, ROOF | full | no | 0 | passive | 2 |
-| `utility_battery` | Extra Battery | 8 x 10 | UTILITY, ROOF, REAR, LEFT, RIGHT | shared | no | 0 | passive | 3 |
-| `utility_generator` | Auxiliary Generator | 8 x 12 | UTILITY, ROOF, REAR, LEFT, RIGHT | shared | no | 0 | passive | 2 |
-| `utility_capacitor` | Burst Capacitor | 8 x 8 | UTILITY, ROOF, REAR, LEFT, RIGHT | shared | no | 0 | automatic | 1 |
-| `utility_nitro` | Nitro Tank | 8 x 14 | UTILITY, ROOF, REAR, LEFT, RIGHT | full | no | 0 | manual | 1 |
-| `utility_overdrive` | Emergency Booster | 8 x 12 | UTILITY, ROOF, REAR, LEFT, RIGHT | shared | no | 0 | manual | 1 |
-| `utility_traction` | Traction Computer | 8 x 8 | UTILITY, ROOF, REAR, LEFT, RIGHT | shared | no | 0 | passive | 1 |
-| `utility_gyro` | Gyro Stabilizer | 8 x 10 | UTILITY, ROOF, REAR, LEFT, RIGHT | shared | no | 0 | passive | 1 |
-| `utility_radar` | Radar | 8 x 8 | ROOF, UTILITY | shared | no | 1 | passive | 1 |
-| `utility_minesensor` | Mine Detector | 8 x 6 | FRONT, UTILITY, ROOF | shared | no | 0 | automatic | 1 |
-| `utility_decoy` | Decoy Drone | 8 x 10 | UTILITY, ROOF, REAR, LEFT, RIGHT | shared | no | 0 | manual | 1 |
-| `utility_jump` | Jump Pad | 14 x 12 | UTILITY, REAR | full | no | 0 | manual | 1 |
-| `utility_winch` | Recovery Winch | 8 x 10 | FRONT, UTILITY, LEFT, RIGHT | shared | no | 0 | manual | 1 |
-| `utility_ballast` | Sliding Ballast | 8 x 12 | UTILITY, ROOF, REAR, LEFT, RIGHT | shared | no | 0 | automatic | 1 |
-| `utility_spoiler` | Active Wing | 16 x 6 | REAR, ROOF | full | no | 2 | automatic | 1 |
-| `utility_targeting` | Turret Computer | 8 x 8 | UTILITY, ROOF, REAR | shared | no | 0 | passive | 1 |
-| `utility_solar` | Solar Panel | 14 x 10 | ROOF, UTILITY | full | no | 0 | passive | 2 |
+| Part id | Name | Footprint w x h | Compatible mounts | Hardpoint | Facing | Base | Height | Trigger | Max per car |
+| :-- | :-- | :-- | :-- | :-- | :-- | --: | --: | :-- | --: |
+| `chassis_beetle` | Beetle | 34 x 58 | body | n/a | n/a | n/a | n/a | passive | n/a |
+| `chassis_arrow` | Arrow | 28 x 62 | body | n/a | n/a | n/a | n/a | passive | n/a |
+| `chassis_pickup` | Pickup | 38 x 74 | body | n/a | n/a | n/a | n/a | passive | n/a |
+| `chassis_spider` | Spider | 48 x 68 | body | n/a | n/a | n/a | n/a | passive | n/a |
+| `chassis_trike` | Trike | 26 x 48 | body | n/a | n/a | n/a | n/a | passive | n/a |
+| `engine_mini_electric` | Mini Electric | 12 x 10 | ENGINE | n/a | n/a | n/a | n/a | passive | n/a |
+| `engine_four_cylinder` | Four-Cylinder | 18 x 14 | ENGINE | n/a | n/a | n/a | n/a | passive | n/a |
+| `engine_v6` | V6 | 18 x 14 | ENGINE | n/a | n/a | n/a | n/a | passive | n/a |
+| `engine_v8` | V8 | 20 x 16 | ENGINE | n/a | n/a | n/a | n/a | passive | n/a |
+| `engine_v12` | V12 | 20 x 18 | ENGINE | n/a | n/a | n/a | n/a | passive | n/a |
+| `engine_small_turbo` | Small Turbo | 16 x 14 | ENGINE | n/a | n/a | n/a | n/a | passive | n/a |
+| `engine_twin_turbo` | Twin Turbo | 20 x 16 | ENGINE | n/a | n/a | n/a | n/a | passive | n/a |
+| `engine_supercharger` | Supercharger | 20 x 16 | ENGINE | n/a | n/a | n/a | n/a | passive | n/a |
+| `engine_diesel` | Torque Diesel | 20 x 16 | ENGINE | n/a | n/a | n/a | n/a | passive | n/a |
+| `engine_electric_sport` | Sport Electric | 18 x 12 | ENGINE | n/a | n/a | n/a | n/a | passive | n/a |
+| `engine_electric_eco` | Eco Electric | 16 x 12 | ENGINE | n/a | n/a | n/a | n/a | passive | n/a |
+| `engine_hybrid` | Hybrid | 18 x 16 | ENGINE | n/a | n/a | n/a | n/a | passive | n/a |
+| `engine_rotary` | Rotary | 14 x 12 | ENGINE | n/a | n/a | n/a | n/a | passive | n/a |
+| `engine_turbine` | Turbine | 16 x 18 | ENGINE | n/a | n/a | n/a | n/a | passive | n/a |
+| `engine_rocket` | Rocket Engine | 16 x 18 | ENGINE | n/a | n/a | n/a | n/a | passive | n/a |
+| `engine_twin` | Twin Drive | 22 x 16 | ENGINE | n/a | n/a | n/a | n/a | passive | n/a |
+| `engine_spring` | Spring Drive | 16 x 14 | ENGINE | n/a | n/a | n/a | n/a | passive | n/a |
+| `engine_offroad` | Trail Engine | 18 x 16 | ENGINE | n/a | n/a | n/a | n/a | passive | n/a |
+| `engine_resilient` | Ironheart | 18 x 16 | ENGINE | n/a | n/a | n/a | n/a | passive | n/a |
+| `engine_experimental` | Wildcard Motor | 16 x 14 | ENGINE | n/a | n/a | n/a | n/a | passive | n/a |
+| `tires_slick` | Slicks | 8 x 14 | WHEEL | n/a | n/a | n/a | n/a | passive | n/a |
+| `tires_street` | Street Tires | 8 x 14 | WHEEL | n/a | n/a | n/a | n/a | passive | n/a |
+| `tires_rain` | Rain Runners | 8 x 14 | WHEEL | n/a | n/a | n/a | n/a | passive | n/a |
+| `tires_sand` | Sand Paddles | 8 x 14 | WHEEL | n/a | n/a | n/a | n/a | passive | n/a |
+| `tires_mud` | Mud Claws | 8 x 14 | WHEEL | n/a | n/a | n/a | n/a | passive | n/a |
+| `tires_snow` | Snow Treads | 8 x 14 | WHEEL | n/a | n/a | n/a | n/a | passive | n/a |
+| `tires_ice` | Ice Spikes | 8 x 14 | WHEEL | n/a | n/a | n/a | n/a | passive | n/a |
+| `tires_soft` | Soft Compound | 8 x 14 | WHEEL | n/a | n/a | n/a | n/a | passive | n/a |
+| `tires_hard` | Hard Compound | 8 x 14 | WHEEL | n/a | n/a | n/a | n/a | passive | n/a |
+| `tires_drift` | Drift Rings | 8 x 14 | WHEEL | n/a | n/a | n/a | n/a | passive | n/a |
+| `tires_armored` | Armored Tires | 8 x 14 | WHEEL | n/a | n/a | n/a | n/a | passive | n/a |
+| `tires_solid` | Solid Core | 8 x 14 | WHEEL | n/a | n/a | n/a | n/a | passive | n/a |
+| `tires_balloon` | Balloon Tires | 8 x 14 | WHEEL | n/a | n/a | n/a | n/a | passive | n/a |
+| `tires_monster` | Monster Wheels | 8 x 14 | WHEEL | n/a | n/a | n/a | n/a | passive | n/a |
+| `tires_micro` | Micro Wheels | 8 x 14 | WHEEL | n/a | n/a | n/a | n/a | passive | n/a |
+| `tires_halftrack` | Half Tracks | 8 x 14 | WHEEL | n/a | n/a | n/a | n/a | passive | n/a |
+| `tires_track` | Full Tracks | 8 x 14 | WHEEL | n/a | n/a | n/a | n/a | passive | n/a |
+| `tires_magnetic` | Magnetic Rollers | 8 x 14 | WHEEL | n/a | n/a | n/a | n/a | passive | n/a |
+| `tires_adaptive` | Adaptive Tires | 8 x 14 | WHEEL | n/a | n/a | n/a | n/a | passive | n/a |
+| `tires_blades` | Razor Wheels | 8 x 14 | WHEEL | n/a | n/a | n/a | n/a | passive | n/a |
+| `weapon_front_mg` | Front Machine Gun | 8 x 12 | FRONT, ROOF, LEFT, RIGHT, REAR | shared | free | 8 | 0 | manual | n/a |
+| `weapon_rear_mg` | Rear Sentry | 8 x 10 | REAR, ROOF, LEFT, RIGHT | shared | free | 8 | 0 | automatic | n/a |
+| `weapon_turret` | Swivel Turret | 12 x 12 | ROOF, FRONT, REAR | full | none | n/a | 2 | hybrid | n/a |
+| `weapon_shotgun` | Road Shotgun | 8 x 12 | FRONT, ROOF, LEFT, RIGHT, REAR | shared | free | 8 | 0 | manual | n/a |
+| `weapon_railshot` | Needle Railgun | 8 x 18 | FRONT, ROOF | full | free | 8 | 1 | hybrid | n/a |
+| `weapon_rocket` | Straight Rocket | 8 x 14 | FRONT, ROOF, LEFT, RIGHT, REAR | full | free | 8 | 0 | manual | n/a |
+| `weapon_homing` | Seeker Missile | 10 x 14 | ROOF, REAR, FRONT | full | free | 10 | 1 | hybrid | n/a |
+| `weapon_mine` | Road Mine | 10 x 8 | REAR, UTILITY | shared | fixed rear | n/a | 0 | manual | n/a |
+| `weapon_oil` | Oil Slick | 10 x 8 | REAR, UTILITY | shared | fixed rear | n/a | 0 | manual | n/a |
+| `weapon_foam` | Sticky Foam | 10 x 12 | FRONT, ROOF, LEFT, RIGHT | full | free | 10 | 0 | manual | n/a |
+| `weapon_emp` | EMP Pulse | 12 x 12 | ROOF, UTILITY | full | none | n/a | 1 | manual | 1 |
+| `weapon_tesla` | Tesla Arc | 8 x 8 | ROOF, LEFT, RIGHT, FRONT, REAR | shared | none | n/a | 1 | automatic | n/a |
+| `weapon_flame` | Flame Spitter | 8 x 14 | FRONT, LEFT, RIGHT, REAR | full | free | 8 | 0 | manual | n/a |
+| `weapon_frost` | Frost Cannon | 8 x 14 | FRONT, ROOF, LEFT, RIGHT, REAR | full | free | 8 | 0 | manual | n/a |
+| `weapon_hammer` | Crash Hammer | 12 x 16 | FRONT, LEFT, RIGHT | full | free | 12 | 1 | manual | n/a |
+| `weapon_saw` | Side Saw | 14 x 6 | LEFT, RIGHT | full | fixed outward | n/a | 0 | automatic | n/a |
+| `weapon_harpoon` | Grapple Harpoon | 8 x 14 | FRONT, ROOF, LEFT, RIGHT, REAR | full | free | 8 | 0 | manual | 1 |
+| `weapon_air` | Air Cannon | 10 x 12 | FRONT, ROOF, LEFT, RIGHT, REAR | full | free | 10 | 0 | manual | n/a |
+| `weapon_boomerang` | Steel Boomerang | 12 x 8 | FRONT, ROOF, LEFT, RIGHT | full | free | 8 | 0 | manual | n/a |
+| `weapon_mortar` | Arc Mortar | 16 x 16 | ROOF, REAR | full | none | n/a | 2 | hybrid | n/a |
+| `defense_light_plate` | Light Plates | 12 x 4 | ARMOR | full | free | 4 | 0 | passive | 4 |
+| `defense_heavy_plate` | Heavy Plating | 14 x 6 | ARMOR | full | free | 6 | 0 | passive | 4 |
+| `defense_front_bumper` | Crash Bumper | 14 x 5 | FRONT | full | fixed front | n/a | 0 | passive | 1 |
+| `defense_rear_bumper` | Rear Guard | 14 x 5 | REAR | full | fixed rear | n/a | 0 | passive | 1 |
+| `defense_side_panels` | Side Shields | 14 x 5 | LEFT, RIGHT | full | fixed outward | n/a | 0 | passive | 1 |
+| `defense_wheel_cage` | Wheel Cage | 8 x 10 | UTILITY, ROOF, ARMOR | full | none | n/a | 0 | passive | 1 |
+| `defense_engine_case` | Engine Shell | 8 x 12 | UTILITY, ROOF, ARMOR | full | none | n/a | 0 | passive | 1 |
+| `defense_ceramic` | Ceramic Panels | 8 x 12 | UTILITY, ROOF, ARMOR | full | none | n/a | 0 | passive | 1 |
+| `defense_breakaway` | Breakaway Armor | 8 x 10 | UTILITY, ROOF, ARMOR | full | none | n/a | 0 | automatic | 1 |
+| `defense_composite` | Composite Shell | 8 x 12 | UTILITY, ROOF, ARMOR | full | none | n/a | 0 | passive | 1 |
+| `defense_energy_shield` | Energy Shield | 10 x 10 | ROOF, UTILITY | full | none | n/a | 1 | automatic | 1 |
+| `defense_faraday` | Faraday Cage | 8 x 10 | UTILITY, ROOF, ARMOR | full | none | n/a | 0 | passive | 1 |
+| `defense_heatguard` | Heat Guard | 8 x 8 | UTILITY, ROOF, ARMOR | shared | none | n/a | 0 | passive | 1 |
+| `defense_antimissile` | Missile Interceptor | 10 x 10 | ROOF | full | none | n/a | 1 | automatic | 1 |
+| `defense_minesweeper` | Mine Sweeper | 12 x 6 | FRONT | full | fixed front | n/a | 0 | automatic | 1 |
+| `defense_fireproof` | Fireproof Lining | 8 x 8 | UTILITY, ROOF, ARMOR | shared | none | n/a | 0 | passive | 1 |
+| `defense_oilproof` | Grip Coating | 8 x 8 | UTILITY, ROOF, ARMOR | shared | none | n/a | 0 | passive | 1 |
+| `defense_damper` | Shock Dampers | 8 x 10 | UTILITY, ROOF, ARMOR | full | none | n/a | 0 | passive | 1 |
+| `defense_steer_assist` | Steering Stabilizer | 8 x 8 | UTILITY, ROOF, ARMOR | shared | none | n/a | 0 | passive | 1 |
+| `defense_reactive` | Reactive Foam | 8 x 12 | UTILITY, ROOF, ARMOR | full | none | n/a | 0 | automatic | 1 |
+| `utility_spare` | Spare Wheel | 8 x 12 | UTILITY, ROOF, REAR, LEFT, RIGHT | shared | none | n/a | 0 | manual | 1 |
+| `utility_repair` | Repair Kit | 8 x 8 | UTILITY, ROOF, REAR, LEFT, RIGHT | shared | none | n/a | 0 | manual | 2 |
+| `utility_fan` | Cooling Fan | 8 x 8 | UTILITY, ROOF, FRONT, REAR, LEFT, RIGHT | shared | none | n/a | 0 | passive | 2 |
+| `utility_radiator` | Racing Radiator | 14 x 6 | FRONT, UTILITY, ROOF | full | none | n/a | 0 | passive | 2 |
+| `utility_battery` | Extra Battery | 8 x 10 | UTILITY, ROOF, REAR, LEFT, RIGHT | shared | none | n/a | 0 | passive | 3 |
+| `utility_generator` | Auxiliary Generator | 8 x 12 | UTILITY, ROOF, REAR, LEFT, RIGHT | shared | none | n/a | 0 | passive | 2 |
+| `utility_capacitor` | Burst Capacitor | 8 x 8 | UTILITY, ROOF, REAR, LEFT, RIGHT | shared | none | n/a | 0 | automatic | 1 |
+| `utility_nitro` | Nitro Tank | 8 x 14 | UTILITY, ROOF, REAR, LEFT, RIGHT | full | none | n/a | 0 | manual | 1 |
+| `utility_overdrive` | Emergency Booster | 8 x 12 | UTILITY, ROOF, REAR, LEFT, RIGHT | shared | none | n/a | 0 | manual | 1 |
+| `utility_traction` | Traction Computer | 8 x 8 | UTILITY, ROOF, REAR, LEFT, RIGHT | shared | none | n/a | 0 | passive | 1 |
+| `utility_gyro` | Gyro Stabilizer | 8 x 10 | UTILITY, ROOF, REAR, LEFT, RIGHT | shared | none | n/a | 0 | passive | 1 |
+| `utility_radar` | Radar | 8 x 8 | ROOF, UTILITY | shared | none | n/a | 1 | passive | 1 |
+| `utility_minesensor` | Mine Detector | 8 x 6 | FRONT, UTILITY, ROOF | shared | none | n/a | 0 | automatic | 1 |
+| `utility_decoy` | Decoy Drone | 8 x 10 | UTILITY, ROOF, REAR, LEFT, RIGHT | shared | none | n/a | 0 | manual | 1 |
+| `utility_jump` | Jump Pad | 14 x 12 | UTILITY, REAR | full | none | n/a | 0 | manual | 1 |
+| `utility_winch` | Recovery Winch | 8 x 10 | FRONT, UTILITY, LEFT, RIGHT | shared | none | n/a | 0 | manual | 1 |
+| `utility_ballast` | Sliding Ballast | 8 x 12 | UTILITY, ROOF, REAR, LEFT, RIGHT | shared | none | n/a | 0 | automatic | 1 |
+| `utility_spoiler` | Active Wing | 16 x 6 | REAR, ROOF | full | none | n/a | 2 | automatic | 1 |
+| `utility_targeting` | Turret Computer | 8 x 8 | UTILITY, ROOF, REAR | shared | none | n/a | 0 | passive | 1 |
+| `utility_solar` | Solar Panel | 14 x 10 | ROOF, UTILITY | full | none | n/a | 0 | passive | 2 |
 <!-- END PART TABLE -->
 
 ## Every chassis
 
-Generated by the same script. Coordinates are chassis-local world pixels. Turns are listed
-default first.
+Generated by the same script. Coordinates are chassis-local world pixels. Facings allowed
+are for parts with a free facing, default first.
 
 <!-- BEGIN CHASSIS TABLES -->
 #### Beetle (`chassis_beetle`)
 
 Body 34 x 58. Engine bay at (0, 20). Wheels: `front_left` (-14.5, -17) steers; `front_right` (14.5, -17) steers; `rear_left` (-14.5, 17.5) driven; `rear_right` (14.5, 17.5) driven.
 
-| Mount id | Categories | Centre x, y | Max footprint w x h | Region +/- x, y | Turns allowed | Capacity |
+| Mount id | Categories | Centre x, y | Max footprint w x h | Region +/- x, y | Facings allowed | Capacity |
 | :-- | :-- | :-- | :-- | :-- | :-- | --: |
-| `front_center` | FRONT, ARMOR | 0, -22 | 16 x 12 | 2, 2 | 0 3 1 | 1 |
-| `roof_mid` | ROOF | 0, 0 | 14 x 14 | 2, 2 | 0 1 2 3 | 1 |
-| `left_utility` | UTILITY | -13, 0 | 8 x 14 | 2, 2 | 0 1 2 3 | 1 |
-| `right_utility` | UTILITY | 13, 0 | 8 x 14 | 2, 2 | 0 1 2 3 | 1 |
-| `rear_center` | REAR, ARMOR | 0, 23 | 16 x 10 | 2, 2 | 2 3 1 | 1 |
+| `front_center` | FRONT, ARMOR | 0, -22 | 16 x 12 | 2, 2 | front | 1 |
+| `roof_mid` | ROOF | 0, 0 | 14 x 14 | 2, 2 | front, right, rear, left | 1 |
+| `left_utility` | UTILITY | -13, 0 | 8 x 14 | 2, 2 | front, right, rear, left | 1 |
+| `right_utility` | UTILITY | 13, 0 | 8 x 14 | 2, 2 | front, right, rear, left | 1 |
+| `rear_center` | REAR, ARMOR | 0, 23 | 16 x 10 | 2, 2 | rear | 1 |
 
 #### Arrow (`chassis_arrow`)
 
 Body 28 x 62. Engine bay at (0, 20). Wheels: `front_left` (-11.5, -14) steers; `front_right` (11.5, -14) steers; `rear_left` (-13, 19) driven; `rear_right` (13, 19) driven.
 
-| Mount id | Categories | Centre x, y | Max footprint w x h | Region +/- x, y | Turns allowed | Capacity |
+| Mount id | Categories | Centre x, y | Max footprint w x h | Region +/- x, y | Facings allowed | Capacity |
 | :-- | :-- | :-- | :-- | :-- | :-- | --: |
-| `front_center` | FRONT, ARMOR | 0, -29 | 14 x 12 | 2, 2 | 0 3 1 | 1 |
-| `roof_mid` | ROOF | 0, 0 | 10 x 18 | 2, 2 | 0 1 2 3 | 1 |
-| `roof_rear` | ROOF | 0, 17 | 12 x 12 | 2, 2 | 0 1 2 3 | 1 |
-| `rear_center` | REAR, ARMOR | 0, 29 | 14 x 8 | 2, 2 | 2 3 1 | 1 |
+| `front_center` | FRONT, ARMOR | 0, -29 | 14 x 12 | 2, 2 | front | 1 |
+| `roof_mid` | ROOF | 0, 0 | 10 x 18 | 2, 2 | front, right, rear, left | 1 |
+| `roof_rear` | ROOF | 0, 17 | 12 x 12 | 2, 2 | front, right, rear, left | 1 |
+| `rear_center` | REAR, ARMOR | 0, 29 | 14 x 8 | 2, 2 | rear | 1 |
 
 #### Pickup (`chassis_pickup`)
 
 Body 38 x 74. Engine bay at (0, -22). Wheels: `front_left` (-15.5, -23) steers; `front_right` (15.5, -23) steers; `rear_left` (-15.5, 22) driven; `rear_right` (15.5, 22) driven.
 
-| Mount id | Categories | Centre x, y | Max footprint w x h | Region +/- x, y | Turns allowed | Capacity |
+| Mount id | Categories | Centre x, y | Max footprint w x h | Region +/- x, y | Facings allowed | Capacity |
 | :-- | :-- | :-- | :-- | :-- | :-- | --: |
-| `roof_cab` | ROOF | 0, -12 | 14 x 10 | 2, 2 | 0 1 2 3 | 1 |
-| `bed_front` | UNIVERSAL | 0, 1 | 18 x 12 | 5, 2 | 0 1 2 3 | 2 |
-| `left_bed` | REAR | -15, 6 | 8 x 12 | 2, 2 | 2 3 1 | 1 |
-| `right_bed` | REAR | 15, 6 | 8 x 12 | 2, 2 | 2 3 1 | 1 |
-| `bed_rear` | UNIVERSAL | 0, 17 | 18 x 16 | 1, 1 | 0 1 2 3 | 1 |
-| `rear_center` | REAR, ARMOR | 0, 32 | 18 x 10 | 2, 2 | 2 3 1 | 1 |
+| `roof_cab` | ROOF | 0, -12 | 14 x 10 | 2, 2 | front, right, rear, left | 1 |
+| `bed_front` | UNIVERSAL | 0, 1 | 18 x 12 | 5, 2 | front, right, rear, left | 2 |
+| `left_bed` | REAR | -15, 6 | 8 x 12 | 2, 2 | rear, left | 1 |
+| `right_bed` | REAR | 15, 6 | 8 x 12 | 2, 2 | rear, right | 1 |
+| `bed_rear` | UNIVERSAL | 0, 17 | 18 x 16 | 1, 1 | front, right, rear, left | 1 |
+| `rear_center` | REAR, ARMOR | 0, 32 | 18 x 10 | 2, 2 | rear | 1 |
 
 #### Spider (`chassis_spider`)
 
 Body 48 x 68. Engine bay at (0, 24). Wheels: `front_left` (-22.5, -24) steers; `front_right` (22.5, -24) steers; `mid_left` (-24.5, 0) driven; `mid_right` (24.5, 0) driven; `rear_left` (-22.5, 24) driven; `rear_right` (22.5, 24) driven.
 
-| Mount id | Categories | Centre x, y | Max footprint w x h | Region +/- x, y | Turns allowed | Capacity |
+| Mount id | Categories | Centre x, y | Max footprint w x h | Region +/- x, y | Facings allowed | Capacity |
 | :-- | :-- | :-- | :-- | :-- | :-- | --: |
-| `front_utility` | UTILITY | 0, -28 | 14 x 8 | 2, 2 | 0 1 2 3 | 1 |
-| `left_front` | LEFT, ARMOR | -12, -14 | 8 x 14 | 2, 2 | 3 0 2 | 1 |
-| `right_front` | RIGHT, ARMOR | 12, -14 | 8 x 14 | 2, 2 | 1 0 2 | 1 |
-| `roof_front` | ROOF | 0, -14 | 12 x 14 | 2, 2 | 0 1 2 3 | 1 |
-| `roof_mid` | ROOF | 0, 2 | 12 x 14 | 2, 2 | 0 1 2 3 | 1 |
-| `left_rear` | LEFT, ARMOR | -12, 14 | 8 x 14 | 2, 2 | 3 0 2 | 1 |
-| `right_rear` | RIGHT, ARMOR | 12, 14 | 8 x 14 | 2, 2 | 1 0 2 | 1 |
-| `rear_utility` | UTILITY | 0, 17 | 12 x 12 | 2, 2 | 0 1 2 3 | 1 |
+| `front_utility` | UTILITY | 0, -28 | 14 x 8 | 2, 2 | front, right, rear, left | 1 |
+| `left_front` | LEFT, ARMOR | -12, -14 | 8 x 14 | 2, 2 | left, front, rear | 1 |
+| `right_front` | RIGHT, ARMOR | 12, -14 | 8 x 14 | 2, 2 | right, front, rear | 1 |
+| `roof_front` | ROOF | 0, -14 | 12 x 14 | 2, 2 | front, right, rear, left | 1 |
+| `roof_mid` | ROOF | 0, 2 | 12 x 14 | 2, 2 | front, right, rear, left | 1 |
+| `left_rear` | LEFT, ARMOR | -12, 14 | 8 x 14 | 2, 2 | left, front, rear | 1 |
+| `right_rear` | RIGHT, ARMOR | 12, 14 | 8 x 14 | 2, 2 | right, front, rear | 1 |
+| `rear_utility` | UTILITY | 0, 17 | 12 x 12 | 2, 2 | front, right, rear, left | 1 |
 
 #### Trike (`chassis_trike`)
 
 Body 26 x 48. Engine bay at (0, 3). Wheels: `front_left` (-11.5, -13) steers; `front_right` (11.5, -13) steers; `rear_center` (0, 16) driven.
 
-| Mount id | Categories | Centre x, y | Max footprint w x h | Region +/- x, y | Turns allowed | Capacity |
+| Mount id | Categories | Centre x, y | Max footprint w x h | Region +/- x, y | Facings allowed | Capacity |
 | :-- | :-- | :-- | :-- | :-- | :-- | --: |
-| `front_center` | FRONT, ARMOR | 0, -15 | 10 x 14 | 2, 2 | 0 3 1 | 1 |
-| `roof_mid` | ROOF | 0, 1 | 14 x 10 | 2, 2 | 0 1 2 3 | 1 |
-| `left_rear` | REAR | -10.5, 15 | 8 x 12 | 2, 2 | 2 3 1 | 1 |
-| `right_rear` | REAR | 10.5, 15 | 8 x 12 | 2, 2 | 2 3 1 | 1 |
+| `front_center` | FRONT, ARMOR | 0, -15 | 10 x 14 | 2, 2 | front | 1 |
+| `roof_mid` | ROOF | 0, 1 | 14 x 10 | 2, 2 | front, right, rear, left | 1 |
+| `left_rear` | REAR | -10.5, 15 | 8 x 12 | 2, 2 | rear | 1 |
+| `right_rear` | REAR | 10.5, 15 | 8 x 12 | 2, 2 | rear | 1 |
 <!-- END CHASSIS TABLES -->

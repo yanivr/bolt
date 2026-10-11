@@ -2,7 +2,9 @@ import type {
   AccessoryDefinition,
   ActivePrimitive,
   MountCategory,
+  PartFacing,
   PartParams,
+  QuarterTurn,
   TriggerMode,
 } from '@bolt/shared';
 
@@ -18,7 +20,10 @@ import type {
  * active primitives). Nothing in a weapon changes how the car drives except its mass and
  * where that mass sits.
  *
- * Rotation 0 points the muzzle at the front of the car.
+ * Quarter turn 0 points the muzzle at the front of the car, 1 right, 2 back, 3 left. Most
+ * weapons have a `free` facing: the player aims them any way their mount allows. The traps
+ * always drop behind (`fixed`, turn 2), the saw always cuts outward from its side mount, and
+ * the weapons that find their own target all round (turret, EMP, tesla, mortar) have none.
  */
 
 const GUN: MountCategory[] = ['FRONT', 'ROOF', 'LEFT', 'RIGHT', 'REAR'];
@@ -34,7 +39,9 @@ type WeaponRow = {
   mounts: MountCategory[];
   use: 'full' | 'shared';
   height?: 0 | 1 | 2;
-  rotatable?: boolean;
+  /** Defaults to `free`: the player aims it any way the mount allows. */
+  facing?: PartFacing;
+  fixedTurn?: QuarterTurn | 'outward';
   maxPerCar?: number;
   behaviorId: string;
   soundKey: string;
@@ -85,12 +92,13 @@ function weapon(row: WeaponRow): AccessoryDefinition {
       { type: 'StartCooldown', seconds: row.cooldown },
     ],
     hardpointUse: row.use,
-    rotatable: row.rotatable ?? true,
+    facing: row.facing ?? 'free',
     heightLevel: row.height ?? 0,
     // Sustained figures at the fastest the weapon can be used, for the part card.
     powerDraw: Math.round((row.energyPerShot / row.cooldown) * 100) / 100,
     heatEffect: Math.round((row.heatPerShot / row.cooldown) * 100) / 100,
   };
+  if (row.fixedTurn !== undefined) def.fixedTurn = row.fixedTurn;
   if (row.maxPerCar !== undefined) def.maxPerCar = row.maxPerCar;
   return def;
 }
@@ -154,6 +162,7 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
     mounts: ['ROOF', 'FRONT', 'REAR'],
     use: 'full',
     height: 2,
+    facing: 'none',
     behaviorId: 'turret_burst',
     soundKey: 'weapon_turret',
     description: 'Tracks a rival all the way round and puts 18 damage on it.',
@@ -316,7 +325,8 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
     footprint: [10, 8],
     mounts: ['REAR', 'UTILITY'],
     use: 'shared',
-    rotatable: false,
+    facing: 'fixed',
+    fixedTurn: 2,
     behaviorId: 'drop_mine',
     soundKey: 'weapon_mine',
     description: 'Drops a mine behind you: 13 damage and a 1.2-second slow.',
@@ -349,7 +359,8 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
     footprint: [10, 8],
     mounts: ['REAR', 'UTILITY'],
     use: 'shared',
-    rotatable: false,
+    facing: 'fixed',
+    fixedTurn: 2,
     behaviorId: 'oil_strip',
     soundKey: 'weapon_oil',
     description: 'Lays a strip of oil that costs a rival grip for 2.5 seconds.',
@@ -405,7 +416,7 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
     mounts: ['ROOF', 'UTILITY'],
     use: 'full',
     height: 1,
-    rotatable: false,
+    facing: 'none',
     maxPerCar: 1,
     behaviorId: 'emp_pulse',
     soundKey: 'weapon_emp',
@@ -432,7 +443,7 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
     mounts: ['ROOF', 'LEFT', 'RIGHT', 'FRONT', 'REAR'],
     use: 'shared',
     height: 1,
-    rotatable: false,
+    facing: 'none',
     behaviorId: 'tesla_arc',
     soundKey: 'weapon_tesla',
     description: 'Zaps any rival that comes close: 12 damage and a brief delay on its systems.',
@@ -529,10 +540,11 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
     massKg: 60,
     mode: 'A',
     cooldown: 3,
-    footprint: [6, 14],
+    footprint: [14, 6],
     mounts: ['LEFT', 'RIGHT'],
     use: 'full',
-    rotatable: false,
+    facing: 'fixed',
+    fixedTurn: 'outward',
     behaviorId: 'contact_saw',
     soundKey: 'weapon_saw',
     description: 'Bites by itself for 7 damage whenever a rival rubs that side.',
@@ -638,7 +650,7 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
     mounts: ['ROOF', 'REAR'],
     use: 'full',
     height: 2,
-    rotatable: false,
+    facing: 'none',
     behaviorId: 'mortar_burst',
     soundKey: 'weapon_mortar',
     description: 'Drops a shell on a painted spot up to 320 pixels away: 25 damage at the centre.',

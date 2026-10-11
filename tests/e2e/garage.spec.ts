@@ -474,10 +474,20 @@ test('an installed part can be moved, rotated, given a fire button, replaced and
   );
   expect(dragged).toBeLessThan(2);
 
-  // Rotate steps through the orientations a front mount allows.
-  await expect(page.getByTestId('part-facing')).toHaveText('Facing forward');
-  await page.getByTestId('rotate-part').tap();
-  await expect(page.getByTestId('part-facing')).not.toHaveText('Facing forward');
+  // A nose mount only faces forward: the picker shows it lit, the other three dimmed, and a
+  // press on a dimmed one says why and changes nothing.
+  const picker = page.getByTestId('facing-picker');
+  await expect(picker).toHaveAttribute('data-facing', '0');
+  await expect(picker.getByRole('radio', { name: 'Front' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  for (const name of ['Right', 'Rear', 'Left'])
+    await expect(picker.getByRole('radio', { name })).toHaveAttribute('aria-disabled', 'true');
+  await picker.getByRole('radio', { name: 'Rear' }).tap({ force: true });
+  await expect(status(page)).toHaveText(/This mount only faces forward\./);
+  await expect(picker).toHaveAttribute('data-facing', '0');
+  expect(await credits(page)).toBe(470);
 
   // Two fire buttons: giving Secondary to this gun takes it from the shotgun.
   const fire = tools.getByRole('radiogroup', { name: 'Fire button' });
@@ -493,7 +503,8 @@ test('an installed part can be moved, rotated, given a fire button, replaced and
   await page.locator('.slot-tile[data-part="weapon_shotgun"]').tap();
   await expect(fire.getByRole('radio', { name: 'Off' })).toHaveAttribute('aria-checked', 'true');
   // The rule is explained on the card.
-  await expect(tools).toContainText('Two weapons can have a fire button.');
+  await expect(tools.locator('.g-fire-note')).toBeVisible();
+  await expect(tools.locator('.g-fire-note')).toHaveText('Two weapons can have a fire button.');
 
   // Replace the shotgun: the list shows what fits its mount, and Replace is one transaction.
   await tools.getByRole('button', { name: 'Replace' }).tap();
@@ -652,13 +663,13 @@ test('at zero an illegal draft is not raced: the last legal car is', async ({ pa
     page,
     await blueprint(page, 'Legal Eagle', {}, [['utility_fan', 'roof_mid']]),
   );
-  // A saved build from an older catalog, with a hammer that no longer fits its mount.
+  // A saved build from an older catalog, with a hammer hung outside its mount's region.
   const stale = await blueprint(
     page,
     'Old Faithful',
     { engineId: 'engine_v8' },
     [
-      ['weapon_hammer', 'front_center', { assignedActionSlot: 0 }],
+      ['weapon_hammer', 'front_center', { assignedActionSlot: 0, offsetX: 5 }],
       ['utility_nitro', 'left_utility'],
     ],
     '0.2.0',
@@ -715,7 +726,8 @@ test('an illegal build is flagged, Ready is held back, and Repair Build fixes it
     'Old Faithful',
     { engineId: 'engine_v8' },
     [
-      ['weapon_hammer', 'front_center', { assignedActionSlot: 0 }],
+      // Hung five pixels off centre, outside the mount's region: no rule allows that.
+      ['weapon_hammer', 'front_center', { assignedActionSlot: 0, offsetX: 5 }],
       ['utility_nitro', 'left_utility'],
     ],
     '0.2.0',
@@ -988,8 +1000,10 @@ test('the whole garage can be driven from the keyboard', async ({ page }) => {
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('ArrowDown');
   await expect(page.getByTestId('part-offset')).toHaveText('1, 1');
+  // R steps through the facings the mount allows; a nose mount has one, and says so.
   await page.keyboard.press('r');
-  await expect(page.getByTestId('part-facing')).not.toHaveText('Facing forward');
+  await expect(page.getByTestId('facing-picker')).toHaveAttribute('data-facing', '0');
+  await expect(status(page)).toHaveText(/This mount only faces forward\./);
 
   // Escape lets go of the part and returns to the whole car.
   await page.keyboard.press('Escape');
@@ -1391,7 +1405,7 @@ for (const size of [
       expect(fits, 'the part card scrolls').toBe(true);
       for (const name of ['Primary', 'Secondary', 'Auto', 'Off'])
         await expect(tools.getByRole('radio', { name })).toBeInViewport({ ratio: 1 });
-      for (const name of ['Move forward', 'Move back', 'Rotate', 'Replace', /^Remove/])
+      for (const name of ['Move forward', 'Move back', 'Replace', /^Remove/])
         await expect(tools.getByRole('button', { name })).toBeInViewport({ ratio: 1 });
       await expect(page.getByTestId('part-offset')).toBeInViewport({ ratio: 1 });
     }
@@ -1416,9 +1430,11 @@ for (const size of [
 const SPIDER: PartSpec[] = [
   ['utility_minesensor', 'front_utility'],
   ['weapon_front_mg', 'left_front', { assignedActionSlot: 0 }],
-  ['weapon_tesla', 'right_front'],
+  ['utility_spare', 'right_front'],
+  // The two tallest parts in the catalog on the two highest mounts: the overview is sized to
+  // the pixel on this phone, and neither may be cut by the top of the floor.
   ['utility_radar', 'roof_front'],
-  ['utility_spare', 'roof_mid'],
+  ['weapon_tesla', 'roof_mid'],
   ['weapon_rear_mg', 'left_rear'],
   ['utility_repair', 'rear_utility'],
 ];
@@ -1429,7 +1445,7 @@ const PICKUP: PartSpec[] = [
   ['weapon_rear_mg', 'left_bed', { rotationQuarterTurns: 2 }],
   ['utility_fan', 'right_bed'],
   ['weapon_mortar', 'bed_rear', { autoMode: true }],
-  ['defense_rear_bumper', 'rear_center'],
+  ['defense_rear_bumper', 'rear_center', { rotationQuarterTurns: 2 }],
 ];
 
 for (const frame of [
@@ -1694,10 +1710,10 @@ test('in focus a part is positioned in plain sight: nudges and turns show on the
   await expect(bench).toHaveAttribute('data-focus', 'roof_mid');
   const scale = await drawnScale(page);
   expect(scale).toBeGreaterThanOrEqual(4);
-  // The part keeps its gold outline, with the room it has drawn thin under it and a chevron
+  // The part keeps its gold outline, with the room it has drawn thin under it and an arrow
   // for the way it faces.
   const grab = page.getByTestId('part-grab');
-  const mark = page.getByTestId('part-facing-mark').locator('.facing-line');
+  const mark = page.getByTestId('part-facing-mark').locator('.facing-shaft');
   await expect(grab).toHaveCount(1);
   await expect(page.locator('.g-car .socket.is-room')).toHaveCount(1);
   await expect(mark).toHaveCount(1);
@@ -1723,10 +1739,11 @@ test('in focus a part is positioned in plain sight: nudges and turns show on the
   await tile(page, 'mount:roof_mid').focus();
   await page.keyboard.press('ArrowDown');
   await expect(page.getByTestId('part-offset')).toHaveText('0, -1');
-  // Turning the part turns the chevron.
+  // Turning the part turns the arrow.
   const facing = await mark.getAttribute('points');
-  await page.getByTestId('rotate-part').tap();
-  await expect(page.getByTestId('part-facing')).toHaveText('Facing right');
+  await page.getByTestId('face-1').tap();
+  await expect(page.getByTestId('facing-picker')).toHaveAttribute('data-facing', '1');
+  await expect(status(page)).toHaveText(/Facing right/);
   await expect(mark).not.toHaveAttribute('points', facing!);
   // The rotate-view control keeps the view on the part.
   const view = await bench.getAttribute('data-view');
@@ -1735,6 +1752,307 @@ test('in focus a part is positioned in plain sight: nudges and turns show on the
   await expect(bench).toHaveAttribute('data-focus', 'roof_mid');
   await assertLayout(page, 'focus, part nudged and turned, view rotated');
 });
+
+/** The sheet frame the canvas drew an installed part with, as `drawCar` recorded it. */
+async function partFrame(page: Page, instanceId: string): Promise<number> {
+  const frames = (await page.locator('.g-car canvas').getAttribute('data-part-frames')) ?? '';
+  const found = frames.split(' ').find((entry) => entry.startsWith(`${instanceId}:`));
+  expect(found, `frame of ${instanceId} in "${frames}"`).toBeDefined();
+  return Number(found!.split(':')[1]);
+}
+
+/** Direction of the facing arrow on screen, as a unit vector from its tail to its tip. */
+async function arrowDirection(page: Page): Promise<{ x: number; y: number }> {
+  const points = await page
+    .getByTestId('part-facing-mark')
+    .locator('.facing-shaft')
+    .getAttribute('points');
+  const [tail, tip] = points!.split(' ').map((p) => p.split(',').map(Number)) as [
+    [number, number],
+    [number, number],
+  ];
+  const length = Math.hypot(tip[0] - tail[0], tip[1] - tail[1]);
+  return { x: (tip[0] - tail[0]) / length, y: (tip[1] - tail[1]) / length };
+}
+
+test("facing is the player's choice: the Road Shotgun on the Trike roof faces forward, then backward, and every way", async ({
+  page,
+}) => {
+  await skipTips(page);
+  await page.setViewportSize({ width: 870, height: 370 });
+  await page.goto('/?debug=1');
+  await seedLastBuild(
+    page,
+    await blueprint(
+      page,
+      'Roof Gun',
+      { chassisId: 'chassis_trike', engineId: 'engine_mini_electric' },
+      [],
+    ),
+  );
+  await openGarage(page);
+  // The roof mount is 14 x 10 and the shotgun 8 x 12: before catalog 0.5.0 it could only lie
+  // across the car. It now goes on facing forward.
+  await slotBuy(page, 'mount:roof_mid', 'weapon_shotgun');
+  const tools = page.getByRole('region', { name: 'Selected part' });
+  await expect(tools).toContainText('Road Shotgun');
+  const picker = page.getByTestId('facing-picker');
+  const bench = page.locator('.g-bench');
+  await expect(picker).toHaveAttribute('data-facing', '0');
+  const names = ['Front', 'Right', 'Rear', 'Left'];
+  // A roof allows all four: nothing is dimmed.
+  for (const name of names)
+    await expect(picker.getByRole('radio', { name })).not.toHaveAttribute('aria-disabled', 'true');
+  const instanceId = (await tools.getAttribute('data-instance'))!;
+  const view = async () => Number(await bench.getAttribute('data-view'));
+
+  const check = async (turn: number, where: string) => {
+    await expect(picker, where).toHaveAttribute('data-facing', String(turn));
+    for (let i = 0; i < 4; i++)
+      await expect(picker.getByTestId(`face-${i}`), where).toHaveAttribute(
+        'aria-checked',
+        String(i === turn),
+      );
+    // The sprite: the frame of the car's own heading plus a quarter turn (16 of 64) a step.
+    const carFrame = await view();
+    await expect.poll(() => partFrame(page, instanceId), where).toBe((carFrame + turn * 16) % 64);
+    // The arrow on the car: the same heading on screen, flattened by the tilted camera.
+    await expect(page.getByTestId('part-facing-mark'), where).toHaveAttribute(
+      'data-facing',
+      String(turn),
+    );
+    const heading = ((carFrame + turn * 16) / 64) * Math.PI * 2;
+    const arrow = await arrowDirection(page);
+    const dot = arrow.x * Math.sin(heading) + arrow.y * -Math.cos(heading);
+    expect(dot, `${where}: arrow against the part's heading`).toBeGreaterThan(0.985);
+  };
+
+  await check(0, 'as installed');
+  const paid = await credits(page);
+  // Forward, then backward: the two ways the owner could not have.
+  await picker.getByRole('radio', { name: 'Rear' }).tap();
+  await expect(status(page)).toHaveText(/Facing back/);
+  await check(2, 'facing back');
+  await picker.getByRole('radio', { name: 'Front' }).tap();
+  await expect(status(page)).toHaveText(/Facing forward/);
+  await check(0, 'facing forward');
+  // Turning is free and leaves the part where it was.
+  expect(await credits(page)).toBe(paid);
+  await expect(page.getByTestId('part-offset')).toHaveText('0, 0');
+  // Every facing agrees with the sprite and the arrow in every view heading.
+  for (let turned = 0; turned < 4; turned++) {
+    for (let turn = 0; turn < 4; turn++) {
+      await picker.getByTestId(`face-${turn}`).tap();
+      await check(turn, `view ${turned}, facing ${names[turn]}`);
+    }
+    const before = await view();
+    await page.getByRole('button', { name: 'Rotate view' }).tap();
+    await expect(bench).not.toHaveAttribute('data-view', String(before));
+  }
+  // R on the slot tile steps clockwise through the four.
+  await picker.getByTestId('face-0').tap();
+  await tile(page, 'mount:roof_mid').focus();
+  for (const turn of [1, 2, 3, 0]) {
+    await page.keyboard.press('r');
+    await expect(picker).toHaveAttribute('data-facing', String(turn));
+  }
+  await assertLayout(page, 'roof weapon turned');
+  await expect(ready(page)).toHaveAttribute('aria-disabled', 'false');
+});
+
+test('parts with no facing choice show no picker, and a fixed part shows which way it works', async ({
+  page,
+}) => {
+  await skipTips(page);
+  await page.setViewportSize({ width: 870, height: 370 });
+  await page.goto('/?debug=1');
+  await seedLastBuild(
+    page,
+    await blueprint(page, 'Fixed', {}, [
+      ['utility_radar', 'roof_mid'],
+      ['weapon_mine', 'rear_center', { rotationQuarterTurns: 2, assignedActionSlot: 0 }],
+      ['defense_front_bumper', 'front_center'],
+    ]),
+  );
+  await openGarage(page);
+  const tools = page.getByRole('region', { name: 'Selected part' });
+  // A radar has no direction: no picker and no arrow on the car.
+  await tile(page, 'mount:roof_mid').tap();
+  await expect(tools).toContainText('Radar');
+  await expect(page.getByTestId('facing-picker')).toHaveCount(0);
+  await expect(page.getByTestId('part-facing-mark')).toHaveCount(0);
+  await expect(tools.getByRole('button', { name: 'Move forward' })).toBeVisible();
+  // A mine always drops behind: no picker, and the arrow on the car points back.
+  await tile(page, 'mount:rear_center').tap();
+  await expect(tools).toContainText('Road Mine');
+  await expect(page.getByTestId('facing-picker')).toHaveCount(0);
+  await expect(page.getByTestId('part-facing-mark')).toHaveAttribute('data-facing', '2');
+  // R has nothing to step to, and says so.
+  await tile(page, 'mount:rear_center').focus();
+  await page.keyboard.press('r');
+  await expect(status(page)).toHaveText(/This part always faces back\./);
+  await tile(page, 'mount:front_center').tap();
+  await expect(tools).toContainText('Crash Bumper');
+  await expect(page.getByTestId('facing-picker')).toHaveCount(0);
+  await expect(page.getByTestId('part-facing-mark')).toHaveAttribute('data-facing', '0');
+});
+
+/** Everything on the occupied-slot card, by test id or role, that must be whole and on screen. */
+async function assertCard(page: Page, where: string, expectPicker: boolean): Promise<void> {
+  const report = await page.evaluate((picker) => {
+    const out: string[] = [];
+    const card = document.querySelector<HTMLElement>('.g-tools');
+    if (!card) return ['no card'];
+    const panel = card.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const body = card.querySelector<HTMLElement>('.g-tools-body')!;
+    if (body.scrollHeight > body.clientHeight + 1)
+      out.push(`the card scrolls: ${body.scrollHeight} > ${body.clientHeight}`);
+    if (body.scrollWidth > body.clientWidth + 1)
+      out.push(`the card is too wide: ${body.scrollWidth} > ${body.clientWidth}`);
+    const controls = Array.from(
+      card.querySelectorAll<HTMLElement>(
+        'button, .pad-mid, .pad-title, [data-testid="part-offset"], [data-testid="remove-refund"], .g-tools-head h2, .g-block-title',
+      ),
+    );
+    const name = (el: Element) =>
+      `${el.className} "${(el.getAttribute('aria-label') ?? el.textContent ?? '').trim().slice(0, 24)}"`;
+    for (const el of controls) {
+      const box = el.getBoundingClientRect();
+      if (box.width === 0 && box.height === 0) continue;
+      if (
+        box.left < panel.left - 0.5 ||
+        box.top < panel.top - 0.5 ||
+        box.right > panel.right + 0.5 ||
+        box.bottom > panel.bottom + 0.5
+      )
+        out.push(`outside the panel: ${name(el)}`);
+      if (box.left < -0.5 || box.top < -0.5 || box.right > vw + 0.5 || box.bottom > vh + 0.5)
+        out.push(`outside the viewport: ${name(el)}`);
+      if (el.tagName === 'BUTTON') {
+        if (el.scrollWidth > el.clientWidth + 1) out.push(`clipped: ${name(el)}`);
+        if (box.width < 43.5 || box.height < 43.5)
+          out.push(`small target: ${name(el)} ${Math.round(box.width)}x${Math.round(box.height)}`);
+        // Nothing lies over a button: the middle of each is its own.
+        const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+        if (!top || !(el === top || el.contains(top))) out.push(`covered: ${name(el)}`);
+      }
+    }
+    // No two buttons overlap.
+    const buttons = controls.filter((el) => el.tagName === 'BUTTON');
+    for (let i = 0; i < buttons.length; i++)
+      for (let j = i + 1; j < buttons.length; j++) {
+        const a = buttons[i]!.getBoundingClientRect();
+        const b = buttons[j]!.getBoundingClientRect();
+        if (a.width === 0 || b.width === 0) continue;
+        if (
+          a.left < b.right - 0.5 &&
+          b.left < a.right - 0.5 &&
+          a.top < b.bottom - 0.5 &&
+          b.top < a.bottom - 0.5
+        )
+          out.push(`overlap: ${name(buttons[i]!)} and ${name(buttons[j]!)}`);
+      }
+    const has = card.querySelector('[data-testid="facing-picker"]') !== null;
+    if (has !== picker) out.push(picker ? 'no direction picker' : 'a direction picker');
+    for (const id of ['part-offset', 'replace', 'remove', 'remove-refund'])
+      if (!card.querySelector(`[data-testid="${id}"]`)) out.push(`missing ${id}`);
+    // The help paragraph is gone: the card is controls only.
+    if (card.querySelector('.g-tools-hint')) out.push('the help text is back');
+    return out;
+  }, expectPicker);
+  expect(report, where).toEqual([]);
+}
+
+for (const size of [
+  { width: 870, height: 370 },
+  { width: 870, height: 340 },
+  { width: 844, height: 390 },
+  { width: 667, height: 375 },
+]) {
+  test(`the part card fits at ${size.width} x ${size.height} with nothing cut and nothing to scroll`, async ({
+    page,
+  }) => {
+    await skipTips(page);
+    await page.setViewportSize(size);
+    await page.goto('/?debug=1');
+    await seedLastBuild(
+      page,
+      await blueprint(
+        page,
+        'Card',
+        { chassisId: 'chassis_trike', engineId: 'engine_mini_electric' },
+        [
+          // The owner's own case: a Frost Cannon on the Trike roof, refund 110.
+          ['weapon_frost', 'roof_mid', { rotationQuarterTurns: 3, assignedActionSlot: 0 }],
+          // A non-directional part with a three-digit refund (Emergency Booster, 115).
+          ['utility_overdrive', 'left_rear'],
+        ],
+      ),
+    );
+    await openGarage(page);
+    const where = `${size.width} x ${size.height}`;
+    const tools = page.getByRole('region', { name: 'Selected part' });
+
+    await tile(page, 'mount:roof_mid').tap();
+    await expect(tools).toContainText('Frost Cannon');
+    await page.waitForTimeout(240);
+    await assertCard(page, `${where}, roof weapon`, true);
+    await assertLayout(page, `${where}, roof weapon card`);
+    // Every control by name: the fire row, the four directions, the nudge pad with its
+    // readout, Replace and Remove with its refund.
+    for (const name of ['Primary', 'Secondary', 'Off'])
+      await expect(tools.getByRole('radio', { name, exact: true })).toBeInViewport({ ratio: 1 });
+    for (const name of ['Front', 'Right', 'Rear', 'Left'])
+      await expect(
+        page.getByTestId('facing-picker').getByRole('radio', { name, exact: true }),
+      ).toBeInViewport({ ratio: 1 });
+    for (const name of ['Move forward', 'Move back', 'Move left', 'Move right', 'Replace'])
+      await expect(tools.getByRole('button', { name, exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(page.getByTestId('part-offset')).toBeInViewport({ ratio: 1 });
+    await expect(page.getByTestId('remove')).toBeInViewport({ ratio: 1 });
+    await expect(page.getByTestId('remove-refund')).toHaveText('+110');
+    await expect(page.getByTestId('remove-refund')).toBeInViewport({ ratio: 1 });
+    await expect(page.getByTestId('facing-picker')).toHaveAttribute('data-facing', '3');
+    // A refund of four digits fits the same button: measured on a hidden copy of it, the
+    // same width, so the real one is left to React.
+    const room = await page.getByTestId('remove').evaluate((button) => {
+      const copy = button.cloneNode(true) as HTMLElement;
+      const box = button.getBoundingClientRect();
+      copy.style.position = 'absolute';
+      copy.style.visibility = 'hidden';
+      copy.style.width = `${box.width}px`;
+      copy.style.height = `${box.height}px`;
+      button.parentElement!.append(copy);
+      const refund = copy.querySelector<HTMLElement>('[data-testid="remove-refund"]')!;
+      refund.textContent = '+8888';
+      const outer = copy.getBoundingClientRect();
+      const inner = refund.getBoundingClientRect();
+      const fits =
+        copy.scrollWidth <= copy.clientWidth + 1 &&
+        inner.right <= outer.right - 1 &&
+        inner.left >= outer.left + 1 &&
+        inner.bottom <= outer.bottom + 0.5;
+      copy.remove();
+      return fits;
+    });
+    expect(room, `${where}: a four-digit refund`).toBe(true);
+    // The card still fits after the part is turned and nudged.
+    await page.getByTestId('face-0').tap();
+    await tools.getByRole('button', { name: 'Move left' }).tap();
+    await assertCard(page, `${where}, roof weapon turned`, true);
+
+    await tile(page, 'mount:left_rear').tap();
+    await expect(tools).toContainText('Emergency Booster');
+    await page.waitForTimeout(240);
+    await assertCard(page, `${where}, non-directional part`, false);
+    await assertLayout(page, `${where}, non-directional card`);
+    await expect(page.getByTestId('remove-refund')).toHaveText('+115');
+    await expect(page.getByTestId('remove-refund')).toBeInViewport({ ratio: 1 });
+    await expect(tools.getByRole('radiogroup', { name: 'Fire button' })).toHaveCount(0);
+  });
+}
 
 test('the idle Your Car panel shows scores, indicators, a derived summary and tappable equipment', async ({
   page,
@@ -1843,7 +2161,9 @@ test('portrait: the car is a strip, the slots are rows under it, and five parts 
   await openGarage(page);
   await expect(ready(page)).toBeInViewport({ ratio: 1 });
   await expect(page.getByTestId('credits-left')).toBeInViewport({ ratio: 1 });
-  await expect(page.locator('.g-car canvas')).toBeInViewport({ ratio: 0.6 });
+  // The cell the car is drawn in; the canvas itself keeps clear room round it for parts
+  // that overhang.
+  await expect(page.locator('.g-car')).toBeInViewport({ ratio: 0.6 });
   await assertLayout(page, 'first visit', { portrait: true });
   // The car takes a little under thirty percent of the height; no leaders, no tiles around it.
   const floor = (await page.locator('.g-floor').boundingBox())!;

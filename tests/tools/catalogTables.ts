@@ -1,5 +1,6 @@
 import { CHASSIS_LIST, allParts, partCard } from '@bolt/content';
-import { accessoryMounts, engineMount } from '@bolt/shared';
+import type { AccessoryDefinition } from '@bolt/shared';
+import { accessoryMounts, engineMount, partBase } from '@bolt/shared';
 
 /**
  * Prints the reference tables of docs/GARAGE_API.md from the catalog: every part id with its
@@ -9,12 +10,20 @@ import { accessoryMounts, engineMount } from '@bolt/shared';
  *   npx tsx tests/tools/catalogTables.ts
  */
 
+const TURN_NAMES = ['front', 'right', 'rear', 'left'] as const;
+
+/** `free`, `none`, or `fixed` with the way it always points. */
+function facingCell(part: AccessoryDefinition): string {
+  if (part.facing !== 'fixed') return part.facing;
+  return `fixed ${part.fixedTurn === 'outward' ? 'outward' : TURN_NAMES[part.fixedTurn ?? 0]}`;
+}
+
 const n = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
 
 export function partTable(): string {
   const lines = [
-    '| Part id | Name | Footprint w x h | Compatible mounts | Hardpoint | Turns | Height | Trigger | Max per car |',
-    '| :-- | :-- | :-- | :-- | :-- | :-- | --: | :-- | --: |',
+    '| Part id | Name | Footprint w x h | Compatible mounts | Hardpoint | Facing | Base | Height | Trigger | Max per car |',
+    '| :-- | :-- | :-- | :-- | :-- | :-- | --: | --: | :-- | --: |',
   ];
   for (const part of allParts()) {
     const card = partCard(part);
@@ -23,7 +32,7 @@ export function partTable(): string {
     lines.push(
       `| \`${part.id}\` | ${part.displayName} | ${part.footprint.w} x ${part.footprint.h} | ${
         part.category === 'chassis' ? 'body' : part.compatibleMounts.join(', ')
-      } | ${accessory ? part.hardpointUse : 'n/a'} | ${accessory ? (part.rotatable ? 'yes' : 'no') : 'n/a'} | ${
+      } | ${accessory ? part.hardpointUse : 'n/a'} | ${accessory ? facingCell(part) : 'n/a'} | ${accessory && part.facing === 'free' ? partBase(part) : 'n/a'} | ${
         accessory ? part.heightLevel : 'n/a'
       } | ${card.triggerMode} | ${card.maxPerCar ?? 'n/a'} |`,
     );
@@ -47,12 +56,12 @@ export function chassisTables(): string {
     );
     out.push('');
     out.push(
-      '| Mount id | Categories | Centre x, y | Max footprint w x h | Region +/- x, y | Turns allowed | Capacity |',
+      '| Mount id | Categories | Centre x, y | Max footprint w x h | Region +/- x, y | Facings allowed | Capacity |',
     );
     out.push('| :-- | :-- | :-- | :-- | :-- | :-- | --: |');
     for (const mount of accessoryMounts(chassis))
       out.push(
-        `| \`${mount.id}\` | ${mount.categories.join(', ')}${mount.acceptsAnyWeapon ? ' (any weapon)' : ''} | ${n(mount.x)}, ${n(mount.y)} | ${mount.maxFootprint.w} x ${mount.maxFootprint.h} | ${mount.regionHalfW}, ${mount.regionHalfH} | ${mount.allowedQuarterTurns.join(' ')} | ${mount.capacity} |`,
+        `| \`${mount.id}\` | ${mount.categories.join(', ')}${mount.acceptsAnyWeapon ? ' (any weapon)' : ''} | ${n(mount.x)}, ${n(mount.y)} | ${mount.maxFootprint.w} x ${mount.maxFootprint.h} | ${mount.regionHalfW}, ${mount.regionHalfH} | ${mount.allowedQuarterTurns.map((t) => TURN_NAMES[t]).join(', ')} | ${mount.capacity} |`,
       );
     out.push('');
   }

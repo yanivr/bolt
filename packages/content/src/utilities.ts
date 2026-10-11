@@ -60,7 +60,8 @@ function utility(row: UtilityRow): AccessoryDefinition {
     triggerMode: row.trigger,
     params: { ...row.params },
     hardpointUse: row.use ?? 'shared',
-    rotatable: false,
+    // No utility has a direction a player could choose: sensors and nozzles are part of the box.
+    facing: 'none',
     heightLevel: row.height ?? 0,
     powerDraw: row.powerDraw ?? 0,
     heatEffect: row.heatEffect ?? 0,

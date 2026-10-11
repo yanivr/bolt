@@ -11,7 +11,8 @@ import { chromium } from '@playwright/test';
  *   pnpm build && PORT=2671 node apps/server/dist/main.js &
  *   npx tsx tests/visual/garage.ts http://localhost:2671 tests/visual/out/garage [sizes]
  *
- * At every size: the idle overview of each of the five chassis, focus on a roof weapon, focus
+ * At every size: the idle overview of each of the five chassis, each of them fully loaded in
+ * both main views, focus on a roof weapon, focus
  * on an outer mount of the Spider, focus with the part nudged and turned, the engine in
  * focus, the compare pane, Browse All Parts, the idle Your Car panel and an illegal build.
  *
@@ -87,7 +88,81 @@ const PICKUP: PartSpec[] = [
   ['utility_battery', 'bed_front', { offsetX: 5 }],
   ['weapon_rear_mg', 'left_bed', { rotationQuarterTurns: 2 }],
   ['weapon_mortar', 'bed_rear', { autoMode: true }],
-  ['defense_rear_bumper', 'rear_center'],
+  ['defense_rear_bumper', 'rear_center', { rotationQuarterTurns: 2 }],
+];
+/** Every mount of each chassis filled, to check that a full car still reads as a car. */
+const LOADED: Array<
+  [name: string, chassisId: string, engineId: string, paintId: string, parts: PartSpec[]]
+> = [
+  [
+    'beetle',
+    'chassis_beetle',
+    'engine_four_cylinder',
+    'paint_signal',
+    [
+      ['weapon_front_mg', 'front_center', { assignedActionSlot: 0 }],
+      ['weapon_homing', 'roof_mid', { assignedActionSlot: 1 }],
+      ['utility_spare', 'left_utility'],
+      ['utility_capacitor', 'right_utility'],
+      ['weapon_mine', 'rear_center', { rotationQuarterTurns: 2 }],
+    ],
+  ],
+  [
+    'arrow',
+    'chassis_arrow',
+    'engine_four_cylinder',
+    'paint_cobalt',
+    [
+      ['weapon_harpoon', 'front_center', { assignedActionSlot: 0 }],
+      ['weapon_railshot', 'roof_mid', { assignedActionSlot: 1 }],
+      ['utility_fan', 'roof_rear'],
+      ['weapon_oil', 'rear_center', { rotationQuarterTurns: 2 }],
+    ],
+  ],
+  [
+    'pickup',
+    'chassis_pickup',
+    'engine_four_cylinder',
+    'paint_sunflare',
+    [
+      ['utility_radar', 'roof_cab'],
+      ['utility_repair', 'bed_front', { offsetX: -5 }],
+      ['utility_battery', 'bed_front', { offsetX: 5 }],
+      ['weapon_rear_mg', 'left_bed', { rotationQuarterTurns: 3 }],
+      ['weapon_shotgun', 'right_bed', { rotationQuarterTurns: 1, assignedActionSlot: 0 }],
+      ['weapon_mortar', 'bed_rear', { autoMode: true }],
+      ['defense_rear_bumper', 'rear_center', { rotationQuarterTurns: 2 }],
+    ],
+  ],
+  [
+    'spider',
+    'chassis_spider',
+    'engine_four_cylinder',
+    'paint_mint',
+    [
+      // Exactly the 1,000 credits: eight mounts filled on the most expensive frame.
+      ['utility_radar', 'front_utility'],
+      ['weapon_saw', 'left_front', { rotationQuarterTurns: 3 }],
+      ['weapon_front_mg', 'right_front', { rotationQuarterTurns: 0, assignedActionSlot: 0 }],
+      ['weapon_shotgun', 'roof_front', { assignedActionSlot: 1 }],
+      ['utility_spare', 'roof_mid'],
+      ['defense_side_panels', 'left_rear', { rotationQuarterTurns: 3 }],
+      ['defense_light_plate', 'right_rear', { rotationQuarterTurns: 1 }],
+      ['utility_fan', 'rear_utility'],
+    ],
+  ],
+  [
+    'trike',
+    'chassis_trike',
+    'engine_mini_electric',
+    'paint_signal',
+    [
+      ['weapon_shotgun', 'front_center', { assignedActionSlot: 0 }],
+      ['weapon_frost', 'roof_mid', { rotationQuarterTurns: 1, assignedActionSlot: 1 }],
+      ['weapon_rear_mg', 'left_rear', { rotationQuarterTurns: 2 }],
+      ['utility_repair', 'right_rear'],
+    ],
+  ],
 ];
 /** A saved build from an older catalog that is also over its frame's weight limit. */
 const STALE: PartSpec[] = [
@@ -167,21 +242,30 @@ async function capture(browser: Browser, size: Size, problems: string[]): Promis
     await shot(page, size, `01_overview_${name}`);
   }
 
+  // Every mount of each chassis filled, in both main views, with Ready allowed.
+  for (const [name, chassisId, engineId, paintId, parts] of LOADED) {
+    await seed(blueprint(`Full ${name}`, { chassisId, engineId, paintId }, parts, version));
+    await openGarage();
+    await shot(page, size, `14_loaded_${name}`);
+    await press('Rotate view');
+    await shot(page, size, `14b_loaded_${name}_view_turned`);
+  }
+
   // A Beetle: an empty roof slot in focus, the compare pane, then a roof weapon in focus.
   await seed(blueprint('Beetle', { chassisId: 'chassis_beetle' }, [], version));
   await openGarage();
   await tile('mount:roof_mid').click();
   await shot(page, size, '02_focus_empty_roof_slot');
-  await row('weapon_turret').click();
+  await row('weapon_rocket').click();
   await shot(page, size, '03_compare_pane');
   await page.getByTestId('install').click();
   await page.waitForTimeout(3800);
   await shot(page, size, '04_focus_roof_weapon');
-  // The same weapon nudged forward and turned to face right.
+  // The same weapon nudged forward and turned to face right with the direction picker.
   await press('Move forward');
   await press('Move forward');
   await press('Move left');
-  await page.getByTestId('rotate-part').click();
+  await page.getByTestId('face-1').click();
   await page.waitForTimeout(3800);
   await shot(page, size, '05_focus_nudged_rotated');
   await press('Rotate view');

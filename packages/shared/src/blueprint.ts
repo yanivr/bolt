@@ -6,6 +6,7 @@ import {
   PART_CLEARANCE_PX,
   WHEEL_WELL,
 } from './balance.js';
+import { headingForwardX, headingForwardY, wrapAngle } from './math.js';
 import { sha256Hex } from './sha256.js';
 import type {
   AccessoryDefinition,
@@ -218,12 +219,41 @@ export function buildHash(blueprint: VehicleBlueprint): string {
 
 export type Rect = { x0: number; y0: number; x1: number; y1: number };
 
-/** Footprint after rotation: odd quarter turns swap width and length. */
-export function rotatedFootprint(
-  footprint: { w: number; h: number },
+/**
+ * Side of the square base a part with a free facing stands on: the smaller side of its
+ * footprint. Barrels, nozzles and wings reach past the base, and may reach past the mount.
+ */
+export function partBase(part: Pick<AccessoryDefinition, 'footprint'>): number {
+  return Math.min(part.footprint.w, part.footprint.h);
+}
+
+/**
+ * The room a part takes on the car, in the car's own frame (width across, length along), for
+ * every fit, overlap and nudge check. A part with a free facing takes its square base, which
+ * is the same at every quarter turn, so any such part that fits a mount can point any way
+ * the mount allows. A part with a fixed facing takes its footprint turned the way it always
+ * points (odd quarter turns swap width and length); a part with no facing stays at turn 0.
+ */
+export function occupiedFootprint(
+  part: Pick<AccessoryDefinition, 'footprint' | 'facing'>,
   turns: QuarterTurn,
 ): { w: number; h: number } {
-  return turns % 2 === 1 ? { w: footprint.h, h: footprint.w } : { w: footprint.w, h: footprint.h };
+  if (part.facing === 'free') {
+    const side = partBase(part);
+    return { w: side, h: side };
+  }
+  return turns % 2 === 1
+    ? { w: part.footprint.h, h: part.footprint.w }
+    : { w: part.footprint.w, h: part.footprint.h };
+}
+
+/**
+ * Whether a part fits a mount's box. One answer per part and mount: a free part's base is
+ * the same whichever way it points, and any other part has a single facing there.
+ */
+export function fitsMountBox(mount: MountPoint, part: AccessoryDefinition): boolean {
+  const size = occupiedFootprint(part, allowedRotations(mount, part)[0] ?? 0);
+  return size.w <= mount.maxFootprint.w && size.h <= mount.maxFootprint.h;
 }
 
 export function rectAround(x: number, y: number, w: number, h: number): Rect {
@@ -270,9 +300,37 @@ export function mountAccepts(mount: MountPoint, part: AccessoryDefinition): bool
   );
 }
 
-/** Orientations a part may take on a mount. Parts that cannot rotate stay at 0. */
+/** The quarter turn that points away from the car at a mount: its arc as a turn. */
+export function outwardTurn(mount: MountPoint): QuarterTurn {
+  const arc = mountArc(mount);
+  return arc === 'front' ? 0 : arc === 'right' ? 1 : arc === 'rear' ? 2 : 3;
+}
+
+/**
+ * Ways a part may point on a mount, default first. A free part takes what the mount allows;
+ * a fixed part has exactly its own turn wherever it is mounted; a part without a facing
+ * stays at 0.
+ */
 export function allowedRotations(mount: MountPoint, part: AccessoryDefinition): QuarterTurn[] {
-  return part.rotatable ? mount.allowedQuarterTurns : [0];
+  if (part.facing === 'free') return mount.allowedQuarterTurns;
+  if (part.facing === 'fixed')
+    return [part.fixedTurn === 'outward' ? outwardTurn(mount) : (part.fixedTurn ?? 0)];
+  return [0];
+}
+
+/**
+ * World heading of a mounted part, radians clockwise from up like every heading in the game:
+ * the car's heading plus a quarter turn per step (0 front, 1 right, 2 rear, 3 left). This is
+ * the direction a weapon fires along.
+ */
+export function partHeadingRad(carHeadingRad: number, turns: QuarterTurn): number {
+  return wrapAngle(carHeadingRad + (turns * Math.PI) / 2);
+}
+
+/** Unit vector of `partHeadingRad` in world space (y grows down the screen). */
+export function partDirection(carHeadingRad: number, turns: QuarterTurn): { x: number; y: number } {
+  const heading = carHeadingRad + (turns * Math.PI) / 2;
+  return { x: headingForwardX(heading), y: headingForwardY(heading) };
 }
 
 /** Which way a rotation points: 0 forward, 1 right, 2 rear, 3 left. */
@@ -300,7 +358,7 @@ export type PlacedPart = {
   /** Centre of the part in chassis-local pixels. */
   x: number;
   y: number;
-  /** Footprint after rotation. */
+  /** Room taken in the car's frame (`occupiedFootprint`). */
   w: number;
   h: number;
   rect: Rect;
@@ -322,7 +380,7 @@ export function placePart(
   def: AccessoryDefinition,
   mount: MountPoint,
 ): PlacedPart {
-  const size = rotatedFootprint(def.footprint, instance.rotationQuarterTurns);
+  const size = occupiedFootprint(def, instance.rotationQuarterTurns);
   const x = mount.x + snapOffset(instance.offsetX);
   const y = mount.y + snapOffset(instance.offsetY);
   return {

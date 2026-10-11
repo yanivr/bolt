@@ -32,8 +32,21 @@ export type EngineArt = {
   exhaustStyle: 'puff' | 'flame' | 'none';
 };
 
+/** A point on a mounted part, in the part's own model space at heading 0. */
+export type PartAnchor3 = { x: number; y: number; z: number };
+
 /**
  * A mounted weapon, defense or utility. Modelled around its own origin (the mount point) with
  * its base at height 0, front toward negative Y; the compositor lifts it to the mount height.
+ *
+ * `muzzles` are where shots and flashes start (one per barrel, in firing order) and `pivot`
+ * is the axis a turret head turns about. Both go into the atlas manifest for the combat
+ * milestone. Every weapon has at least one muzzle.
  */
-export type PartArt = { id: string; cell: number; model: Model };
+export type PartArt = {
+  id: string;
+  cell: number;
+  model: Model;
+  muzzles?: PartAnchor3[];
+  pivot?: PartAnchor3;
+};

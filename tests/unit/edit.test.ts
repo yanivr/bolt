@@ -11,7 +11,7 @@ import {
   WEAPON_LIST,
   baselineBlueprint,
 } from '@bolt/content';
-import type { AccessoryDefinition, EditResult, VehicleBlueprint } from '@bolt/shared';
+import type { AccessoryDefinition, EditResult, QuarterTurn, VehicleBlueprint } from '@bolt/shared';
 import {
   MAX_GARAGE_HISTORY,
   STARTING_CREDITS,
@@ -199,7 +199,11 @@ describe('price and refund of all 105 parts (Sections 6.1 and 19.1)', () => {
     expect(ok(renameBlueprint(start, CATALOG, 'Dust Devil')).spend).toMatchObject(free);
     const gun = start.parts.find((p) => p.partId === 'weapon_front_mg')!;
     expect(ok(assignActionSlot(start, CATALOG, gun.instanceId, 1)).spend).toMatchObject(free);
-    expect(ok(rotatePart(start, CATALOG, gun.instanceId)).spend).toMatchObject(free);
+    const aimed = ok(installPart(start, CATALOG, 'weapon_shotgun', { mountId: 'roof_mid' }));
+    expect(ok(rotatePart(aimed.blueprint, CATALOG, aimed.instanceId!)).spend).toMatchObject({
+      ...free,
+      totalCost: aimed.spend.totalCost,
+    });
     expect(compareCost(start, start, CATALOG)).toMatchObject(free);
     // Two identical parts swapped for one of another kind: spend and refund stay separate.
     const a = car('chassis_spider', [
@@ -489,17 +493,18 @@ describe('movePart and rotatePart', () => {
       offsetY: 0,
       rotationQuarterTurns: 0,
     });
-    // The cab roof and the tailgate are wide and shallow: a 12-long gun only fits turned
-    // sideways, so the move picks the first orientation that is allowed there and fits.
+    // The cab roof is wide and shallow, 14 x 10. The gun stands on its 8 x 8 base, so it goes
+    // there facing the way it already faced; before catalog 0.5.0 it had to turn sideways.
     const front = ok(movePart(start, CATALOG, 'gun', { mountId: 'roof_cab' }));
     expect(front.blueprint.parts.find((p) => p.instanceId === 'gun')).toMatchObject({
       mountId: 'roof_cab',
       offsetX: 0,
       offsetY: 0,
-      rotationQuarterTurns: 1,
+      rotationQuarterTurns: 0,
     });
+    // The tailgate only faces back, so the move takes that mount's facing.
     const rear = ok(movePart(start, CATALOG, 'gun', { mountId: 'rear_center' }));
-    expect(rear.blueprint.parts.find((p) => p.instanceId === 'gun')!.rotationQuarterTurns).toBe(3);
+    expect(rear.blueprint.parts.find((p) => p.instanceId === 'gun')!.rotationQuarterTurns).toBe(2);
     expect(check(front.blueprint).ok && check(rear.blueprint).ok).toBe(true);
     expect(refusal(movePart(start, CATALOG, 'gun', { mountId: 'engine_bay' })).issue.code).toBe(
       'NO_COMPATIBLE_MOUNT',
@@ -512,9 +517,9 @@ describe('movePart and rotatePart', () => {
     );
   });
 
-  it('steps a part through the orientations its mount allows and its footprint fits', () => {
-    // On the bed rack every quarter turn is allowed, but the radar is in the way of a
-    // sideways gun, so the gun alone is used here.
+  it('steps a part through the facings its mount allows', () => {
+    // On the bed rack every quarter turn is allowed, and the gun's square base means the
+    // radar beside it is never in the way of a turn.
     const solo = deepFreeze(
       car('chassis_pickup', [
         {
@@ -535,7 +540,31 @@ describe('movePart and rotatePart', () => {
     expect(ok(rotatePart(solo, CATALOG, 'gun', 2)).blueprint.parts[0]!.rotationQuarterTurns).toBe(
       2,
     );
-    // On a front mount the step skips the orientation that points back across the cabin.
+    for (let i = 0; i < 4; i++) {
+      const beside = ok(rotatePart(start, CATALOG, 'gun', i as QuarterTurn));
+      expect(check(beside.blueprint).ok, `beside the radar, facing ${i}`).toBe(true);
+    }
+    // On a side mount the step skips the facing that points back across the cabin.
+    const flank = deepFreeze(
+      car('chassis_spider', [
+        {
+          partId: 'weapon_front_mg',
+          mountId: 'left_front',
+          instanceId: 'gun',
+          rotationQuarterTurns: 3,
+          assignedActionSlot: 0,
+        },
+      ]),
+    );
+    const turns = [3];
+    bp = flank;
+    for (let i = 0; i < 3; i++) {
+      bp = ok(rotatePart(bp, CATALOG, 'gun')).blueprint;
+      turns.push(bp.parts[0]!.rotationQuarterTurns);
+    }
+    expect(turns).toEqual([3, 0, 2, 3]);
+    expect(refusal(rotatePart(flank, CATALOG, 'gun', 1)).issue.code).toBe('BAD_ROTATION');
+    // A nose mount faces forward and nothing else.
     const nose = deepFreeze(
       car('chassis_beetle', [
         {
@@ -546,16 +575,26 @@ describe('movePart and rotatePart', () => {
         },
       ]),
     );
-    const turns = [0];
-    bp = nose;
-    for (let i = 0; i < 3; i++) {
-      bp = ok(rotatePart(bp, CATALOG, 'gun')).blueprint;
-      turns.push(bp.parts[0]!.rotationQuarterTurns);
-    }
-    expect(turns).toEqual([0, 1, 3, 0]);
-    expect(refusal(rotatePart(nose, CATALOG, 'gun', 2)).issue.code).toBe('BAD_ROTATION');
-    // A part that cannot turn has nowhere to step to.
+    expect(refusal(rotatePart(nose, CATALOG, 'gun')).issue.code).toBe('BAD_ROTATION');
+    for (const turn of [1, 2, 3] as const)
+      expect(refusal(rotatePart(nose, CATALOG, 'gun', turn)).issue.code).toBe('BAD_ROTATION');
+    // A part without a facing has nowhere to step to, and a fixed one cannot be turned.
     expect(refusal(rotatePart(start, CATALOG, 'radar')).issue.code).toBe('BAD_ROTATION');
+    const trap = deepFreeze(
+      car('chassis_beetle', [
+        {
+          partId: 'weapon_mine',
+          mountId: 'rear_center',
+          instanceId: 'mine',
+          rotationQuarterTurns: 2,
+          assignedActionSlot: 0,
+        },
+      ]),
+    );
+    expect(check(trap).ok).toBe(true);
+    expect(refusal(rotatePart(trap, CATALOG, 'mine')).issue.code).toBe('BAD_ROTATION');
+    for (const turn of [0, 1, 3] as const)
+      expect(refusal(rotatePart(trap, CATALOG, 'mine', turn)).issue.code).toBe('BAD_ROTATION');
   });
 });
 
@@ -861,10 +900,15 @@ describe('repairBlueprint (Section 15.6)', () => {
     const repaired = repairBlueprint(old, CATALOG);
     expect(repaired.ok).toBe(true);
     expect(repaired.blueprint.catalogVersion).toBe(CATALOG.version);
-    // Only parts an error points at are removed: the unknown part, the gun facing the wrong
-    // way, and one of the two fans on a single-capacity mount.
-    expect(repaired.removed.map((r) => r.instance.instanceId)).toEqual(['gone', 'mg', 'fan2']);
-    expect(repaired.blueprint.parts.map((p) => p.instanceId)).toEqual(['fan']);
+    // Only parts an error points at are removed: the unknown part and one of the two fans on
+    // a single-capacity mount. The gun that faced backward on a nose mount is not removed:
+    // it is turned to the one way that mount faces.
+    expect(repaired.removed.map((r) => r.instance.instanceId)).toEqual(['gone', 'fan2']);
+    expect(repaired.blueprint.parts.map((p) => p.instanceId)).toEqual(['mg', 'fan']);
+    expect(repaired.blueprint.parts[0]).toMatchObject({
+      rotationQuarterTurns: 0,
+      assignedActionSlot: 0,
+    });
     expect(old.catalogVersion).toBe('0.1.0');
   });
 
@@ -956,8 +1000,9 @@ describe('installedParts', () => {
   it('lists parts in canonical order with their geometry', () => {
     const parts = installedParts(ROOKIE_BLUEPRINT, CATALOG);
     expect(parts.map((p) => p.mount.id)).toEqual(['front_center', 'left_utility']);
-    expect(parts[0]).toMatchObject({ x: 0, y: -22, w: 8, h: 12 });
-    expect(parts[0]!.rect).toEqual({ x0: -4, y0: -28, x1: 4, y1: -16 });
+    // The gun is 8 x 12 as drawn and stands on its 8 x 8 base.
+    expect(parts[0]).toMatchObject({ x: 0, y: -22, w: 8, h: 8 });
+    expect(parts[0]!.rect).toEqual({ x0: -4, y0: -26, x1: 4, y1: -18 });
     expect(validateBlueprint(ROOKIE_BLUEPRINT, CATALOG).ok).toBe(true);
   });
 });

@@ -6,11 +6,13 @@ import type {
   EditResult,
   PartCategory,
   PlacedPart,
+  QuarterTurn,
   RemovedPart,
   VehicleBlueprint,
 } from '@bolt/shared';
 import {
   BUILD_SECONDS,
+  allowedRotations,
   assignActionSlot,
   compareCost,
   createHistory,
@@ -513,16 +515,71 @@ export function tryMove(
   return movePart(blueprint, catalog, instanceId, { offsetX, offsetY });
 }
 
+/** Steps a part clockwise to the next facing its mount allows (the R key). */
 export function rotate(
   session: GarageSession,
   catalog: Catalog,
   instanceId: string,
 ): GarageSession {
-  const result = rotatePart(currentBlueprint(session), catalog, instanceId);
-  const turned = result.ok
-    ? result.blueprint.parts.find((p) => p.instanceId === instanceId)
-    : undefined;
-  return commit(session, catalog, result, STRINGS.garage.facing[turned?.rotationQuarterTurns ?? 0]);
+  if (!building(session)) return session;
+  const blueprint = currentBlueprint(session);
+  const part = installedParts(blueprint, catalog).find((p) => p.instance.instanceId === instanceId);
+  if (!part) return session;
+  const allowed = allowedRotations(part.mount, part.def);
+  for (let step = 1; step <= 3; step++) {
+    const turn = ((part.instance.rotationQuarterTurns + step) % 4) as QuarterTurn;
+    if (allowed.includes(turn)) return face(session, catalog, instanceId, turn);
+  }
+  // Nowhere to step to: say which single way this part or mount faces.
+  return face(
+    session,
+    catalog,
+    instanceId,
+    ((part.instance.rotationQuarterTurns + 1) % 4) as QuarterTurn,
+  );
+}
+
+/**
+ * Why a part cannot face a way on its mount, in approved copy, or null when it can. The
+ * direction picker shows this on a press of a dimmed arrow, and `face` refuses with it.
+ */
+export function facingBlocked(part: PlacedPart, turn: QuarterTurn): string | null {
+  const allowed = allowedRotations(part.mount, part.def);
+  if (allowed.includes(turn)) return null;
+  if (part.def.facing === 'none') return STRINGS.garage.facingNone;
+  if (part.def.facing === 'fixed') return STRINGS.garage.facingFixed[allowed[0] ?? 0];
+  return allowed.length === 1
+    ? STRINGS.garage.facingOnly[allowed[0]!]
+    : STRINGS.garage.facingBlocked[turn];
+}
+
+/** Points a part one of the four ways: 0 front, 1 right, 2 rear, 3 left. */
+export function face(
+  session: GarageSession,
+  catalog: Catalog,
+  instanceId: string,
+  turn: QuarterTurn,
+): GarageSession {
+  if (!building(session)) return session;
+  const blueprint = currentBlueprint(session);
+  const part = installedParts(blueprint, catalog).find((p) => p.instance.instanceId === instanceId);
+  if (!part) return session;
+  const reason = facingBlocked(part, turn);
+  if (reason !== null)
+    return refused(session, {
+      code: 'BAD_ROTATION',
+      severity: 'error',
+      message: reason,
+      instanceId,
+      mountId: part.mount.id,
+    });
+  if (part.instance.rotationQuarterTurns === turn) return session;
+  return commit(
+    session,
+    catalog,
+    rotatePart(blueprint, catalog, instanceId, turn),
+    STRINGS.garage.facing[turn],
+  );
 }
 
 export type FireChoice = 0 | 1 | 'auto' | null;

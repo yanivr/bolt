@@ -65,6 +65,8 @@ export type MountCategory =
   | 'UNIVERSAL';
 
 export type QuarterTurn = 0 | 1 | 2 | 3;
+/** How a mounted part's direction is decided. See `AccessoryDefinition.facing`. */
+export type PartFacing = 'free' | 'fixed' | 'none';
 
 /** Which way a hit arrives, or a part faces, in the car's own frame. */
 export type CarArc = 'front' | 'rear' | 'left' | 'right';
@@ -316,7 +318,11 @@ export type PartDefinition = {
   category: PartCategory;
   price: number;
   massKg: number;
-  /** Width and length in world pixels at rotation 0 (length runs along the car). */
+  /**
+   * Width (across the car) and length (along it) in world pixels. For an accessory this is the
+   * part at quarter turn 0, facing the front of the car; the room it takes once mounted is
+   * `occupiedFootprint`.
+   */
   footprint: { w: number; h: number };
   compatibleMounts: MountCategory[];
   spriteKey: string;
@@ -348,9 +354,12 @@ export type MountPoint = {
   /** Half-extent of the bounded installation region around the hardpoint. */
   regionHalfW: number;
   regionHalfH: number;
-  /** Largest part footprint, after rotation, this mount accepts. */
+  /** Largest occupied footprint (`occupiedFootprint`) this mount accepts. */
   maxFootprint: { w: number; h: number };
-  /** Orientations a rotatable part may take here. The first is the default. */
+  /**
+   * Ways a part with a free facing may point here: 0 front, 1 right, 2 rear, 3 left. A
+   * statement about the car, not about geometry. The first is the default.
+   */
   allowedQuarterTurns: QuarterTurn[];
   /** How many small parts may share this mount. A large part always takes all of it. */
   capacity: number;
@@ -419,8 +428,17 @@ export type AccessoryDefinition = PartDefinition & {
   params: PartParams;
   /** `full` takes the whole hardpoint, `shared` may sit on a rack beside another small part. */
   hardpointUse: 'full' | 'shared';
-  /** False when orientation means nothing for the part; it must then stay at rotation 0. */
-  rotatable: boolean;
+  /**
+   * Whether the player chooses which way the part points. `free`: any way its mount allows,
+   * and it occupies a square base so the choice never depends on room. `fixed`: the part
+   * decides (`fixedTurn`). `none`: direction means nothing and it stays at quarter turn 0.
+   */
+  facing: PartFacing;
+  /**
+   * For a `fixed` part: the quarter turn it always has, or `outward` for away from the centre
+   * line of the car, which depends on the side its mount is on.
+   */
+  fixedTurn?: QuarterTurn | 'outward';
   /** 0 flush, 1 raised, 2 tall. Tall parts raise the centre of mass. */
   heightLevel: 0 | 1 | 2;
   /** Sustained electrical draw shown on the part card (zero for parts that draw per shot). */

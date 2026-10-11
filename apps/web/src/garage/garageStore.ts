@@ -1,5 +1,5 @@
 import { CATALOG } from '@bolt/content';
-import type { Catalog, PartCategory, VehicleBlueprint } from '@bolt/shared';
+import type { Catalog, PartCategory, QuarterTurn, VehicleBlueprint } from '@bolt/shared';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 import type { FireChoice, GarageSession, Slot, StartOptions } from './buildSession.js';
@@ -27,7 +27,10 @@ export type GarageState = {
   remove: (instanceId: string) => void;
   nudge: (instanceId: string, dx: number, dy: number) => void;
   moveTo: (instanceId: string, offsetX: number, offsetY: number) => void;
+  /** Steps to the next facing the mount allows. */
   rotate: (instanceId: string) => void;
+  /** Points a part front (0), right (1), rear (2) or left (3). */
+  face: (instanceId: string, turn: QuarterTurn) => void;
   setFire: (instanceId: string, slot: FireChoice) => void;
   paint: (paintId: string) => void;
   rename: (name: string) => void;
@@ -75,6 +78,7 @@ export function createGarageStore(deps: GarageDeps) {
       nudge: (instanceId, dx, dy) => apply((s) => build.nudge(s, catalog, instanceId, dx, dy)),
       moveTo: (instanceId, x, y) => apply((s) => build.moveTo(s, catalog, instanceId, x, y)),
       rotate: (instanceId) => apply((s) => build.rotate(s, catalog, instanceId)),
+      face: (instanceId, turn) => apply((s) => build.face(s, catalog, instanceId, turn)),
       setFire: (instanceId, slot) => apply((s) => build.setFire(s, catalog, instanceId, slot)),
       paint: (paintId) => apply((s) => build.paint(s, catalog, paintId)),
       rename: (name) => apply((s) => build.rename(s, catalog, name)),

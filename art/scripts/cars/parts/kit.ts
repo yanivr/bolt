@@ -1,6 +1,6 @@
 import type { Decal, Shape, Solid } from '../../lib/model.js';
 import { circle, roundRect, subtract } from '../../lib/model.js';
-import type { PartArt } from '../types.js';
+import type { PartAnchor3, PartArt } from '../types.js';
 import { PART_MATERIALS } from './materials.js';
 
 /**
@@ -52,53 +52,56 @@ export function stripes(pitch: number, width: number, dx = 0, dy = 1, offset = 0
   };
 }
 
-/** Tag of the invisible solid that only informs the icon scale; see `iconFitMarker`. */
-export const ICON_FIT_TAG = 'iconFit';
+/** How a finished part differs from the solids as they were written. */
+export type FinishOptions = {
+  /**
+   * Uniform magnification of the whole model about the mount point, heights included. The
+   * hero pass draws a weapon larger than the base it stands on; the shapes are authored at
+   * the size of the catalog footprint and enlarged here, so one number says how much.
+   */
+  scale?: number;
+};
 
-/**
- * The catalog icon is scaled from a model's ground radius plus half its lift, which crops the
- * top of a tall part on a small base (a mast, a bottle, an insulator). When a model would be
- * cropped, this returns a zero-height solid that covers one integer lattice point at the
- * radius the icon needs. The icon sizing scans integer points and so counts it; the renderer
- * samples between them and never draws it.
- */
-function iconFitMarker(solids: Solid[]): Solid | null {
-  const heading = (-3 * Math.PI * 2) / 32;
-  const cos = Math.cos(heading);
-  const sin = Math.sin(heading);
-  const lift = 0.62 * 1.3;
-  let natural = 4;
-  let up = 0;
-  for (let y = -32; y <= 32; y += 0.5) {
-    for (let x = -32; x <= 32; x += 0.5) {
-      let first = true;
-      for (const solid of solids) {
-        const d = solid.shape(x, y);
-        if (d > 0) continue;
-        const whole = Number.isInteger(x) && Number.isInteger(y);
-        if (first && whole) natural = Math.max(natural, Math.hypot(x, y) + (solid.z1 * lift) / 2);
-        first = false;
-        const z = solid.height ? solid.height(x, y, d) : solid.z1;
-        up = Math.max(up, -(x * sin + y * cos) + z * lift);
-      }
-    }
-  }
-  const needed = Math.ceil(up * 0.92 + 0.6);
-  if (needed <= natural) return null;
-  return {
-    shape: (x, y) => (x === needed && y === 0 ? -1 : 1),
-    material: 'bore',
-    z0: 0,
-    z1: 0,
-    noShadow: true,
-    tag: ICON_FIT_TAG,
+function scaleShape(shape: Shape, s: number): Shape {
+  return (x, y) => s * shape(x / s, y / s);
+}
+
+function scaleSolid(solid: Solid, s: number): Solid {
+  const out: Solid = {
+    ...solid,
+    shape: scaleShape(solid.shape, s),
+    z0: solid.z0 * s,
+    z1: solid.z1 * s,
   };
+  if (solid.bevel !== undefined) out.bevel = solid.bevel * s;
+  if (solid.floor !== undefined) out.floor = solid.floor * s;
+  if (solid.height) {
+    const height = solid.height;
+    out.height = (x, y, d) => s * height(x / s, y / s, d / s);
+  }
+  return out;
 }
 
 export class Kit {
   readonly solids: Solid[] = [];
   readonly decals: Decal[] = [];
+  private readonly muzzles: PartAnchor3[] = [];
+  private pivotPoint: PartAnchor3 | null = null;
   private count = 0;
+
+  /**
+   * Marks where a shot leaves the part: the middle of a barrel's mouth, at the height of its
+   * axis. Call once per barrel, in firing order. In the same units as the solids, before any
+   * finishing scale.
+   */
+  muzzle(x: number, y: number, z: number): void {
+    this.muzzles.push({ x, y, z });
+  }
+
+  /** Marks the axis a self-aiming head turns about, at the height of its bearing. */
+  pivot(x: number, y: number, z: number): void {
+    this.pivotPoint = { x, y, z };
+  }
 
   /** Any shape as an upright solid from `z0` to `z1`. Returns the tag for decals. */
   add(shape: Shape, material: string, z0: number, z1: number, extra: Extra = {}): string {
@@ -233,15 +236,23 @@ export class Kit {
     for (const [x, y] of points) this.decal(circle(x, y, r), on, { shade });
   }
 
-  done(id: string, cell: number): PartArt {
-    // Tallest first: the baker sizes an icon from the first solid it finds over each point.
-    const solids = this.solids
-      .map((solid, i) => ({ solid, i }))
-      .sort((a, b) => b.solid.z1 - a.solid.z1 || a.i - b.i)
-      .map((entry) => entry.solid);
-    const marker = iconFitMarker(solids);
-    if (marker) solids.push(marker);
-    return { id, cell, model: { solids, decals: this.decals, materials: PART_MATERIALS } };
+  done(id: string, cell: number, options: FinishOptions = {}): PartArt {
+    const s = options.scale ?? 1;
+    const round = (v: number) => Math.round(v * s * 100) / 100;
+    const at = (p: PartAnchor3): PartAnchor3 => ({
+      x: round(p.x) + 0,
+      y: round(p.y) + 0,
+      z: round(p.z) + 0,
+    });
+    const solids = s === 1 ? this.solids : this.solids.map((solid) => scaleSolid(solid, s));
+    const decals =
+      s === 1
+        ? this.decals
+        : this.decals.map((decal) => ({ ...decal, shape: scaleShape(decal.shape, s) }));
+    const art: PartArt = { id, cell, model: { solids, decals, materials: PART_MATERIALS } };
+    if (this.muzzles.length > 0) art.muzzles = this.muzzles.map(at);
+    if (this.pivotPoint) art.pivot = at(this.pivotPoint);
+    return art;
   }
 }
 

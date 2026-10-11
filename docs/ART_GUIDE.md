@@ -46,6 +46,47 @@ light for a cast shadow, and finally draws a selective outline that takes the co
 the part it borders (lighter on the lit side). Because rotation happens in the model and not
 on a bitmap, all sixteen frames agree with each other and nothing shimmers or stretches.
 
+### Mounted parts
+
+The 60 weapons, defenses and utilities are built with the small kit in
+`art/scripts/cars/parts/kit.ts` and drawn through `renderPartFrame`
+(`art/scripts/cars/parts/frame.ts`), which the baker and the review tool share. What makes a
+part read on a car at 3x on a phone (DECISIONS 102):
+
+- **Larger than its base.** Write the model at the catalog footprint, front toward negative
+  Y, and finish it with `k.done(id, cell, { scale })`: weapons about 1.15, the rest about
+  1.1. Then push the one shape that names the part past that by hand: the barrel, the lance,
+  the rails, the blade. A part with a free facing stands on a square base (the smaller side
+  of its footprint) in the rules, so the overhang is legal.
+- **One signature shape a weapon.** The comment above each function in `weapons.ts` names it.
+  If two weapons could be confused in silhouette, one of them is wrong.
+- **Direction.** The business end is toward negative Y and carries the warmest, brightest
+  accent. A part with a fixed facing (mine, oil, rear guard, saw, side shields) is modelled
+  the same way and turned by the rules.
+- **Separation from the body.** Part frames get a near-black cool outline all the way round
+  and an opaque one-pixel contact shadow down and to the right; do not add either by hand.
+  Weapon metal (`gunmetal`, `iron`) is lighter and cooler than every paint midtone. Check a
+  new part on all four paints: an amber drum disappears on Sunflare, a blue box on Cobalt.
+- **Height.** Nothing stands more than 16 authored units above its mount once finished (a
+  Tesla Arc is 15.8, a radar dish 16.1 at its rim). The garage overview has exactly that much
+  room over the Spider's roof on a 370 pixel phone before the floor cuts the part.
+- **Anchors.** Call `k.muzzle(x, y, z)` once per barrel at the middle of its mouth, and
+  `k.pivot` for a head that turns. They are scaled with the model and written to the manifest.
+- **Tags.** Keep the Section 13.4 tags on the solids the combat milestone animates.
+- **Cell.** Even, with at least two clear pixels at every heading:
+  `npx tsx art/scripts/preview-parts.ts --check` prints the margin of every part, checks that
+  every anchor lies on its drawing, and fails otherwise.
+
+Review with `npx tsx art/scripts/preview-parts.ts` (or with part ids for one sheet). It
+renders on the five real chassis with their mounts and mount heights: `_review_*.png` (each
+part alone at 5x, its icons, on a car at 3x on all four paints, at true size, and at 5x),
+`_mounted_*_3x.png`, `_icons_*_4x.png` and `_loaded_<chassis>_4x.png` (every mount filled).
+Ask of each: can I name it from the 3x picture, can I tell which way it points, does it stand
+off the body on every paint, does the loaded car still look like a car.
+
+Icons (32 and 24 px) are rendered from the same models by `art/scripts/lib/icon.ts`, which
+frames each one from its true on-screen box so the longer side fills the tile.
+
 ### Vehicle layers and the compositor
 
 Every car is built at runtime from separate sheets: shadow, one wheel sprite per anchor, body,
@@ -101,6 +142,7 @@ cannot vouch for its own taste, so these are open until a person signs them off:
 | Four-Cylinder engine layer                                   | Awaiting review               | Same sprite on all four frames for now                                        |
 | Neon Cut clear night                                         | Awaiting review               | See known weak spots below                                                    |
 | Core effects (smoke, sparks, skids, headlight pool)          | Awaiting review on hardware   | Only stills reviewed; motion needs a real device                              |
+| 60 mounted parts, hero pass (DECISIONS 102)                  | Awaiting product-owner review | Reviewed by the developer in `art/preview/parts`. Weakest: Heat Guard, Traction Computer, Turret Computer, Composite Shell, Decoy Drone |
 | Damage states, 20 weapon effects, rain variant, other biomes | Not started                   | Milestones C and D                                                            |
 
 Known weak spots in Neon Cut, from the terrain bake's own review:

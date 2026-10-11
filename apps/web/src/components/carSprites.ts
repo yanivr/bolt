@@ -215,7 +215,18 @@ function silhouette(sheet: Sheet, frame: number, color: string): HTMLCanvasEleme
   return canvas;
 }
 
-/** Draws one frame of a car, centred on a square canvas of `sheets.size` pixels. */
+/**
+ * Sprite pixels of clear room the car canvas keeps on every side of the chassis frame. A
+ * mounted part is drawn larger than its base and may reach past its mount and past the body
+ * (a harpoon on a nose, a spoiler on a tail), so the canvas is this much larger than the
+ * chassis cell; the element is pulled back by the same amount, so layout still sees the cell.
+ */
+export const CAR_CANVAS_PAD = 16;
+
+/**
+ * Draws one frame of a car, centred on the canvas. The canvas is square: `sheets.size`
+ * pixels, or that plus `CAR_CANVAS_PAD` on every side where parts may overhang.
+ */
 export function drawCar(
   ctx: CanvasRenderingContext2D,
   sheets: CarSheets,
@@ -230,9 +241,11 @@ export function drawCar(
     bodyShiftX: 0,
     bodyShiftY: options.bodyShiftY ?? 0,
   };
-  const size = sheets.size;
-  ctx.clearRect(0, 0, size, size);
+  const size = ctx.canvas.width;
+  ctx.clearRect(0, 0, size, ctx.canvas.height);
   ctx.imageSmoothingEnabled = false;
+  // Which frame of its sheet each mounted part was drawn with, for tests of facing.
+  const partFrames: string[] = [];
   for (const op of layoutCar(sheets.chassis, sheets.wheels, sheets.engine, pose, sheets.parts)) {
     let sheet: Sheet | undefined;
     if (op.kind === 'shadow') sheet = sheets.shadow;
@@ -242,6 +255,7 @@ export function drawCar(
     else if (op.kind === 'engine') sheet = sheets.engineSheet;
     else if (op.kind === 'part') sheet = sheets.partSheets.get(op.sheetId);
     if (!sheet) continue;
+    if (op.kind === 'part') partFrames.push(`${op.instanceId ?? ''}:${op.frame}`);
     const { frameWidth: fw, frameHeight: fh } = sheet.ref;
     const columns = sheet.ref.columns || CAR_SHEET_COLUMNS;
     if (op.kind === 'part' && options.outline && op.instanceId === options.outline.instanceId) {
@@ -271,6 +285,7 @@ export function drawCar(
       fh,
     );
   }
+  if (ctx.canvas instanceof HTMLCanvasElement) ctx.canvas.dataset.partFrames = partFrames.join(' ');
 }
 
 export type { LocalPoint, ScreenPoint } from './carProjection.js';

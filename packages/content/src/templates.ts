@@ -23,7 +23,7 @@ export type BlueprintTemplate = {
 type PartSpec = {
   part: string;
   mount: string;
-  /** Orientation. Defaults to facing forward. */
+  /** Facing: 0 front, 1 right, 2 rear, 3 left. Defaults to 0. */
   turn?: QuarterTurn;
   /** Fire button, or `'auto'` for a hybrid left to fire by itself. */
   fire?: 0 | 1 | 'auto';
@@ -113,7 +113,7 @@ export const TEMPLATES: BlueprintTemplate[] = [
       { part: 'utility_repair', mount: 'bed_front', offset: [-5, 0] },
       { part: 'utility_battery', mount: 'bed_front', offset: [5, 0] },
       { part: 'weapon_rear_mg', mount: 'left_bed', turn: 2 },
-      { part: 'defense_rear_bumper', mount: 'rear_center' },
+      { part: 'defense_rear_bumper', mount: 'rear_center', turn: 2 },
     ]),
   },
   {
@@ -177,7 +177,7 @@ export const TEMPLATES: BlueprintTemplate[] = [
       'paint_mint',
       [
         { part: 'weapon_mortar', mount: 'bed_rear', fire: 0 },
-        { part: 'weapon_oil', mount: 'rear_center', fire: 1 },
+        { part: 'weapon_oil', mount: 'rear_center', turn: 2, fire: 1 },
         { part: 'defense_energy_shield', mount: 'roof_cab' },
         { part: 'utility_repair', mount: 'bed_front', offset: [-5, 0] },
       ],
@@ -229,7 +229,7 @@ export const TEMPLATES: BlueprintTemplate[] = [
       'tires_street',
       'paint_sunflare',
       [
-        { part: 'weapon_mine', mount: 'rear_center', fire: 0 },
+        { part: 'weapon_mine', mount: 'rear_center', turn: 2, fire: 0 },
         { part: 'weapon_rear_mg', mount: 'roof_mid', turn: 2 },
         { part: 'utility_minesensor', mount: 'left_utility' },
       ],

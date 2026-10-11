@@ -27,6 +27,7 @@ import {
 } from '@bolt/shared';
 import { accessoryMounts, removePart } from '@bolt/shared';
 import { describe, expect, it } from 'vitest';
+import { car as testCar } from '../helpers/blueprints.js';
 import {
   ACCESSORY_CATEGORIES,
   catalogEntries,
@@ -252,20 +253,78 @@ describe('garage session: placing parts', () => {
     expect(g.left()).toBe(520);
   });
 
-  it('rotates through the orientations the mount allows', () => {
+  it('steps a roof weapon through all four facings and leaves a nose gun facing forward', () => {
     const g = garage(ROOKIE_BLUEPRINT);
-    const gun = g.car().parts.find((p) => p.partId === 'weapon_front_mg')!.instanceId;
-    const turns = () => g.car().parts.find((p) => p.instanceId === gun)!.rotationQuarterTurns;
-    const allowed = CATALOG.chassis.chassis_beetle!.mounts.find(
-      (m) => m.id === 'front_center',
-    )!.allowedQuarterTurns;
-    const seen = new Set<number>([turns()]);
-    for (let i = 0; i < 6; i++) {
-      g.act.rotate(gun);
-      seen.add(turns());
-      expect(allowed).toContain(turns());
+    g.act.selectSlot({ kind: 'mount', mountId: 'roof_mid' });
+    g.act.focusPart('weapon_shotgun');
+    g.act.install('weapon_shotgun');
+    const shotgun = g.car().parts.find((p) => p.partId === 'weapon_shotgun')!.instanceId;
+    const turns = (id: string) =>
+      g.car().parts.find((p) => p.instanceId === id)!.rotationQuarterTurns;
+    const seen = [turns(shotgun)];
+    for (let i = 0; i < 4; i++) {
+      g.act.rotate(shotgun);
+      seen.push(turns(shotgun));
     }
-    expect(seen.size).toBeGreaterThan(1);
+    expect(seen).toEqual([0, 1, 2, 3, 0]);
+    expect(g.session().notice).toMatchObject({ tone: 'ok', text: 'Facing forward' });
+    // The nose mount has one facing: R says so and changes nothing.
+    const gun = g.car().parts.find((p) => p.partId === 'weapon_front_mg')!.instanceId;
+    const before = g.car();
+    g.act.rotate(gun);
+    expect(g.car()).toBe(before);
+    expect(g.session().notice).toMatchObject({
+      tone: 'error',
+      text: 'This mount only faces forward.',
+    });
+  });
+
+  it('points a part with the direction picker, and says why a direction is not offered', () => {
+    const g = garage(ROOKIE_BLUEPRINT);
+    g.act.selectSlot({ kind: 'mount', mountId: 'roof_mid' });
+    g.act.focusPart('weapon_shotgun');
+    g.act.install('weapon_shotgun');
+    const left = g.left();
+    const shotgun = g.car().parts.find((p) => p.partId === 'weapon_shotgun')!.instanceId;
+    const turn = (id: string) =>
+      g.car().parts.find((p) => p.instanceId === id)!.rotationQuarterTurns;
+    for (const wanted of [2, 3, 1, 0] as const) {
+      g.act.face(shotgun, wanted);
+      expect(turn(shotgun)).toBe(wanted);
+    }
+    expect(g.session().notice).toMatchObject({ tone: 'ok', text: 'Facing forward' });
+    // Turning is free and each turn is one undo step; the facing it already has is no step.
+    expect(g.left()).toBe(left);
+    const steps = g.session().history.past.length;
+    g.act.face(shotgun, 0);
+    expect(g.session().history.past.length).toBe(steps);
+    g.act.undo();
+    expect(turn(shotgun)).toBe(1);
+    // A nose mount only faces forward.
+    const gun = g.car().parts.find((p) => p.partId === 'weapon_front_mg')!.instanceId;
+    const before = g.car();
+    g.act.face(gun, 2);
+    expect(g.car()).toBe(before);
+    expect(g.session().notice).toMatchObject({
+      tone: 'error',
+      text: 'This mount only faces forward.',
+    });
+    expect(g.session().flagged).toEqual([gun]);
+    // A flank mount never faces across the cabin.
+    const spider = garage(
+      testCar('chassis_spider', [
+        { partId: 'weapon_front_mg', mountId: 'left_front', rotationQuarterTurns: 3 },
+      ]),
+    );
+    const flank = spider.car().parts[0]!.instanceId;
+    spider.act.face(flank, 1);
+    expect(spider.car().parts[0]!.rotationQuarterTurns).toBe(3);
+    expect(spider.session().notice).toMatchObject({
+      tone: 'error',
+      text: "This mount can't face right.",
+    });
+    spider.act.face(flank, 0);
+    expect(spider.car().parts[0]!.rotationQuarterTurns).toBe(0);
   });
 
   it('applies the two-button rule when a third weapon asks for a fire button', () => {

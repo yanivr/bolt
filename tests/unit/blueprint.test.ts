@@ -31,7 +31,7 @@ import {
   installedLoadKg,
   mechanicalJson,
   resolveBlueprint,
-  rotatedFootprint,
+  occupiedFootprint,
   sanitizeBlueprintName,
   serializeBlueprint,
   totalMassKg,
@@ -679,12 +679,12 @@ describe('validateBlueprint: every hardpoint (Section 19.1)', () => {
       expect(centred.issues, `${part.id} at rotation ${turn}`).toEqual([]);
       expect(centred.ok).toBe(true);
 
-      // Rotation: every turn the mount allows is accepted when the footprint still fits; every
-      // other turn is refused.
+      // Facing: every turn the part may take here is accepted, every other turn is refused.
+      // Room does not depend on the turn asked for.
       for (const candidate of [0, 1, 2, 3] as QuarterTurn[]) {
         const result = at({ rotationQuarterTurns: candidate });
         const allowed = allowedRotations(mount, part).includes(candidate);
-        const size = rotatedFootprint(part.footprint, candidate);
+        const size = occupiedFootprint(part, candidate);
         const fits = size.w <= mount.maxFootprint.w && size.h <= mount.maxFootprint.h;
         expect(errorCodes(result).includes('BAD_ROTATION'), `rotation ${candidate}`).toBe(!allowed);
         expect(errorCodes(result).includes('PART_TOO_LARGE'), `rotation ${candidate}`).toBe(!fits);
@@ -773,47 +773,47 @@ describe('validateBlueprint: every hardpoint (Section 19.1)', () => {
     );
     expect(errorCodes(mortar)).toEqual(['PART_TOO_LARGE']);
     expect(mortar.issues[0]!.detail).toEqual({ w: 16, h: 16, maxW: 14, maxH: 14 });
-    // The railgun is long: it fits the Arrow's spine and not the Beetle's hood.
-    expect(
-      errorCodes(
-        check(
-          car('chassis_beetle', [
-            { partId: 'weapon_railshot', mountId: 'front_center', assignedActionSlot: 0 },
-          ]),
-        ),
-      ),
-    ).toEqual(['PART_TOO_LARGE']);
-    expect(
-      check(
-        car('chassis_arrow', [
-          { partId: 'weapon_railshot', mountId: 'roof_mid', assignedActionSlot: 0 },
-        ]),
-      ).ok,
-    ).toBe(true);
-    // Turned sideways a machine gun is 12 wide and no longer fits an 8-wide pod.
+    // A part the player aims stands on a square base, the smaller side of its footprint, and
+    // its barrel may reach past the mount. The 8 x 18 railgun therefore goes on the Beetle's
+    // 16 x 12 hood as well as the Arrow's spine; before catalog 0.5.0 only the spine took it.
+    for (const [chassisId, mountId] of [
+      ['chassis_beetle', 'front_center'],
+      ['chassis_arrow', 'roof_mid'],
+    ] as const)
+      expect(
+        check(car(chassisId, [{ partId: 'weapon_railshot', mountId, assignedActionSlot: 0 }])).ok,
+        chassisId,
+      ).toBe(true);
+    // A machine gun on an 8-wide flank pod may face out, forward or back: its base is 8 x 8
+    // whichever way it points, so no turn is ever too large.
     const pod = CHASSIS.chassis_spider!.mounts.find((m) => m.id === 'right_front')!;
     expect(pod.maxFootprint).toEqual({ w: 8, h: 14 });
-    expect(
-      check(
-        car('chassis_spider', [
-          { partId: 'weapon_front_mg', mountId: 'right_front', assignedActionSlot: 0 },
-        ]),
-      ).ok,
-    ).toBe(true);
-    expect(
-      errorCodes(
+    for (const turn of [0, 1, 2] as QuarterTurn[])
+      expect(
         check(
           car('chassis_spider', [
             {
               partId: 'weapon_front_mg',
               mountId: 'right_front',
-              rotationQuarterTurns: 1,
+              rotationQuarterTurns: turn,
               assignedActionSlot: 0,
             },
           ]),
-        ),
-      ),
-    ).toContain('PART_TOO_LARGE');
+        ).ok,
+        `turn ${turn}`,
+      ).toBe(true);
+    // A part with a fixed facing takes its footprint as it lies: the 14 x 5 Crash Bumper is
+    // too wide for the Trike's 10-wide nose.
+    const bumper = check(
+      car('chassis_trike', [{ partId: 'defense_front_bumper', mountId: 'front_center' }]),
+    );
+    expect(errorCodes(bumper)).toContain('PART_TOO_LARGE');
+    expect(bumper.issues.find((i) => i.code === 'PART_TOO_LARGE')!.detail).toEqual({
+      w: 14,
+      h: 5,
+      maxW: 10,
+      maxH: 14,
+    });
   });
 
   it('refuses a part pointed back across the cabin, and one that cannot turn at all', () => {

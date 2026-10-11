@@ -39,14 +39,31 @@ type MountOptions = {
   acceptsAnyWeapon?: boolean;
 };
 
-/** Orientations by where a mount sits: outward first, never back across the cabin. */
+/**
+ * Which way a part with a free facing may point on a mount, default first (0 front, 1 right,
+ * 2 rear, 3 left). This is a statement about the car and has nothing to do with room: such a
+ * part stands on a square base, so if it fits it fits every way the mount allows.
+ *
+ * - FRONT: forward only. A nose mount is a fixed forward gun position.
+ * - REAR: backward only.
+ * - LEFT and RIGHT: outward first, then forward and backward along the flank. Never inward,
+ *   across the cabin.
+ * - ROOF, UNIVERSAL (the Pickup's bed) and UTILITY: all four. Nothing stands in the way.
+ *
+ * The Pickup's two bed rails are REAR mounts on a side wall and add outward to backward.
+ * Parts with a fixed facing ignore this table: the part decides (a Road Mine drops behind
+ * from any mount).
+ */
+const ALL_TURNS: QuarterTurn[] = [0, 1, 2, 3];
 const TURNS: Partial<Record<MountCategory, QuarterTurn[]>> = {
-  FRONT: [0, 3, 1],
-  REAR: [2, 3, 1],
+  FRONT: [0],
+  REAR: [2],
   LEFT: [3, 0, 2],
   RIGHT: [1, 0, 2],
+  ROOF: ALL_TURNS,
+  UNIVERSAL: ALL_TURNS,
+  UTILITY: ALL_TURNS,
 };
-const ALL_TURNS: QuarterTurn[] = [0, 1, 2, 3];
 
 function mount(
   id: string,
@@ -274,8 +291,8 @@ export const CHASSIS_PICKUP = chassis({
   mounts: [
     mount('roof_cab', ['ROOF'], 0, -12, 14, 10),
     mount('bed_front', ['UNIVERSAL'], 0, 1, 18, 12, { region: [5, 2], capacity: 2 }),
-    mount('left_bed', ['REAR'], -15, 6, 8, 12),
-    mount('right_bed', ['REAR'], 15, 6, 8, 12),
+    mount('left_bed', ['REAR'], -15, 6, 8, 12, { turns: [2, 3] }),
+    mount('right_bed', ['REAR'], 15, 6, 8, 12, { turns: [2, 1] }),
     mount('bed_rear', ['UNIVERSAL'], 0, 17, 18, 16, { region: [1, 1] }),
     mount('rear_center', ['REAR', 'ARMOR'], 0, 32, 18, 10),
     engineBay(0, -22),

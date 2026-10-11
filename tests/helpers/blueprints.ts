@@ -8,7 +8,7 @@ import type {
   QuarterTurn,
   VehicleBlueprint,
 } from '@bolt/shared';
-import { allowedRotations, mountAccepts, rotatedFootprint, validateBlueprint } from '@bolt/shared';
+import { allowedRotations, fitsMountBox, mountAccepts, validateBlueprint } from '@bolt/shared';
 
 /** A bare car on a chassis, optionally with other essentials, plus the parts given. */
 export function car(
@@ -40,14 +40,10 @@ export function warningCodes(result: BlueprintValidation): BlueprintIssueCode[] 
   return result.issues.filter((i) => i.severity === 'warning').map((i) => i.code);
 }
 
-/** First rotation the mount allows at which the part's footprint fits, or null. */
+/** The default facing of a part on a mount it fits, or null when it does not go there. */
 export function fittingRotation(mount: MountPoint, part: AccessoryDefinition): QuarterTurn | null {
-  if (!mountAccepts(mount, part)) return null;
-  for (const turn of allowedRotations(mount, part)) {
-    const size = rotatedFootprint(part.footprint, turn);
-    if (size.w <= mount.maxFootprint.w && size.h <= mount.maxFootprint.h) return turn;
-  }
-  return null;
+  if (!mountAccepts(mount, part) || !fitsMountBox(mount, part)) return null;
+  return allowedRotations(mount, part)[0] ?? null;
 }
 
 /**

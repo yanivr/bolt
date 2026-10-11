@@ -2017,6 +2017,15 @@ button:focus-visible,
     inset -2px -2px 0 #2b3852;
 }
 
+/* The whole car: nothing is cut. The view is sized for the car and a part of ordinary height
+   on every mount; a tall part or a barrel turned outward on a high mount (a shotgun on the
+   Pickup's bed rail) may stand a few pixels past the edge of the floor, and is drawn there
+   rather than clipped. In focus the car is larger than the floor on purpose and is clipped. */
+.g-bench:not([data-focus]) .g-floor,
+.g-bench[data-focus=''] .g-floor {
+  overflow: visible;
+}
+
 /* The car takes no presses of its own: a tap beside it reaches the floor, which goes back to
    the whole car. Only the handle over the selected part is live. */
 .g-car {
@@ -2057,8 +2066,8 @@ button:focus-visible,
   stroke-dasharray: 3 3;
 }
 
-/* Which way the selected part faces: a gold chevron just ahead of it, edged to read on any
-   paint. */
+/* Which way the selected part faces: a short gold arrow from its middle, lying on the
+   bodywork and edged to read on any paint. */
 .facing polyline {
   fill: none;
   stroke-linecap: square;
@@ -2072,7 +2081,7 @@ button:focus-visible,
 
 .facing-line {
   stroke: var(--gold);
-  stroke-width: 3;
+  stroke-width: 2.5;
 }
 
 .g-grab {
@@ -3173,6 +3182,7 @@ p.g-spend.is-blocked {
 }
 
 .g-fire-row {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -3192,82 +3202,81 @@ p.g-spend.is-blocked {
   font-size: 13.5px;
 }
 
+/* One line under the fire buttons, where the card is tall enough to spare it. */
 .g-fire-note {
-  margin: 3px 0 0;
-  font-size: 12px;
-  line-height: 1.25;
-}
-
-.g-tools-grid {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  gap: 4px 12px;
-}
-
-.g-tools-actions {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 4px;
-  font-size: 13px;
-}
-
-.g-tools-actions .btn {
-  padding: 4px 8px;
-  white-space: nowrap;
-}
-
-.g-turn-row {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.g-turn-row .btn {
   flex: none;
-}
-
-.g-remove .credits {
-  margin-left: 6px;
-  font-size: 14px;
-}
-
-.g-tools-hint {
-  grid-column: 1 / -1;
-  margin: 0;
+  display: none;
+  margin: -2px 0 0;
   font-size: 12px;
   line-height: 1.25;
 }
 
-.dpad {
+@container tools (min-height: 270px) and (min-width: 388px) {
+  .g-fire-note {
+    display: block;
+  }
+}
+
+/* The narrow card has its two actions in a row under the pads and needs the height for that. */
+@container tools (min-height: 325px) {
+  .g-fire-note {
+    display: block;
+  }
+}
+
+/* Facing and Position side by side, Replace and Remove beside them. */
+.g-tools-grid {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 6px 8px;
+}
+
+/* A three-by-three pad: four arrows round a middle cell, its name in the free corner. */
+.pad {
+  flex: none;
+  position: relative;
   display: grid;
   grid-template-columns: repeat(3, 44px);
   grid-template-rows: repeat(3, 44px);
   grid-template-areas:
-    '. up .'
+    'title up .'
     'left mid right'
     '. down .';
   gap: 2px;
 }
 
-.dpad-up {
+.pad-title {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--ivory-dim);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.pad-up {
   grid-area: up;
 }
 
-.dpad-down {
+.pad-down {
   grid-area: down;
 }
 
-.dpad-left {
+.pad-left {
   grid-area: left;
 }
 
-.dpad-right {
+.pad-right {
   grid-area: right;
 }
 
-.dpad-mid {
+.pad-mid {
   grid-area: mid;
   display: grid;
   place-items: center;
@@ -3278,25 +3287,86 @@ p.g-spend.is-blocked {
   border: 1px solid #05070c;
 }
 
-/* A narrow card: the three actions stack beside the arrows, and the fire chips take the row. */
-@container tools (max-width: 349px) {
-  .g-tools-actions {
-    grid-template-columns: minmax(0, 1fr);
+.pad-car {
+  color: var(--ivory-dim);
+}
+
+/* The direction the part faces now: lit like a chosen fire button. */
+.pad-facing .btn.is-on {
+  color: var(--navy);
+  background: var(--cyan);
+  box-shadow:
+    inset var(--px) var(--px) 0 #8be9f3,
+    inset calc(var(--px) * -1) calc(var(--px) * -1) 0 #2a9aa8,
+    0 2px 0 var(--steel-dark);
+}
+
+/* A direction this mount does not have: plainly out of reach, and a press says why. */
+.pad-facing .btn[aria-disabled='true']:not(.is-on) {
+  color: #56607a;
+  background: #1a2233;
+  box-shadow: inset 0 0 0 1px #2a3348;
+}
+
+.g-tools-actions {
+  flex: 1 1 84px;
+  min-width: 84px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.g-tools-actions .btn {
+  flex: none;
+  padding: 4px 6px;
+  white-space: nowrap;
+}
+
+/* Remove carries its refund on a line of its own, so four digits never meet the edge. */
+.g-remove {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-height: 52px;
+  line-height: 1.15;
+}
+
+.g-remove-word {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.g-remove .credits {
+  font-size: 14px;
+}
+
+/* A card too narrow for two pads and a column: the two actions share a row under the pads. */
+@container tools (max-width: 387px) {
+  .has-facing .g-tools-actions {
+    flex: 1 1 100%;
+    flex-direction: row;
   }
-  .g-tools-hint,
+  .has-facing .g-tools-actions .btn {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .has-facing .g-remove {
+    flex-direction: row;
+    gap: 8px;
+    min-height: 44px;
+  }
+}
+
+@container tools (max-width: 349px) {
   .g-fire-row .g-block-title {
     display: none;
   }
   .g-fire-row .chip {
     font-size: 13px;
-  }
-  .g-turn-row {
-    gap: 6px;
-    font-size: 12px;
-    line-height: 1.2;
-  }
-  .g-tools-grid {
-    gap: 4px 8px;
   }
 }
 
@@ -4038,6 +4108,11 @@ p.g-spend.is-blocked {
   }
   .indicator {
     padding: 3px 3px 4px;
+  }
+  .indicator-top {
+    gap: 2px;
+    font-size: 11px;
+    letter-spacing: -0.02em;
   }
   .indicator-value {
     font-size: 13px;

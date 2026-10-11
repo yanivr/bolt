@@ -177,16 +177,39 @@ export const STRINGS = {
     moveDown: 'Move back',
     moveLeft: 'Move left',
     moveRight: 'Move right',
-    rotatePart: 'Rotate',
+    facingTitle: 'Facing',
+    /** The four buttons of the direction picker, relative to the car. */
+    faceTo: { 0: 'Front', 1: 'Right', 2: 'Rear', 3: 'Left' },
     facing: { 0: 'Facing forward', 1: 'Facing right', 2: 'Facing back', 3: 'Facing left' },
+    /** A mount with a single direction, said when another one is pressed. */
+    facingOnly: {
+      0: 'This mount only faces forward.',
+      1: 'This mount only faces right.',
+      2: 'This mount only faces back.',
+      3: 'This mount only faces left.',
+    },
+    /** A part that decides its own direction, and one that has none. */
+    facingFixed: {
+      0: 'This part always faces forward.',
+      1: 'This part always faces right.',
+      2: 'This part always faces back.',
+      3: 'This part always faces left.',
+    },
+    facingNone: 'This part works the same whichever way it sits.',
+    /** A direction a mount with several does not have. */
+    facingBlocked: {
+      0: "This mount can't face forward.",
+      1: "This mount can't face right.",
+      2: "This mount can't face back.",
+      3: "This mount can't face left.",
+    },
     position: 'Position {x}, {y}',
     fireButton: 'Fire button',
     firePrimary: 'Primary',
     fireSecondary: 'Secondary',
     fireAuto: 'Auto',
     fireOff: 'Off',
-    fireNote:
-      'Two weapons can have a fire button. Giving a button to this one takes it from another.',
+    fireNote: 'Two weapons can have a fire button.',
     removeRefund: 'Remove and refund {price}',
     currentPart: 'On your car now',
     swapFree: 'Even swap',
@@ -219,7 +242,6 @@ export const STRINGS = {
     loadValue: '{load}/{max} kg',
     newWarnings: 'New warning',
     clearedWarnings: 'Fixes',
-    dragHint: 'The arrows move it inside its mount. You can also drag it on the car.',
     shareMount: 'shares the rack',
     openBlueprints: 'My Blueprints',
     more: 'More',

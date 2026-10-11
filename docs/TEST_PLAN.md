@@ -13,8 +13,10 @@ the specification is the requirement list; rows are added here as milestones lan
 | `pnpm test:e2e`                   | Playwright against the production build in a phone-sized touch viewport |
 | `pnpm art:check`                  | Car atlases match the pipeline byte for byte                            |
 | `npx tsx tests/visual/capture.ts` | Screenshots and a recording for visual review                           |
-| `npx tsx tests/visual/garage.ts <url> <dir> [sizes]` | Garage states at 870x370, 667x375, 450x840 and 1440x900: the idle overview of each of the five chassis, focus on an empty slot, on a roof weapon, on the part nudged and turned, on the engine, on the outer mounts of a loaded Spider and the bed of a loaded Pickup, the compare pane, Browse All Parts, the idle Your Car panel, an illegal build |
+| `npx tsx tests/visual/garage.ts <url> <dir> [sizes]` | Garage states at 870x370, 667x375, 450x840 and 1440x900: the idle overview of each of the five chassis, focus on an empty slot, on a roof weapon, on the part nudged and turned, on the engine, on the outer mounts of a loaded Spider and the bed of a loaded Pickup, each of the five chassis with every mount filled, the compare pane, Browse All Parts, the idle Your Car panel, an illegal build |
 | `npx tsx tests/visual/loaded.ts <url> <dir>` | A race screenshot of each of the five starter cars, one a chassis |
+| `npx tsx tests/visual/card.ts <url> <dir>` | The occupied-slot card at 870x370, 870x340, 844x390, 667x375 and 450x840 (a roof weapon with a three-digit refund, a nose gun with one facing and the reason shown, non-directional parts, a fixed part, a hybrid with four fire choices), and the Road Shotgun on the Trike roof in all four facings in all four view headings |
+| `npx tsx art/scripts/preview-parts.ts [--check]` | Review sheets of the 60 mounted parts on the five chassis on all four paints, and fully loaded cars; `--check` prints cell margins and fails on a clipped part or an anchor off its drawing |
 | `npx tsx tests/feel/report.ts`    | Handling tables for every chassis (yaw, slip, radius, direction steps)  |
 | `npx tsx tests/feel/pacingReport.ts` | Frame pacing of the shipped render pipeline at 60, 90 and 120 Hz     |
 | `npx tsx tests/feel/buildsReport.ts` | Race time, top speed, launch, heat and stability of every shipped build |
@@ -256,6 +258,48 @@ and the still outline are there; nothing asserts them), the redesign on the owne
 phone (it has been checked only in headless Chromium at his viewport sizes), the 150 ms ease
 of the focus move (the tests wait for it and check where it ends, not how it looks), and
 whether a child finds the garage clear in 60 seconds.
+
+## Automated coverage added with facing, the hero pass and anchors (catalog 0.5.0)
+
+**Unit (`tests/unit/facing.test.ts`, 15 tests).** The facing of every accessory as data (the
+free, fixed and no-facing lists pinned by id); the square base of every free part at every
+turn and the footprint of the others; the allowed facings of every mount of the five chassis,
+pinned as a table and checked by category; every free part that fits a roof mount legal at all
+four turns on each chassis, through the placement rules and through `validateBlueprint`; a
+free part on any mount legal at exactly the turns that mount allows; no fixed part turnable on
+any mount it goes on, by the validator and by `rotatePart`; parts with no facing held at turn
+0; **the 884 chassis, mount and part combinations installable under catalog 0.4.0 all still
+installable** (`tests/unit/fixtures/installable-0.4.0.json`, generated from the old rules
+before the change) and the 32 gained combinations pinned by name; `partHeadingRad` and
+`partDirection` against the compositor's frame for 64 headings and four turns; every template
+legal with its fixed parts at their turn; two 0.4.0 cars migrated by `refaceBlueprint` and
+`repairBlueprint` with every part and fire button kept, and through My Blueprints storage; the
+picker's reasons in approved copy.
+
+`tests/unit/assets.test.ts` gained: every part sheet fits its cell with two clear pixels at
+all 64 headings; every boundary pixel of a part is the outline or the contact shadow color;
+every part is drawn wider than its base and every aimed weapon at least 1.6 times as long;
+every weapon has a muzzle anchor that is finite, above its mount, inside the frame margin and
+within two pixels of the drawing at all 64 headings, and ahead of its base when it has a
+facing; only the turret has a pivot; `partAnchorOffset` against hand arithmetic; every part
+icon within its tile and filling its longer side. `edit`, `blueprint`, `garageStore`, `fuzz`
+(its independent overlap oracle now uses the base rule) and `catalog` tests were updated to
+the rule.
+
+**End to end (`tests/e2e/garage.spec.ts`).** The Road Shotgun bought onto the Trike roof
+faces forward as installed, then backward, then forward: the picker's radio state, the sheet
+frame the canvas really drew the part with (`data-part-frames`, written by `drawCar` from the
+compositor's operations) and the direction of the arrow on the car all agree, for all four
+facings in all four view headings, and R steps through them. A radar has no picker and no
+arrow; a mine and a bumper have no picker and an arrow pointing the way they work, and R says
+so. The part card at 870 x 370, 870 x 340, 844 x 390 and 667 x 375, for a roof weapon with a
+three-digit refund and for a non-directional part with one: nothing scrolls, every button,
+pad, label, readout and the refund is inside the panel and the viewport, no button is
+clipped, covered, overlapping another or under 44 px, a four-digit refund still fits, and the
+help paragraph is gone.
+
+Not automated here: whether the redrawn parts read on a real phone (developer review of the
+preview sheets only), and the combat use of the anchors (Milestone C).
 
 ## Cannot be verified from this repository
 

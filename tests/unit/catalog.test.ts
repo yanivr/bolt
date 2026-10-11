@@ -29,14 +29,13 @@ import {
   TURRET_BLOCKED_COPY,
   accessoryMounts,
   aggregateModifiers,
-  allowedRotations,
+  fitsMountBox,
   emptyTotals,
   applyModifier,
   engineMount,
   mountAccepts,
   rectAround,
   rectsConflict,
-  rotatedFootprint,
   validateBlueprint,
   wheelKitMass,
   wheelKitPrice,
@@ -361,12 +360,7 @@ describe('catalog: 105 parts, five chassis and the exact seed values of Sections
       // Every accessory has a home on at least one of the five frames.
       const homes = CHASSIS_LIST.filter((chassis) =>
         accessoryMounts(chassis).some(
-          (mount) =>
-            mountAccepts(mount, part) &&
-            allowedRotations(mount, part).some((turn) => {
-              const size = rotatedFootprint(part.footprint, turn);
-              return size.w <= mount.maxFootprint.w && size.h <= mount.maxFootprint.h;
-            }),
+          (mount) => mountAccepts(mount, part) && fitsMountBox(mount, part),
         ),
       );
       expect(

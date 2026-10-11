@@ -3,7 +3,7 @@ import { CAR_HEADINGS } from '@bolt/shared';
 import { useEffect, useRef, useState } from 'react';
 import type { GameManifests } from '../game/assets.js';
 import type { CarSheets } from './carSprites.js';
-import { drawCar, loadCarSheets } from './carSprites.js';
+import { CAR_CANVAS_PAD, drawCar, loadCarSheets } from './carSprites.js';
 
 type Props = {
   manifests: GameManifests;
@@ -113,9 +113,14 @@ export function CarCanvas({
     <canvas
       ref={ref}
       className={className ? `car-canvas ${className}` : 'car-canvas'}
-      width={size}
-      height={size}
-      style={{ width: size * scale, height: size * scale }}
+      width={size + 2 * CAR_CANVAS_PAD}
+      height={size + 2 * CAR_CANVAS_PAD}
+      style={{
+        width: (size + 2 * CAR_CANVAS_PAD) * scale,
+        height: (size + 2 * CAR_CANVAS_PAD) * scale,
+        // Pulled back by the pad, so the element takes the room of the chassis cell alone.
+        margin: -CAR_CANVAS_PAD * scale,
+      }}
       aria-hidden="true"
     />
   );

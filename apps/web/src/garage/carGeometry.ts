@@ -13,7 +13,15 @@ import type { BenchMount, Box, FocusInput } from './benchLayout.js';
 /** Headings the rotate-view control steps through: three-quarter views, nose right or left. */
 export const VIEW_FRAMES: readonly number[] = [18, 46, 50, 14];
 
-/** Sprite pixels a mounted part may stand above its mount. */
+/**
+ * Sprite pixels a mounted part may stand above its mount, for the overview's sizing and the
+ * box focus mode frames. It is less than the tallest parts stand (a radar dish is about 13
+ * pixels up): the overview is sized so the Spider is drawn at three times on a 370 pixel
+ * phone, and its two roof mounts have exactly the room for a part 16 authored units tall.
+ * The art keeps to that (docs/ART_GUIDE.md), and an end-to-end test loads the Spider's roof
+ * with the tallest of them. Barrels that reach past a nose or a tail run along the car, where
+ * the floor has room.
+ */
 const PART_HEIGHT = 6;
 /** Sprite pixels a tire stands above the ground. */
 const TIRE_HEIGHT = 8;

@@ -4,6 +4,7 @@ import {
   accessoryMounts,
   allowedRotations,
   blueprintCost,
+  fitsMountBox,
   canonicalizeBlueprint,
   findMount,
   mountAccepts,
@@ -11,7 +12,6 @@ import {
   own,
   placePart,
   resolveBlueprint,
-  rotatedFootprint,
   snapOffset,
 } from './blueprint.js';
 import { clamp } from './math.js';
@@ -241,9 +241,8 @@ function placementOnMount(
     ]);
   for (const [sx, sy] of OFFSET_TRIES)
     offsets.push([sx * Math.floor(mount.regionHalfW), sy * Math.floor(mount.regionHalfH)]);
+  if (!fitsMountBox(mount, def)) return null;
   for (const rotation of rotations) {
-    const size = rotatedFootprint(def.footprint, rotation);
-    if (size.w > mount.maxFootprint.w || size.h > mount.maxFootprint.h) continue;
     for (const [offsetX, offsetY] of offsets) {
       const candidate = placePart(
         {
@@ -398,8 +397,8 @@ export function removePart(
 
 /**
  * Moves a part: to another mount, to another offset on its mount, or both. Omitted fields
- * keep their value, except that a change of mount resets the offset to the centre and picks
- * a legal rotation when the current one is not allowed there.
+ * keep their value, except that a change of mount resets the offset to the centre and takes
+ * the new mount's default facing when the current one is not allowed there.
  */
 export function movePart(
   blueprint: VehicleBlueprint,
@@ -419,12 +418,7 @@ export function movePart(
   let rotation = to.rotationQuarterTurns ?? current.rotationQuarterTurns;
   if (to.rotationQuarterTurns === undefined && changedMount) {
     const allowed = allowedRotations(mount, def);
-    const fits = (r: QuarterTurn) => {
-      const size = rotatedFootprint(def.footprint, r);
-      return size.w <= mount.maxFootprint.w && size.h <= mount.maxFootprint.h;
-    };
-    if (!allowed.includes(rotation) || !fits(rotation))
-      rotation = allowed.find(fits) ?? allowed[0] ?? 0;
+    if (!allowed.includes(rotation)) rotation = allowed[0] ?? 0;
   }
   const moved: BlueprintPart = {
     ...current,
@@ -441,8 +435,9 @@ export function movePart(
 }
 
 /**
- * Turns a part. Pass an absolute orientation, or omit it to step to the next orientation
- * the mount allows and the footprint fits.
+ * Turns a part. Pass the facing wanted (0 front, 1 right, 2 rear, 3 left), or omit it to step
+ * clockwise to the next facing its mount allows. A part with a fixed facing or none is
+ * refused with `BAD_ROTATION`.
  */
 export function rotatePart(
   blueprint: VehicleBlueprint,
@@ -649,6 +644,30 @@ export function assignActionSlot(
   return commit(blueprint, { ...blueprint, parts }, catalog, [], instanceId);
 }
 
+/**
+ * Gives every installed part a facing that today's rules allow, changing nothing else. A
+ * part whose saved quarter turn is still legal keeps it; otherwise it takes its fixed turn,
+ * or its mount's default. This is the whole migration from catalogs before 0.5.0, where a
+ * part's turn was also how its footprint was made to fit: a Road Mine saved at turn 0 now
+ * faces back, a plate turned sideways to fit a narrow nose now faces forward. Nothing is
+ * removed and nothing is bought.
+ */
+export function refaceBlueprint(blueprint: VehicleBlueprint, catalog: Catalog): VehicleBlueprint {
+  const chassis = own(catalog.chassis, blueprint.chassisId);
+  if (!chassis) return blueprint;
+  let changed = false;
+  const parts = blueprint.parts.map((part) => {
+    const def = own(catalog.parts, part.partId);
+    const mount = findMount(chassis, part.mountId);
+    if (!def || !mount) return part;
+    const allowed = allowedRotations(mount, def);
+    if (allowed.includes(part.rotationQuarterTurns)) return part;
+    changed = true;
+    return { ...part, rotationQuarterTurns: allowed[0] ?? 0 };
+  });
+  return changed ? { ...blueprint, parts } : blueprint;
+}
+
 export type RepairResult =
   | { ok: true; blueprint: VehicleBlueprint; removed: RemovedPart[]; spend: SpendBreakdown }
   | { ok: false; blueprint: VehicleBlueprint; removed: RemovedPart[]; issues: BlueprintIssue[] };
@@ -716,7 +735,8 @@ function rehomeOnFallback(
 
 /**
  * The explicit auto-repair of Section 15.6. The blueprint is re-stamped with the current
- * catalog version, then optional parts are removed until it is legal: first any part an
+ * catalog version and every part is given a facing the rules allow (`refaceBlueprint`), then
+ * optional parts are removed until it is legal: first any part an
  * error points at, otherwise any part, always the most expensive first. The chassis, engine
  * and wheel kit are never touched, so a blueprint whose essentials are themselves illegal
  * cannot be repaired and comes back with its remaining issues. The one exception is a chassis
@@ -729,10 +749,9 @@ export function repairBlueprint(
   catalog: Catalog,
   options: RepairOptions = {},
 ): RepairResult {
-  let next: VehicleBlueprint = canonicalizeBlueprint({
-    ...blueprint,
-    catalogVersion: catalog.version,
-  });
+  let next: VehicleBlueprint = canonicalizeBlueprint(
+    refaceBlueprint({ ...blueprint, catalogVersion: catalog.version }, catalog),
+  );
   const removed: RemovedPart[] = [];
   if (options.fallbackChassisId !== undefined && !own(catalog.chassis, blueprint.chassisId)) {
     const rehomed = rehomeOnFallback(blueprint, catalog, options.fallbackChassisId);
