@@ -42,7 +42,14 @@ const STALL_FORGIVE_TICKS = Math.round(0.5 * SIM_HZ);
 export class InputPacer {
   private readonly queue: InputQueue;
   /** The sample most recently consumed. Reused while the queue runs dry. */
-  private readonly applied: ControlInput = { steer: 0, brake: 0, coast: true };
+  private readonly applied: ControlInput = {
+    steer: 0,
+    brake: 0,
+    coast: true,
+    fire: 0,
+    use: 0,
+    target: 0,
+  };
   private hasApplied = false;
   /** Highest sequence ever queued. Survives resets and reconnects so replays stay rejected. */
   private lastQueued = -1;

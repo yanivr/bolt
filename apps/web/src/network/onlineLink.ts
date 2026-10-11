@@ -1,12 +1,27 @@
 import type {
   CarSnapshot,
   DriveJoinOptions,
+  HazardSnapshot,
   InputSample,
   MatchPhase,
+  ModuleSnapshot,
   PlayerInputMessage,
+  ProjectileSnapshot,
   RaceEvent,
+  RaceResult,
+  RaceSnapshot,
+  RivalSnapshot,
+  StatusSnapshot,
 } from '@bolt/shared';
-import { ClientMessage, JOIN_ERROR_CODES, ROOM_DRIVE, ServerMessage } from '@bolt/shared';
+import {
+  ClientMessage,
+  HAZARD_KINDS,
+  JOIN_ERROR_CODES,
+  PROJECTILE_KINDS,
+  ROOM_DRIVE,
+  STATUS_FAMILIES,
+  ServerMessage,
+} from '@bolt/shared';
 import type { Room } from 'colyseus.js';
 import { Client } from 'colyseus.js';
 import { serverOrigin } from './api.js';
@@ -50,7 +65,61 @@ type DriveStateView = {
   lastCheckpointMs: number;
   wrongWaySeconds: number;
   finishedAtMs: number;
+  fx?: {
+    drive: number;
+    speedCap: number;
+    grip: number;
+    steerBias: number;
+    steerScale: number;
+    steerLag: number;
+    rollingAdd: number;
+    heatFactor: number;
+    auxLimit: number;
+    driveSupplyLimit: number;
+    stabilityAdd: number;
+    airborne: boolean;
+  };
+  combat?: {
+    chassis: number;
+    chassisMax: number;
+    armor: Iterable<number>;
+    components: Iterable<number>;
+    statuses: Iterable<StatusView>;
+    modules: Iterable<ModuleSnapshot>;
+    reserve: number;
+    lockWarning: number;
+    ko: boolean;
+  };
+  race?: {
+    phase: string;
+    clockMs: number;
+    position: number;
+    gapMeters: number;
+    gapSeconds: number;
+    rivalTracked: boolean;
+    finishWindowEndTick: number;
+    resultWinner: number;
+    resultJson: string;
+  };
+  rival?: RivalView;
+  rivalBlueprint: string;
+  projectiles?: { forEach(fn: (value: ProjectileView) => void): void };
+  hazards?: { forEach(fn: (value: HazardView) => void): void };
 };
+
+type StatusView = { magnitude: number; untilTick: number };
+type RivalView = Omit<
+  RivalSnapshot,
+  'armor' | 'components' | 'statuses' | 'modules' | 'finishedAtMs'
+> & {
+  finishedAtMs: number;
+  armor: Iterable<number>;
+  components: Iterable<number>;
+  statuses: Iterable<StatusView>;
+  modules: Iterable<{ state: number; aim: number; up: boolean }>;
+};
+type ProjectileView = Omit<ProjectileSnapshot, 'kind'> & { kind: number };
+type HazardView = Omit<HazardSnapshot, 'kind'> & { kind: number };
 
 export type JoinFailure = 'version' | 'unauthorized' | 'build' | 'unavailable';
 
@@ -62,7 +131,104 @@ export class JoinError extends Error {
 
 const RECONNECT_WINDOW_MS = 18_000;
 
+/** One status entry per family on the wire; only the ones still running are kept. */
+function statusList(statuses: Iterable<StatusView> | undefined, tick: number): StatusSnapshot[] {
+  const out: StatusSnapshot[] = [];
+  if (!statuses) return out;
+  let index = 0;
+  for (const status of statuses) {
+    const family = STATUS_FAMILIES[index++];
+    if (family && status.untilTick > tick)
+      out.push({ family, magnitude: status.magnitude, untilTick: status.untilTick });
+  }
+  return out;
+}
+
+/** The race around the local car, rebuilt from the synchronized state. */
+function toRace(state: DriveStateView, car: CarSnapshot): RaceSnapshot | null {
+  const rival = state.rival;
+  const info = state.race;
+  if (!rival || !info) return null;
+  const projectiles: ProjectileSnapshot[] = [];
+  state.projectiles?.forEach((p) =>
+    projectiles.push({
+      id: p.id,
+      kind: PROJECTILE_KINDS[p.kind] ?? 'bullet',
+      owner: p.owner,
+      x: p.x,
+      y: p.y,
+      vx: p.vx,
+      vy: p.vy,
+      tick: p.tick,
+      landTick: p.landTick,
+    }),
+  );
+  const hazards: HazardSnapshot[] = [];
+  state.hazards?.forEach((h) =>
+    hazards.push({
+      id: h.id,
+      kind: HAZARD_KINDS[h.kind] ?? 'mine',
+      owner: h.owner,
+      x: h.x,
+      y: h.y,
+      radius: h.radius,
+      halfLength: h.halfLength,
+      angle: h.angle,
+      armedTick: h.armedTick,
+      endTick: h.endTick,
+      revealed: h.revealed,
+    }),
+  );
+  let result: RaceResult | null = null;
+  if (info.resultJson) {
+    try {
+      result = JSON.parse(info.resultJson) as RaceResult;
+    } catch {
+      result = null;
+    }
+  }
+  return {
+    tick: state.tick,
+    you: 0,
+    phase: info.phase as MatchPhase,
+    raceTimeMs: info.clockMs,
+    car,
+    rival: {
+      x: rival.x,
+      y: rival.y,
+      headingRad: rival.headingRad,
+      velocityX: rival.velocityX,
+      velocityY: rival.velocityY,
+      steeringInput: rival.steeringInput,
+      braking: rival.braking,
+      lap: rival.lap,
+      checkpointIndex: rival.checkpointIndex,
+      courseProgress: rival.courseProgress,
+      finishedAtMs: rival.finishedAtMs < 0 ? null : rival.finishedAtMs,
+      chassis: rival.chassis,
+      chassisMax: rival.chassisMax,
+      armor: Array.from(rival.armor ?? []),
+      components: Array.from(rival.components ?? []),
+      statuses: statusList(rival.statuses, state.tick),
+      modules: Array.from(rival.modules ?? [], (m) => ({ state: m.state, aim: m.aim, up: m.up })),
+      ko: rival.ko,
+      buildHash: rival.buildHash,
+    },
+    rivalBlueprint: state.rivalBlueprint ?? '',
+    projectiles,
+    hazards,
+    position: info.position,
+    gapMeters: info.gapMeters,
+    gapSeconds: info.gapSeconds,
+    rivalTracked: info.rivalTracked,
+    finishWindowEndTick: info.finishWindowEndTick,
+    result,
+  };
+}
+
 function toSnapshot(state: DriveStateView): CarSnapshot {
+  const fx = state.fx;
+  const combat = state.combat;
   return {
     tick: state.tick,
     ackSequence: state.ackSequence,
@@ -104,6 +270,47 @@ function toSnapshot(state: DriveStateView): CarSnapshot {
     lastLapMs: state.lastLapMs,
     wheelIntegrity: state.wheelIntegrity ? Array.from(state.wheelIntegrity) : [],
     buildHash: state.buildHash ?? '',
+    ...(fx
+      ? {
+          effects: {
+            drive: fx.drive,
+            speedCap: fx.speedCap < 0 ? Infinity : fx.speedCap,
+            grip: fx.grip,
+            steerBias: fx.steerBias,
+            steerScale: fx.steerScale,
+            steerLag: fx.steerLag,
+            rollingAdd: fx.rollingAdd,
+            heatFactor: fx.heatFactor,
+            auxLimit: fx.auxLimit,
+            driveSupplyLimit: fx.driveSupplyLimit,
+            stabilityAdd: fx.stabilityAdd,
+            airborne: fx.airborne,
+          },
+        }
+      : {}),
+    ...(combat
+      ? {
+          combat: {
+            chassis: combat.chassis,
+            chassisMax: combat.chassisMax,
+            armor: Array.from(combat.armor ?? []),
+            components: Array.from(combat.components ?? []),
+            statuses: statusList(combat.statuses, state.tick),
+            modules: Array.from(combat.modules ?? [], (m) => ({
+              state: m.state,
+              charges: m.charges,
+              readyTick: m.readyTick,
+              cooldownTicks: m.cooldownTicks,
+              aim: m.aim,
+              locked: m.locked,
+              pool: m.pool,
+            })),
+            reserve: combat.reserve,
+            lockWarning: combat.lockWarning,
+            ko: combat.ko,
+          },
+        }
+      : {}),
   };
 }
 
@@ -111,13 +318,15 @@ function toSnapshot(state: DriveStateView): CarSnapshot {
 export class OnlineLink implements DriveLink {
   readonly mode = 'online' as const;
   onSnapshot: ((snapshot: CarSnapshot) => void) | null = null;
+  onRace: ((race: RaceSnapshot) => void) | null = null;
   onEvent: ((event: RaceEvent) => void) | null = null;
   onStatus: ((status: LinkStatus) => void) | null = null;
   latencyMs = 0;
   private room: Room<DriveStateView>;
   private closed = false;
   private sentAt = new Map<number, number>();
-  private seenEvents = new Set<number>();
+  /** Highest event id delivered. Ids only grow, so anything at or below it is a repeat. */
+  private lastEventId = 0;
 
   private constructor(
     private readonly client: Client,
@@ -127,10 +336,25 @@ export class OnlineLink implements DriveLink {
     this.bind(room);
   }
 
+  /** The rival's canonical blueprint JSON, as the server published it at join. */
+  get rivalBlueprint(): string {
+    return this.room.state?.rivalBlueprint ?? '';
+  }
+
   static async join(options: DriveJoinOptions): Promise<OnlineLink> {
     const client = new Client(serverOrigin());
     try {
       const room = await client.joinOrCreate<DriveStateView>(ROOM_DRIVE, options);
+      // The first state carries the rival's blueprint, which the race view needs before it
+      // can load that car's art.
+      await new Promise<void>((resolve) => {
+        if (room.state?.rivalBlueprint) return resolve();
+        const timer = window.setTimeout(resolve, 3000);
+        room.onStateChange.once(() => {
+          window.clearTimeout(timer);
+          resolve();
+        });
+      });
       return new OnlineLink(client, room);
     } catch (error) {
       const code = (error as { code?: number }).code;
@@ -152,12 +376,18 @@ export class OnlineLink implements DriveLink {
         this.latencyMs = this.latencyMs === 0 ? rtt : this.latencyMs * 0.85 + rtt * 0.15;
         for (const key of this.sentAt.keys()) if (key <= state.ackSequence) this.sentAt.delete(key);
       }
-      this.onSnapshot?.(toSnapshot(state));
+      const car = toSnapshot(state);
+      this.onSnapshot?.(car);
+      if (this.onRace) {
+        const race = toRace(state, car);
+        if (race) this.onRace(race);
+      }
     });
     room.onMessage(ServerMessage.RACE_EVENT, (event: RaceEvent) => {
-      // Events carry unique ids so a resend after a reconnect never replays an effect.
-      if (this.seenEvents.has(event.id)) return;
-      this.seenEvents.add(event.id);
+      // Events carry increasing ids, so a resend after a reconnect never replays an effect
+      // (Section 13.6: network correction must not replay the same effect twice).
+      if (event.id <= this.lastEventId) return;
+      this.lastEventId = event.id;
       this.onEvent?.(event);
     });
     room.onMessage(ServerMessage.MATCH_PHASE, () => undefined);
@@ -210,6 +440,7 @@ export class OnlineLink implements DriveLink {
   leave(): void {
     this.closed = true;
     this.onSnapshot = null;
+    this.onRace = null;
     this.onEvent = null;
     this.onStatus = null;
     void this.room.leave(true).catch(() => undefined);

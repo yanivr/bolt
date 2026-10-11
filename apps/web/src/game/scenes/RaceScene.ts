@@ -1,12 +1,17 @@
 import type {
+  BuildConditions,
+  ControlInput,
   MountedPartSprite,
   CarPose,
   CarSnapshot,
   DriveSession,
   InputSample,
   RaceEvent,
+  RaceSnapshot,
+  ResolvedBuild,
   TerrainOverlay,
   VehicleLoadout,
+  VehicleParams,
 } from '@bolt/shared';
 import {
   MAX_INPUTS_PER_PACKET,
@@ -38,6 +43,8 @@ import { createPaintedBody } from '../composition/paint.js';
 import { Effects } from '../particles/Effects.js';
 import type { SimPose } from '../rendering/frame.js';
 import { BodyMotion, RenderPipeline } from '../rendering/frame.js';
+import type { RivalSprites } from './CombatDebugView.js';
+import { CombatDebugView, rivalSheets } from './CombatDebugView.js';
 
 export type RaceSceneConfig = {
   manifests: GameManifests;
@@ -46,6 +53,13 @@ export type RaceSceneConfig = {
   loadout: VehicleLoadout;
   /** Mounted accessories that have art, positioned for the compositor. */
   parts: MountedPartSprite[];
+  /** The local car's build and race conditions, so prediction can follow part failures. */
+  build: ResolvedBuild;
+  conditions: BuildConditions;
+  /** The other car: its art, and its body for predicting contact. Null when it cannot be drawn. */
+  rival: (RivalSprites & { params: VehicleParams }) | null;
+  /** Showcase scenarios: the local car's controls come from here instead of the driver. */
+  script: ((session: DriveSession) => ControlInput) | null;
   input: DriveInput;
   audio: EngineAudio;
   /** Development aid: a centerline driver replaces the controls for capture and soak runs. */
@@ -96,6 +110,13 @@ export class RaceScene extends Phaser.Scene {
   private forwardAccel = 0;
   private scratchPose: SimPose = { x: 0, y: 0, heading: 0, vx: 0, vy: 0 };
   private driverScratch = createDriverScratch();
+  // DEBUG VISUAL: replaced in Milestone C part 2
+  private combat: CombatDebugView | null = null;
+  private race: RaceSnapshot | null = null;
+  private readonly buttons = { fire: 0, use: 0 };
+  private readonly control: ControlInput = { steer: 0, brake: 0, coast: true, fire: 0, use: 0 };
+  private eventCount = 0;
+  private lastEvent = '';
 
   constructor() {
     super('race');
@@ -104,6 +125,8 @@ export class RaceScene extends Phaser.Scene {
   init(data: RaceSceneConfig): void {
     this.cfg = data;
     this.predictor = new Predictor(data.session);
+    this.predictor.setBuild(data.build, data.conditions);
+    this.predictor.setRivalBody(data.rival ? data.rival.params : null);
   }
 
   preload(): void {
@@ -139,6 +162,11 @@ export class RaceScene extends Phaser.Scene {
       const ref = manifests.cars.parts?.[partId];
       if (ref) sheet(`part:${partId}`, manifests.carsBase, ref.sheet);
     }
+    // DEBUG VISUAL: replaced in Milestone C part 2. The rival is drawn with the ordinary car
+    // compositor; its sheets load beside the local car's (same keys are simply shared).
+    if (this.cfg.rival)
+      for (const [key, ref] of rivalSheets(manifests, this.cfg.rival))
+        if (!this.textures.exists(key)) sheet(key, manifests.carsBase, ref);
     for (const strip of Object.values(manifests.vfx.strips))
       sheet(`vfx:${strip.id}`, manifests.vfxBase, strip);
     for (const chunk of manifests.terrain.ground)
@@ -217,10 +245,13 @@ export class RaceScene extends Phaser.Scene {
       this.cfg.parts,
     );
     this.car.container.setDepth(DEPTH_CAR);
+    // DEBUG VISUAL: replaced in Milestone C part 2
+    this.combat = new CombatDebugView(this, manifests, this.cfg.rival, DEPTH_CAR);
 
     this.pipeline.place(this.readPose());
 
     this.cfg.link.onSnapshot = (snapshot) => this.onSnapshot(snapshot);
+    this.cfg.link.onRace = (race) => this.onRace(race);
     this.cfg.link.onEvent = (event) => this.onRaceEvent(event);
     this.cfg.link.onStatus = (status) => useHud.setState({ linkStatus: status });
     useHud.setState({
@@ -238,8 +269,11 @@ export class RaceScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off('resize', this.layout, this);
       this.cfg.link.onSnapshot = null;
+      this.cfg.link.onRace = null;
       this.cfg.link.onEvent = null;
       this.cfg.link.onStatus = null;
+      this.combat?.destroy();
+      this.combat = null;
     });
     this.cfg.onReady();
   }
@@ -293,8 +327,21 @@ export class RaceScene extends Phaser.Scene {
     this.pipeline.poses.rebase(this.readPose(), m.x - bx, m.y - by, angleDelta(bh, m.headingRad));
   }
 
+  /** The race around the local car: the rival, projectiles, hazards and standings. */
+  private onRace(race: RaceSnapshot): void {
+    this.race = race;
+    this.predictor.setRival(race.rival, race.tick);
+    this.combat?.onRace(race, performance.now());
+  }
+
   private onRaceEvent(event: RaceEvent): void {
-    if (event.type === 'finish') useHud.setState({ finished: true });
+    // Lap and finish events now come for both cars; only the local car's end the local race.
+    if (event.type === 'finish' && event.car === (this.race?.you ?? 0))
+      useHud.setState({ finished: true });
+    if (event.type === 'result') useHud.setState({ finished: true });
+    this.combat?.onEvent(event);
+    this.eventCount++;
+    if (event.type !== 'checkpoint' && event.type !== 'position') this.lastEvent = event.type;
   }
 
   /** Puts the car back on the grid for another run. */
@@ -302,6 +349,8 @@ export class RaceScene extends Phaser.Scene {
     this.predictor.clearPending();
     this.outbox.length = 0;
     this.effects.clear();
+    this.combat?.clear();
+    this.race = null;
     this.cfg.link.resetCar();
     this.pipeline.camera.cut();
     useHud.setState({ finished: false });
@@ -333,6 +382,8 @@ export class RaceScene extends Phaser.Scene {
     );
     this.cameras.main.setScroll(view.scrollX, view.scrollY);
     this.effects.update(dt);
+    // DEBUG VISUAL: replaced in Milestone C part 2
+    this.combat?.update(performance.now(), dt, Math.max(1, Math.round(this.cfg.view.scale)));
 
     // --- Car pose ------------------------------------------------------------------------------
     const speed = t.speed;
@@ -388,8 +439,9 @@ export class RaceScene extends Phaser.Scene {
   private simulate(): void {
     const session = this.predictor.session;
     const input = this.cfg.input;
-    const control =
-      this.cfg.autopilot && !input.touching
+    const source = this.cfg.script
+      ? this.cfg.script(session)
+      : this.cfg.autopilot && !input.touching
         ? driveCenterline(
             session.track,
             session.motion,
@@ -398,6 +450,22 @@ export class RaceScene extends Phaser.Scene {
             this.driverScratch,
           )
         : input.sample(session.motion, session.params, session.telemetry.grip);
+    // The two fire buttons and the utility buttons ride along with the driving sample. A
+    // scenario's script supplies its own.
+    const control = this.control;
+    control.steer = source.steer;
+    control.brake = source.brake;
+    control.coast = source.coast;
+    if (this.cfg.script) {
+      control.fire = source.fire ?? 0;
+      control.use = source.use ?? 0;
+      control.target = source.target ?? 0;
+    } else {
+      input.buttons(this.buttons);
+      control.fire = this.buttons.fire;
+      control.use = this.buttons.use;
+      control.target = 0;
+    }
     const before = session.telemetry.forwardSpeed;
     const { sample } = this.predictor.step(control);
     this.forwardAccel =
@@ -554,6 +622,16 @@ export class RaceScene extends Phaser.Scene {
       pendingInputs: this.predictor.pendingCount,
       corrections: this.predictor.corrections,
       maxCorrection: this.predictor.maxCorrection,
+      position: this.race?.position ?? 1,
+      gapMeters: this.race?.gapMeters ?? 0,
+      chassis: Math.round(this.race?.car.combat?.chassis ?? 0),
+      rivalChassis: Math.round(this.race?.rival.chassis ?? 0),
+      projectiles: this.race?.projectiles.length ?? 0,
+      hazards: this.race?.hazards.length ?? 0,
+      raceEvents: this.eventCount,
+      lastEvent: this.lastEvent,
+      statuses: this.race?.car.combat?.statuses.map((status) => status.family).join(' ') ?? '',
+      result: this.race?.result ? `${this.race.result.reason}:${this.race.result.winner}` : '',
       renderer: this.game.config.renderType === Phaser.WEBGL ? 'webgl' : 'canvas',
     });
   }

@@ -3,6 +3,8 @@ export * from './chassis.js';
 export * from './defenses.js';
 export * from './engines.js';
 export * from './loadout.js';
+export * from './rivals.js';
+export * from './scenarios.js';
 export * from './strings.js';
 export * from './templates.js';
 export * from './tires.js';

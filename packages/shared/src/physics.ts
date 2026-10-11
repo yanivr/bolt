@@ -21,6 +21,7 @@ import {
   SHOULDER_GRIP_FACTOR,
   SHOULDER_ROLLING_DECEL,
   SCRUB_FULL_SLIP,
+  SLOW_ONSET_DECEL,
   STABILITY_MAX,
   STABILITY_MIN,
   STEER_BLEND_SHARPNESS,
@@ -54,6 +55,7 @@ import { createLocation, locate, surfaceAt } from './track.js';
 import type {
   RaceEnvironment,
   SurfaceId,
+  VehicleEffects,
   VehicleMotionState,
   VehicleParams,
   VehicleTelemetry,
@@ -79,9 +81,54 @@ export type ControlInput = {
   brake: number;
   /** True when nobody is touching the controls: gentle throttle, wheels straight. */
   coast: boolean;
+  /** Fire buttons held: bit 0 primary, bit 1 secondary. The integrator ignores it. */
+  fire?: number;
+  /** Manual utilities held, one bit each in blueprint order. The integrator ignores it. */
+  use?: number;
+  /** Repair target: 0 automatic, otherwise component index + 1. The integrator ignores it. */
+  target?: number;
 };
 
 export const NEUTRAL_INPUT: ControlInput = Object.freeze({ steer: 0, brake: 0, coast: true });
+
+/** A car that nothing is acting on. Stepping with these is exactly stepping without effects. */
+export function createEffects(): VehicleEffects {
+  return {
+    drive: 1,
+    speedCap: Infinity,
+    grip: 1,
+    steerBias: 0,
+    steerScale: 1,
+    steerLag: 0,
+    rollingAdd: 0,
+    heatFactor: 1,
+    auxLimit: 1,
+    driveSupplyLimit: 1,
+    stabilityAdd: 0,
+    airborne: false,
+  };
+}
+
+export const NEUTRAL_EFFECTS: VehicleEffects = Object.freeze(createEffects());
+
+export function copyEffects(from: VehicleEffects, to: VehicleEffects): void {
+  to.drive = from.drive;
+  to.speedCap = from.speedCap;
+  to.grip = from.grip;
+  to.steerBias = from.steerBias;
+  to.steerScale = from.steerScale;
+  to.steerLag = from.steerLag;
+  to.rollingAdd = from.rollingAdd;
+  to.heatFactor = from.heatFactor;
+  to.auxLimit = from.auxLimit;
+  to.driveSupplyLimit = from.driveSupplyLimit;
+  to.stabilityAdd = from.stabilityAdd;
+  to.airborne = from.airborne;
+}
+
+export function resetEffects(fx: VehicleEffects): void {
+  copyEffects(NEUTRAL_EFFECTS, fx);
+}
 
 /**
  * A car at rest. Pass the car's params so the battery starts full for that build; without
@@ -334,6 +381,7 @@ export function stepPowertrain(
   dt: number,
   out: PowertrainOutput,
   telemetry: VehicleTelemetry,
+  fx: VehicleEffects = NEUTRAL_EFFECTS,
 ): void {
   const engine = params.engine;
   let output = 1;
@@ -391,7 +439,8 @@ export function stepPowertrain(
   const driveNeed = power.drivetrainDraw * throttle * dt;
   if (driveNeed > 0) {
     demand += driveNeed;
-    driveSupply = Math.min(1, available / driveNeed);
+    // An EMP holds an electric drivetrain down to its protected minimum (Section 8.1).
+    driveSupply = Math.min(fx.driveSupplyLimit, available / driveNeed);
     available -= driveNeed * driveSupply;
     // The drivetrain is served first and still keeps a protected minimum when starved.
     if (driveSupply < 1) output *= Math.max(DRIVETRAIN_MIN_SUPPLY, driveSupply);
@@ -407,7 +456,7 @@ export function stepPowertrain(
   for (let i = 0; i < consumers.length; i++) {
     const consumer = consumers[i]!;
     const need = consumer.draw * dt;
-    const supply = need > 0 ? Math.min(1, Math.max(0, available) / need) : 1;
+    const supply = need > 0 ? Math.min(fx.auxLimit, Math.max(0, available) / need) : fx.auxLimit;
     available -= need * supply;
     demand += need;
     auxNeed += need;
@@ -436,10 +485,15 @@ export function stepPowertrain(
         1,
       );
   output *= 1 - penalty;
+  // Damage, limp-home and boosts act on what the engine delivers, after its own limits.
+  output *= fx.drive;
 
   const work = heat.idleFraction + (1 - heat.idleFraction) * throttle * output;
   const production =
-    heat.enginePerSecond * work * (throttle < PARTIAL_LOAD_THROTTLE ? heat.partialLoadFactor : 1) +
+    heat.enginePerSecond *
+      fx.heatFactor *
+      work *
+      (throttle < PARTIAL_LOAD_THROTTLE ? heat.partialLoadFactor : 1) +
     heat.constantPerSecond;
   const airflow = AIRFLOW_STILL + (1 - AIRFLOW_STILL) * Math.min(1, speed / AIRFLOW_FULL_SPEED);
   const shed =
@@ -472,7 +526,9 @@ export function stepPowertrain(
       : state.coreHeat >= HEAT_WARNING
         ? 1
         : 0;
-  telemetry.lowPower = driveSupply < 1 || auxGot < auxNeed - 1e-9;
+  telemetry.lowPower =
+    (driveNeed > 0 && driveSupply < fx.driveSupplyLimit) ||
+    (fx.auxLimit >= 1 && auxGot < auxNeed - 1e-9);
 }
 
 /**
@@ -547,18 +603,21 @@ export function stepVehicle(
   dt: number,
   scratch: StepScratch,
   telemetry: VehicleTelemetry,
+  effects: VehicleEffects = NEUTRAL_EFFECTS,
 ): void {
   // --- 1. Filter the commanded steering -------------------------------------------------------
-  const steerTarget = input.coast
-    ? 0
-    : clamp(Number.isFinite(input.steer) ? input.steer : 0, -1, 1);
+  let steerTarget = input.coast ? 0 : clamp(Number.isFinite(input.steer) ? input.steer : 0, -1, 1);
+  // Damaged steering has less lock, and a damaged wheel pulls the car toward its side.
+  if (effects.steerScale !== 1 || effects.steerBias !== 0)
+    steerTarget = clamp(steerTarget * effects.steerScale + effects.steerBias, -1, 1);
+  const air = effects.airborne;
   // Returning toward centre is a release. Crossing over to the other side is not: it engages at
   // the quicker rate all the way through, so a left-right flick has no kink at the centre.
   const releasing =
     Math.abs(steerTarget) < Math.abs(state.steeringInput) && steerTarget * state.steeringInput >= 0;
   state.steeringInput +=
     (steerTarget - state.steeringInput) *
-    expBlend(dt, releasing ? STEER_RELEASE_TIME : STEER_ENGAGE_TIME);
+    expBlend(dt, (releasing ? STEER_RELEASE_TIME : STEER_ENGAGE_TIME) + effects.steerLag);
   if (Math.abs(state.steeringInput) < 1e-4 && steerTarget === 0) state.steeringInput = 0;
 
   // --- 2. Surface under the car --------------------------------------------------------------
@@ -599,7 +658,8 @@ export function stepVehicle(
   // --- 4b. Power, heat and the engine's own state (Section 11.8 steps 2 and 3) ----------------
   const power = scratch.power;
   const speedNow = Math.hypot(vf, vl);
-  stepPowertrain(state, throttle, speedNow, params, env, dt, power, telemetry);
+  if (air) throttle = 0;
+  stepPowertrain(state, throttle, speedNow, params, env, dt, power, telemetry, effects);
 
   // --- 4c. Coefficients for this step (Section 11.8 step 4) ---------------------------------
   let gripRaw = rawSurfaceGrip(params, env, ground.surface, ground.onShoulder, power.gripSupply);
@@ -615,8 +675,8 @@ export function stepVehicle(
     const q = Math.min(1, speedNow / DOWNFORCE_REF_SPEED);
     gripRaw *= 1 + power.downforce * q * q;
   }
-  const grip = Math.min(MAX_COMBINED_GRIP, gripRaw);
-  const unstable = instability(params, power.stabilityAdd);
+  const grip = Math.min(MAX_COMBINED_GRIP, gripRaw) * effects.grip;
+  const unstable = instability(params, power.stabilityAdd + effects.stabilityAdd);
   const road = isRoad(ground.surface);
   const speedScale = road ? params.roadSpeedFactor : 1;
 
@@ -632,9 +692,12 @@ export function stepVehicle(
     ((params.dragLinear * vf) / speedScale +
       (params.dragQuadratic * vf * Math.abs(vf)) / (speedScale * speedScale)) /
     params.massKg;
-  const rolling = rollingDecel(params, ground.surface, ground.onShoulder);
+  const rolling = rollingDecel(params, ground.surface, ground.onShoulder) + effects.rollingAdd;
+  const vfIn = vf;
 
-  if (state.reversing) {
+  if (air) {
+    // Off the ground: nothing drives, brakes or drags the car until it lands.
+  } else if (state.reversing) {
     vf = approach(vf, -params.reverseSpeed, REVERSE_ACCEL * grip * dt);
   } else {
     vf += (drive - drag) * dt;
@@ -643,6 +706,8 @@ export function stepVehicle(
     if (vf > 0) vf = Math.max(0, vf - resist * dt);
     else if (vf < 0)
       vf = Math.min(0, vf + (resist + params.brakeDecel * 0.4 * grip * throttle) * dt);
+    // A slow holds the car down to a speed: it sheds the excess quickly and cannot regain it.
+    if (vf > effects.speedCap) vf = Math.max(effects.speedCap, vfIn - SLOW_ONSET_DECEL * dt);
   }
 
   // --- 6. Yaw --------------------------------------------------------------------------------
@@ -664,7 +729,8 @@ export function stepVehicle(
     (vl / alignSpeed) *
     smoothstep(8, 48, Math.abs(vf) + Math.abs(vl));
   const yawTarget = vf * curvature + clamp(align, -ALIGN_LIMIT, ALIGN_LIMIT);
-  state.yawRate += (yawTarget - state.yawRate) * expBlend(dt, params.yawResponseTime);
+  // In the air the car keeps the rotation it left the ground with.
+  if (!air) state.yawRate += (yawTarget - state.yawRate) * expBlend(dt, params.yawResponseTime);
   state.headingRad = wrapAngle(state.headingRad + state.yawRate * dt);
 
   // --- 7. Lateral slip -----------------------------------------------------------------------
@@ -691,7 +757,9 @@ export function stepVehicle(
   );
   // The tire curve can never deliver more than was asked for, so the car cannot be pushed
   // through zero slip and out the other side.
-  const dv = Math.sign(wanted) * Math.min(Math.abs(wanted), maxDv * tireResponse(demand, kinetic));
+  const dv = air
+    ? 0
+    : Math.sign(wanted) * Math.min(Math.abs(wanted), maxDv * tireResponse(demand, kinetic));
   // The tires push across the car, not across its path, so some of their work comes off the
   // car's speed. Within the free-rolling band of slip that loss is given back and cornering
   // costs nothing; past it the loss fades in to its full physical value, which is what slows
@@ -757,7 +825,7 @@ export function stepVehicle(
     // Obstacles are solid circles inside the corridor.
     const gc = Math.floor(cx / 96);
     const gr = Math.floor(cy / 96);
-    if (gc >= 0 && gr >= 0 && gc < track.gridCols && gr < track.gridRows) {
+    if (!air && gc >= 0 && gr >= 0 && gc < track.gridCols && gr < track.gridRows) {
       const bucket = track.obstacleGrid[gr * track.gridCols + gc]!;
       for (let k = 0; k < bucket.length; k++) {
         const ob = track.obstacles[bucket[k]!]!;

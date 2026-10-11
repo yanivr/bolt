@@ -208,6 +208,21 @@ export type HudState = {
   corrections: number;
   maxCorrection: number;
   renderer: string;
+  /**
+   * Combat diagnostics for the debug readout and the end-to-end tests. Not the combat HUD:
+   * that is designed in Milestone C part 2 from the same snapshot (docs/COMBAT_API.md).
+   */
+  position: number;
+  gapMeters: number;
+  chassis: number;
+  rivalChassis: number;
+  projectiles: number;
+  hazards: number;
+  raceEvents: number;
+  lastEvent: string;
+  statuses: string;
+  /** `reason:winner` once the race is decided, otherwise empty. */
+  result: string;
 };
 
 export const useHud = create<HudState>(() => ({
@@ -241,4 +256,14 @@ export const useHud = create<HudState>(() => ({
   corrections: 0,
   maxCorrection: 0,
   renderer: '',
+  position: 1,
+  gapMeters: 0,
+  chassis: 0,
+  rivalChassis: 0,
+  projectiles: 0,
+  hazards: 0,
+  raceEvents: 0,
+  lastEvent: '',
+  statuses: '',
+  result: '',
 }));

@@ -575,9 +575,12 @@ export type PlayerInput = {
   steer: number;
   /** Inclusive range 0 to 1. Above the lift threshold the throttle releases. */
   brake: number;
-  fireSlot?: 0 | 1;
-  activateUtility?: string;
-  selectRepairTarget?: string;
+  /** Fire buttons held this tick: bit 0 primary, bit 1 secondary (Section 8.3). */
+  fire?: number;
+  /** Manual utilities held this tick, one bit per manual utility in blueprint order. */
+  use?: number;
+  /** Component a repair should go to: 0 lets the car choose, otherwise component index + 1. */
+  target?: number;
 };
 
 /**
@@ -779,6 +782,40 @@ export type BuildConditions = {
 export type RaceEnvironment = {
   weather: WeatherId;
   wetness: number;
+};
+
+/**
+ * What damage, status effects and active equipment do to a car's driving this step
+ * (Section 11.8 step 4). The combat layer rewrites these numbers every tick from component
+ * health and active statuses; the integrator only reads them. Every field has a neutral value
+ * with which the integrator produces bit-identical results to a car without effects, and the
+ * whole record travels in the snapshot so a predicting client replays with the same numbers.
+ */
+export type VehicleEffects = {
+  /** Multiplier on engine output: engine damage, limp-home, boosts, the wheel-swap penalty. */
+  drive: number;
+  /** Forward speed, world px/s, the car is being held down to. Infinity when not slowed. */
+  speedCap: number;
+  /** Multiplier on grip: oil, frost and damaged wheels. */
+  grip: number;
+  /** Added to the commanded steering: a damaged wheel pulls the car toward its side. */
+  steerBias: number;
+  /** Multiplier on the commanded steering: damaged steering has less lock. */
+  steerScale: number;
+  /** Seconds added to the steering filter: damaged steering answers late. */
+  steerLag: number;
+  /** Extra rolling resistance, px/s2: dragging a broken wheel. */
+  rollingAdd: number;
+  /** Multiplier on engine heat: a damaged engine runs hot. */
+  heatFactor: number;
+  /** Ceiling on the supply of optional electrical consumers: 0 while an EMP has them down. */
+  auxLimit: number;
+  /** Ceiling on the supply of an electric drivetrain. Never below the protected minimum. */
+  driveSupplyLimit: number;
+  /** Added to the stability score: negative with damaged wheels. */
+  stabilityAdd: number;
+  /** True while the car is off the ground: no tire forces, no steering, low obstacles pass under. */
+  airborne: boolean;
 };
 
 export type MatchPhase =

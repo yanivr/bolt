@@ -345,6 +345,164 @@ export const SOLAR_TIME: Record<'day' | 'dusk' | 'night', number> = {
 
 export const WRONG_WAY_SECONDS = 1.2;
 export const SPAWN_RAM_GRACE_SECONDS = 1.5;
+/** Share of the ram impulse and ram damage that applies during the spawn grace (Section 3.4). */
+export const SPAWN_RAM_GRACE_FACTOR = 0.3;
+/** A KO needs zero chassis and two disabled core systems for this long, continuously. */
+export const KO_SECONDS = 3;
+/** Floor on the speed a time gap is measured against, so a stopped car is not "hours" ahead. */
+export const GAP_SPEED_FLOOR = 80;
+
+// --- Combat: damage and components (Sections 8.1, 10.1) -----------------------------------------
+//
+// Numbers that belong to one part live in that part's catalog `params`. What follows are the
+// rules every part shares.
+
+/** Integrity every component starts with before `ModifyIntegrity` (Section 10.1). */
+export const COMPONENT_INTEGRITY = 100;
+/** Section 8.1 states: healthy above, damaged down to critical, critical down to 1, disabled at 0. */
+export const COMPONENT_HEALTHY = 65;
+export const COMPONENT_CRITICAL = 20;
+/**
+ * Chassis damage as a share of the nominal (component) damage of a hit. Section 8.4 pairs 8 to
+ * 18 component points with 2 to 8 chassis points, and 20 to 30 with 8 to 12.
+ */
+export const CHASSIS_DAMAGE_SHARE = 0.4;
+/** Extra chassis share when the hit lands on bare bodywork with no component within reach. */
+export const BODY_HIT_SHARE = 0.3;
+/** A hit damages the nearest component within this many pixels of where it landed. */
+export const HIT_LOCAL_RADIUS = 15;
+/** Share of a penetrating hit, per unit of penetration, that reaches the next module along. */
+export const PENETRATION_SECOND_SHARE = 1;
+/** A fresh plate absorbs everything it is asked to; a spent one lets this share through anyway. */
+export const ARMOR_MIN_ABSORB = 0.5;
+/** A disabled wheel still rolls at this efficiency (Section 8.1). */
+export const WHEEL_LIMP_EFFICIENCY = 0.35;
+/** Grip lost per unit of mean wheel efficiency lost. */
+export const WHEEL_GRIP_WEIGHT = 0.8;
+/** Steering pull toward a damaged side, as steering input, at most (Section 8.1: 12 percent). */
+export const WHEEL_PULL_MAX = 0.12;
+/** Rolling resistance added, px/s2, per unit of mean wheel efficiency lost. */
+export const WHEEL_DRAG_DECEL = 60;
+/** Stability points lost per unit of mean wheel efficiency lost (Section 6.5 damagePenalty). */
+export const WHEEL_STABILITY_PENALTY = 25;
+/** A disabled engine keeps this share of its output: limp-home (Section 8.1). */
+export const ENGINE_LIMP_OUTPUT = 0.5;
+/** A disabled engine makes this much more heat for the output it still has. */
+export const ENGINE_DAMAGE_HEAT = 0.3;
+/** Disabled steering keeps this share of its lock and answers this many seconds late. */
+export const STEERING_LIMP_SCALE = 0.5;
+export const STEERING_DAMAGE_LAG = 0.08;
+/** With the chassis at zero the car limps: this share of engine output remains (Section 3.4). */
+export const LIMP_DRIVE_FACTOR = 0.6;
+
+// --- Combat: ramming (Sections 3.4, 10.1) ------------------------------------------------------
+
+/** Bounce between two cars. */
+export const CAR_RESTITUTION = 0.25;
+/** Closing speeds below this are rubbing, and do no damage (the forgiveness band). */
+export const RAM_FORGIVE_SPEED = 45;
+/** Damage per px/s of closing speed above the band, before mass share, angle and armor. */
+export const RAM_DAMAGE_PER_SPEED = 0.085;
+export const RAM_DAMAGE_MAX = 24;
+/** Seconds before the same pair of cars can deal ram damage again. */
+export const RAM_DAMAGE_COOLDOWN_SECONDS = 0.5;
+/** How strongly an off-centre push turns the car, radians per px/s of sideways push at the end. */
+export const RAM_YAW_KICK = 0.004;
+
+// --- Combat: statuses (Sections 8.1, 8.4, 11.8) ------------------------------------------------
+
+/** How fast a slow sheds speed above its cap, px/s2. */
+export const SLOW_ONSET_DECEL = 300;
+/** Total temporary speed suppression from debuffs never exceeds this (Section 8.1). */
+export const SLOW_TOTAL_CAP = 0.45;
+/** Total temporary grip loss from debuffs never exceeds this: there is always steering. */
+export const GRIP_LOSS_CAP = 0.6;
+/** Burn damage lands in pulses this far apart, so a fire is a few readable hits, not sixty. */
+export const BURN_PULSE_SECONDS = 1 / 3;
+/** Immunity to another forced steering or hard disable after one lands (Section 8.1). */
+export const CC_IMMUNITY_SECONDS = 2;
+/** A weapon impulse at or above this, px/s, counts as a major forced steering effect. */
+export const MAJOR_IMPULSE = 90;
+/** Mass a weapon impulse is quoted for. Lighter cars are thrown further, within these bounds. */
+export const IMPULSE_MASS_MIN = 0.6;
+export const IMPULSE_MASS_MAX = 1.5;
+
+// --- Combat: weapons (Sections 8.3, 8.4, 11.5) -------------------------------------------------
+
+/** No fire command comes back faster than this, whatever the catalog says (Section 8.4). */
+export const WEAPON_COOLDOWN_FLOOR_SECONDS = 1.2;
+/** Reload is this much longer at the thermal protection threshold, growing from the performance threshold. */
+export const WEAPON_HEAT_RELOAD_PENALTY = 0.5;
+/** Reload is this much longer for a weapon at zero integrity's edge, growing below healthy. */
+export const WEAPON_DAMAGE_RELOAD_PENALTY = 0.6;
+/** Chance of a harmless misfire per shot for a weapon about to fail, growing below healthy. */
+export const WEAPON_MISFIRE_CHANCE = 0.25;
+/** A misfire costs this long before the weapon can be tried again. */
+export const WEAPON_MISFIRE_SECONDS = 0.6;
+/** Projectiles live at most this long unless their part says otherwise (Section 8.3). */
+export const PROJECTILE_MAX_LIFE_SECONDS = 5;
+/** Simultaneous projectiles and ground hazards a race keeps. The oldest gives way. */
+export const MAX_PROJECTILES = 64;
+export const MAX_HAZARDS = 48;
+/** Spacing of the wall probes along a projectile's path and a line of sight, px. */
+export const SWEEP_STEP = 9;
+/** Line of sight is rechecked this often for weapons that track a target, in ticks. */
+export const LOS_INTERVAL_TICKS = 3;
+/** An enemy trap is hidden until a car is this close; a Mine Detector adds its own distance. */
+export const HAZARD_REVEAL_RANGE = 90;
+/** The rival is tracked on the HUD within this range; Radar multiplies it. */
+export const RIVAL_TRACK_RANGE = 600;
+/** Seconds between repair actions on one car (Section 8.2: cannot be spammed). */
+export const REPAIR_LOCKOUT_SECONDS = 2;
+/** A refused fire command is reported to its driver at most this often, in seconds. */
+export const REFUSAL_REPORT_SECONDS = 0.5;
+
+/**
+ * Weather acts on what lies on the road (Section 6.5: weather multiplies selected effect
+ * durations). Rain washes oil and foam away and puts fires out sooner; cold keeps frost; dry
+ * heat melts it. Multipliers on a hazard's lifetime.
+ */
+export const HAZARD_LIFE_WEATHER: Record<
+  'oil' | 'fire' | 'frost' | 'foam',
+  Record<WeatherId, number>
+> = {
+  oil: {
+    clear: 1,
+    rain: 0.6,
+    heavy_rain: 0.45,
+    sandstorm: 0.8,
+    dry_heat: 1,
+    snowfall: 0.8,
+    clear_frost: 1,
+  },
+  fire: {
+    clear: 1,
+    rain: 0.5,
+    heavy_rain: 0.35,
+    sandstorm: 0.8,
+    dry_heat: 1.25,
+    snowfall: 0.6,
+    clear_frost: 0.9,
+  },
+  frost: {
+    clear: 1,
+    rain: 1.3,
+    heavy_rain: 1.3,
+    sandstorm: 0.8,
+    dry_heat: 0.6,
+    snowfall: 1.5,
+    clear_frost: 1.5,
+  },
+  foam: {
+    clear: 1,
+    rain: 0.8,
+    heavy_rain: 0.65,
+    sandstorm: 0.9,
+    dry_heat: 1.1,
+    snowfall: 1,
+    clear_frost: 1,
+  },
+};
 
 // --- Input ------------------------------------------------------------------------------------
 
@@ -397,7 +555,7 @@ export const DIRECTION_REVERSE_SPEED = 30;
 
 // --- Network ----------------------------------------------------------------------------------
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 export const MAX_QUEUED_INPUTS = 8;
 export const MAX_INPUTS_PER_PACKET = 6;
 export const REMOTE_INTERP_DELAY_MS = 120;

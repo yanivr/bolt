@@ -636,6 +636,28 @@ input:focus-visible {
   left: calc(var(--safe-left) + 12px);
 }
 
+/* DEBUG CONTROL: replaced in Milestone C part 2. Plain fire and utility buttons on the action
+   side, above the speed readout, so combat can be operated by touch. */
+.hud-actions {
+  position: absolute;
+  right: calc(var(--safe-right) + 12px);
+  bottom: calc(var(--safe-bottom) + 84px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.hand-right .hud-actions {
+  right: auto;
+  left: calc(var(--safe-left) + 12px);
+  align-items: flex-start;
+}
+
+.debug-combat {
+  bottom: calc(var(--safe-bottom) + 30px);
+}
+
 .hud-unit {
   font-size: 13px;
   font-weight: 800;

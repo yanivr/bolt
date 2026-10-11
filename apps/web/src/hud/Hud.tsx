@@ -66,6 +66,29 @@ function Countdown() {
 const DEBUG = new URLSearchParams(window.location.search).get('debug') === '1';
 
 /** Development readout for hardware testing: frame rate, link quality and prediction health. */
+/** Combat diagnostics. The combat HUD itself is Milestone C part 2. */
+function CombatReadout() {
+  const position = useHud((s) => s.position);
+  const gap = useHud((s) => s.gapMeters);
+  const chassis = useHud((s) => s.chassis);
+  const rival = useHud((s) => s.rivalChassis);
+  const projectiles = useHud((s) => s.projectiles);
+  const hazards = useHud((s) => s.hazards);
+  const events = useHud((s) => s.raceEvents);
+  const last = useHud((s) => s.lastEvent);
+  const statuses = useHud((s) => s.statuses);
+  const result = useHud((s) => s.result);
+  return (
+    <div className="debug debug-combat" data-testid="debug-combat">
+      pos {position} · gap {gap.toFixed(1)} m · hull {chassis} · rival {rival} · shots {projectiles}{' '}
+      · traps {hazards} · events {events}
+      {last ? ` · last ${last}` : ''}
+      {statuses ? ` · ${statuses}` : ''}
+      {result ? ` · result ${result}` : ''}
+    </div>
+  );
+}
+
 function DebugReadout() {
   const fps = useHud((s) => s.fps);
   const latency = useHud((s) => s.latencyMs);
@@ -88,7 +111,18 @@ function DebugReadout() {
   );
 }
 
-type Props = { manifests: GameManifests; onPause: () => void };
+/**
+ * The driver's combat buttons, as the blueprint defines them. A stand-in until the combat HUD
+ * is designed: it exists so weapons and utilities can be operated by touch.
+ */
+export type HudActions = {
+  fire: Array<{ slot: 0 | 1; label: string }>;
+  use: Array<{ bit: number; label: string }>;
+  onFire: (slot: 0 | 1) => void;
+  onUse: (bit: number) => void;
+};
+
+type Props = { manifests: GameManifests; onPause: () => void; actions?: HudActions | null };
 
 /**
  * Race HUD (Section 5.9). Top left: lap and lap times. Top centre: race clock and the next
@@ -96,7 +130,7 @@ type Props = { manifests: GameManifests; onPause: () => void };
  * side, where weapon controls join it in Milestone C. Every element stays outside the area
  * around the local car.
  */
-export function Hud({ manifests, onPause }: Props) {
+export function Hud({ manifests, onPause, actions }: Props) {
   const unit = useApp((s) => s.settings.speedUnit);
   const showGuide = useApp((s) => s.settings.showTouchGuide);
   const steering = useApp((s) => s.settings.steering);
@@ -176,6 +210,33 @@ export function Hud({ manifests, onPause }: Props) {
         </div>
       )}
       {DEBUG && <DebugReadout />}
+      {DEBUG && <CombatReadout />}
+
+      {/* DEBUG CONTROL: replaced in Milestone C part 2 */}
+      {actions && (actions.fire.length > 0 || actions.use.length > 0) && phase === 'RACING' && (
+        <div className="hud-actions">
+          {actions.use.map((item) => (
+            <HudButton
+              key={`use-${item.bit}`}
+              className="btn"
+              onPress={() => actions.onUse(item.bit)}
+              label={item.label}
+            >
+              {item.label}
+            </HudButton>
+          ))}
+          {actions.fire.map((item) => (
+            <HudButton
+              key={`fire-${item.slot}`}
+              className="btn btn-primary"
+              onPress={() => actions.onFire(item.slot)}
+              label={`Fire ${item.label}`}
+            >
+              {item.label}
+            </HudButton>
+          ))}
+        </div>
+      )}
 
       <div className="hud-speed panel">
         <PixelText

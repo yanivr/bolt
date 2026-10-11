@@ -2,6 +2,7 @@ import { COUNTDOWN_SECONDS, RACE_LIMIT_SECONDS, SIM_DT } from './balance.js';
 import type { ControlInput, StepScratch } from './physics.js';
 import {
   NEUTRAL_INPUT,
+  createEffects,
   createMotionState,
   createStepScratch,
   createTelemetry,
@@ -14,6 +15,7 @@ import { createProgress, updateProgress } from './track.js';
 import type {
   MatchPhase,
   RaceEnvironment,
+  VehicleEffects,
   VehicleMotionState,
   VehicleParams,
   VehicleProgressState,
@@ -38,6 +40,11 @@ export type DriveSession = {
    * order. State only for now: damage arrives with combat in Milestone C.
    */
   wheelIntegrity: number[];
+  /**
+   * What damage and status effects are doing to this car's driving. Neutral for a car on its
+   * own; the race rewrites it every tick and a predicting client copies it from the snapshot.
+   */
+  effects: VehicleEffects;
   scratch: StepScratch;
   phase: MatchPhase;
   tick: number;
@@ -64,6 +71,7 @@ export function createDriveSession(
     progress: createProgress(),
     telemetry: createTelemetry(),
     wheelIntegrity: Array.from({ length: params.wheelCount }, () => 100),
+    effects: createEffects(),
     scratch: createStepScratch(),
     phase: 'COUNTDOWN',
     tick: 0,
@@ -106,6 +114,7 @@ export function sessionSnapshot(
     lastLapMs: session.lastLapMs,
     wheelIntegrity: [...session.wheelIntegrity],
     buildHash,
+    effects: { ...session.effects },
   };
 }
 
@@ -136,6 +145,7 @@ export function stepDriveSession(session: DriveSession, input: ControlInput): St
       SIM_DT,
       session.scratch,
       session.telemetry,
+      session.effects,
     );
     session.motion.velocityX = 0;
     session.motion.velocityY = 0;
@@ -161,6 +171,7 @@ export function stepDriveSession(session: DriveSession, input: ControlInput): St
     SIM_DT,
     session.scratch,
     session.telemetry,
+    session.effects,
   );
 
   if (!racing) return result;
@@ -200,5 +211,10 @@ export function stepDriveSession(session: DriveSession, input: ControlInput): St
   return result;
 }
 
-const NEUTRAL_BRAKE: ControlInput = Object.freeze({ steer: 0, brake: 0.75, coast: false });
+/**
+ * What a car that is no longer racing is given: off the throttle and on the brake, held just
+ * short of the pull that engages reverse. (At 0.75 a finished car stopped and then backed down
+ * the track for good, which a second car still racing would have met.)
+ */
+export const NEUTRAL_BRAKE: ControlInput = Object.freeze({ steer: 0, brake: 0.58, coast: false });
 export { NEUTRAL_INPUT };

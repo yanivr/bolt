@@ -4,6 +4,81 @@ Catalog and balance data use semantic versions (`CATALOG_VERSION` in
 `packages/content/src/catalog.ts`). Every change to a price, mass, coefficient or track is
 listed here with the measurement that motivated it.
 
+## 0.6.0 (combat parameters and the first combat balance pass, October 11, 2026)
+
+The first version in which weapons, defenses and utilities do something in a race. No price
+and no mass changed. Reports: `docs/evidence/balance/` (before and after, clear and rain),
+produced by `npx tsx tests/balance/report.ts`. See `docs/DECISIONS.md` entries 104 to 123.
+
+**Added parameters.** Every active part gained the numbers its behaviour needs that the spec
+table does not give: spread, projectile speed and radius, lock and wind-up times, blast and
+hazard radii, hazard lives, live caps, drop distances, impulses. They are in `params` in
+`packages/content/src/weapons.ts` and `utilities.ts`, and each is asserted by a test in
+`tests/unit/combatParts.test.ts`. The spec's own numbers (damage, cooldown, range, charges)
+are unchanged.
+
+**How it was measured.** Sparring brain against sparring brain on Neon Cut. (1) Every starter
+and example build against every other from both grid slots, four seeds, 440 races. (2) A
+weapon bench: one copy of each of the twenty weapons on a stock Spider against the same
+Spider carrying ballast instead, from both grid slots, four seeds. Only seven weapons are on
+a shipped build, so the bench is the only measure of the other thirteen. Both cars are driven
+by the same simple driver, so these compare builds and weapons, not drivers.
+
+**Tuned.**
+
+| Part | 0.5.0 | 0.6.0 | Why |
+| :-- | :-- | :-- | :-- |
+| Front Machine Gun, Rear Sentry | spread 6 degrees | spread 8 degrees | The cheapest guns dealt the most damage per credit by a wide margin |
+| Front Machine Gun, Rear Sentry, Swivel Turret | full damage to 220 px | full damage to 110 px, falling to 60 percent at 220 px | The same. A follower sits at 110 to 220 px for most of a lap |
+| Decoy Drone | dropped 14 px behind the centre (inside the hull) | dropped 46 px behind | A missile from behind reached the car before the drone |
+
+**Before and after** (clear night, four seeds).
+
+| Measure | 0.5.0 numbers | 0.6.0 |
+| :-- | --: | --: |
+| Front Machine Gun, damage per 100 credits, shipped builds | 57.3 (3.85x median) | 55.3 (3.07x) |
+| Rear Sentry, shipped builds | 34.4 (2.31x) | 31.3 (1.74x) |
+| Front Machine Gun, bench | 232.5 (11.1x) | 222.8 (9.7x) |
+| Swivel Turret, bench | 258.2 (12.3x) | 235.2 (10.3x) |
+| Rear Sentry, bench | 86.5 (4.1x) | 88.8 (3.9x) |
+| Mean race length | 120.2 s | 120.2 s |
+| Knockouts in 440 races | 0 | 0 |
+| Cars whose chassis reached zero, of 880 | 12 | 17 |
+
+**What the numbers say, plainly.**
+
+- *Races are decided by pace, not by combat.* The win-rate order is the lap-time order of
+  the Milestone B table: Straight-Line Rocket 100 percent, Sprinter 90, Tiny Trouble 80,
+  Tinker 70, Back-Alley Trap 60, Rain Runner 50, Longlegs 35, Packhorse 30, Rookie 25, Dust
+  Spider 10, Iron Mule 0. Six builds are outside 30 to 70 percent and are flagged. Two cars
+  of different pace separate within a lap, and a weapon with 220 px of reach then has
+  nothing to shoot: the Front Machine Gun fires 2.9 bursts in an average race. Seeds barely
+  move the result, because the sparring driver is consistent. This is the main finding. It
+  is not something weapon numbers can fix, and it was not tuned: it needs the tracks,
+  shortcuts and track-side repairs of Section 3.4's "competition stays close" and an AI that
+  fights for position (Milestone D), and then a second pass.
+- *Sustained fire from the cheap guns is the strongest thing in the catalog when two cars do
+  stay together.* On the bench the turret and the machine gun win every race against an
+  unarmed twin; the turret brings its chassis to zero in half of them and the machine gun in
+  a quarter. Measured before the falloff, a parked Beetle 150 px ahead lost its engine to a
+  Front Machine Gun in 9 s of uninterrupted fire and its chassis in 22 s. Weapons with
+  charges cannot exceed charges times damage (Straight Rocket 110, Seeker 60, Arc Mortar 75),
+  and weapons on a cooldown scale with time in contact. The falloff above takes 10 to 20
+  percent off; the flags remain (turret 10.3x, machine gun 9.7x, sentry 3.9x, railgun 2.9x,
+  rocket 2.2x the bench median). Closing this properly is a design choice, not a modest
+  retune, and is left for the owner: ammunition for the bullet guns, more heat per burst,
+  or a lower chassis share (40 percent of component damage today).
+- *Short-range weapons are under-measured.* The Road Shotgun, Flame Spitter, Crash Hammer and
+  Air Cannon fired once every other bench race: the sparring driver follows at 110 to 220 px
+  and they reach 90 to 110. Flame Spitter is flagged at 0.28x the median and the shotgun sits
+  at 0.52x; both numbers say more about the driver than the weapon. Not tuned.
+- *Control weapons* (Oil Slick, Sticky Foam, EMP Pulse, Frost Cannon, Grapple Harpoon, Air
+  Cannon) are measured but not compared on damage. Only the harpoon changed who won on the
+  bench (88 percent). The others cost the victim under a second.
+- *In the rain* (220 races, two seeds) the order is the same with Sprinter ahead of the
+  Rocket; the Tesla Arc's wet range more than doubles its bench damage; the Road Mine drops
+  to 0.43x on shipped builds.
+
 ## 0.5.0 (facing is the player's choice, October 11, 2026)
 
 No price, mass or coefficient changed, and the measured table of every shipped build below

@@ -20,7 +20,7 @@ export type BlueprintTemplate = {
   blueprint: VehicleBlueprint;
 };
 
-type PartSpec = {
+export type PartSpec = {
   part: string;
   mount: string;
   /** Facing: 0 front, 1 right, 2 rear, 3 left. Defaults to 0. */
@@ -30,7 +30,8 @@ type PartSpec = {
   offset?: [number, number];
 };
 
-function build(
+/** Builds a shipped blueprint from a short description. Used for templates and scenarios. */
+export function build(
   name: string,
   chassisId: string,
   engineId: string,

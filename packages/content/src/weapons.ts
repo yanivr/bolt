@@ -122,9 +122,19 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
     cone: 85,
     energyPerShot: 2,
     heatPerShot: 2,
-    params: { bullets: 5, damagePerBullet: 3, burstSeconds: 0.4, projectileSpeed: 560 },
+    params: {
+      bullets: 5,
+      damagePerBullet: 3,
+      burstSeconds: 0.4,
+      projectileSpeed: 560,
+      spreadDegrees: 8,
+      projectileRadius: 2,
+      falloffStart: 110,
+      falloffMinFactor: 0.6,
+      aimAssist: true,
+    },
     actions: [
-      { type: 'SpawnProjectile', count: 5, damage: 3, speed: 560, spreadDegrees: 6, tag: 'bullet' },
+      { type: 'SpawnProjectile', count: 5, damage: 3, speed: 560, spreadDegrees: 8, tag: 'bullet' },
     ],
   }),
   weapon({
@@ -145,10 +155,20 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
     cone: 90,
     energyPerShot: 2,
     heatPerShot: 2,
-    params: { bullets: 4, damagePerBullet: 3, burstSeconds: 0.35, projectileSpeed: 560 },
+    params: {
+      bullets: 4,
+      damagePerBullet: 3,
+      burstSeconds: 0.35,
+      projectileSpeed: 560,
+      spreadDegrees: 8,
+      projectileRadius: 2,
+      falloffStart: 110,
+      falloffMinFactor: 0.6,
+      acquireSeconds: 0.25,
+    },
     actions: [
       { type: 'AcquireTarget', arcDegrees: 90, range: 220, lineOfSight: true },
-      { type: 'SpawnProjectile', count: 4, damage: 3, speed: 560, spreadDegrees: 6, tag: 'bullet' },
+      { type: 'SpawnProjectile', count: 4, damage: 3, speed: 560, spreadDegrees: 8, tag: 'bullet' },
     ],
   }),
   weapon({
@@ -171,7 +191,18 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
     cone: 360,
     energyPerShot: 5,
     heatPerShot: 4,
-    params: { damage: 18, bullets: 3, turnRateDegPerSecond: 120, projectileSpeed: 560 },
+    params: {
+      damage: 18,
+      bullets: 3,
+      burstSeconds: 0.2,
+      turnRateDegPerSecond: 120,
+      lockToleranceDegrees: 6,
+      projectileSpeed: 560,
+      spreadDegrees: 3,
+      projectileRadius: 2,
+      falloffStart: 110,
+      falloffMinFactor: 0.6,
+    },
     actions: [
       { type: 'AcquireTarget', arcDegrees: 360, range: 220, lineOfSight: true, turnRate: 120 },
       { type: 'SpawnProjectile', count: 3, damage: 6, speed: 560, spreadDegrees: 3, tag: 'bullet' },
@@ -201,6 +232,8 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
       falloffStart: 50,
       falloffMinFactor: 0.4,
       projectileSpeed: 480,
+      spreadDegrees: 40,
+      projectileRadius: 2,
     },
     actions: [
       {
@@ -233,7 +266,7 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
     energyPerShot: 14,
     heatPerShot: 8,
     charges: 5,
-    params: { damage: 27, chargeSeconds: 0.8, penetration: 0.5 },
+    params: { damage: 27, chargeSeconds: 0.8, penetration: 0.5, beamRadius: 3 },
     actions: [
       { type: 'AcquireTarget', arcDegrees: 20, range: 350, lineOfSight: true },
       { type: 'ShowTelegraph', seconds: 0.8, style: 'charge_line' },
@@ -259,7 +292,14 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
     energyPerShot: 3,
     heatPerShot: 5,
     charges: 5,
-    params: { damage: 22, splashDamage: 6, splashRadius: 34, projectileSpeed: 380, lifeSeconds: 5 },
+    params: {
+      damage: 22,
+      splashDamage: 6,
+      splashRadius: 34,
+      projectileSpeed: 380,
+      lifeSeconds: 5,
+      projectileRadius: 4,
+    },
     actions: [
       {
         type: 'SpawnProjectile',
@@ -296,9 +336,11 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
     params: {
       damage: 20,
       lockWarningSeconds: 0.5,
+      lockSeconds: 0.6,
       projectileSpeed: 300,
       turnRateDegPerSecond: 150,
       lifeSeconds: 5,
+      projectileRadius: 4,
     },
     actions: [
       { type: 'AcquireTarget', arcDegrees: 120, range: 220, lineOfSight: true },
@@ -343,6 +385,9 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
       liveCap: 6,
       armSeconds: 0.6,
       triggerRadius: 16,
+      blastRadius: 26,
+      dropDistance: 10,
+      lifeSeconds: 60,
     },
     actions: [
       { type: 'SpawnMine', damage: 13, armSeconds: 0.6, triggerRadius: 16, liveCap: 6 },
@@ -375,6 +420,7 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
       stripLength: 90,
       stripWidth: 26,
       lifeSeconds: 8,
+      dropDistance: 12,
     },
     actions: [
       { type: 'SpawnAreaHazard', shape: 'strip', length: 90, width: 26, lifeSeconds: 8 },
@@ -399,7 +445,13 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
     cone: 0,
     energyPerShot: 2,
     heatPerShot: 0,
-    params: { speedReduction: 0.2, slowSeconds: 2, puddleRadius: 30, lifeSeconds: 6 },
+    params: {
+      speedReduction: 0.2,
+      slowSeconds: 2,
+      puddleRadius: 30,
+      lifeSeconds: 6,
+      flightSeconds: 0.5,
+    },
     actions: [
       { type: 'SpawnAreaHazard', shape: 'puddle', radius: 30, throwDistance: 120, lifeSeconds: 6 },
       { type: 'ApplyGripDebuff', family: 'slow', magnitude: 0.2, seconds: 2 },
@@ -426,7 +478,7 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
     cone: 360,
     energyPerShot: 30,
     heatPerShot: 4,
-    params: { radius: 135, disableSeconds: 1.5, chargeSeconds: 0.6 },
+    params: { radius: 135, disableSeconds: 1.5, chargeSeconds: 0.6, scramblesMissiles: true },
     actions: [
       { type: 'ShowTelegraph', seconds: 0.6, style: 'emp_charge' },
       { type: 'ApplyEMP', radius: 135, seconds: 1.5 },
@@ -452,7 +504,7 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
     cone: 360,
     energyPerShot: 10,
     heatPerShot: 3,
-    params: { damage: 12, moduleDelaySeconds: 0.6 },
+    params: { damage: 12, moduleDelaySeconds: 0.6, wetRangeFactor: 1.25 },
     actions: [
       { type: 'AcquireTarget', arcDegrees: 360, range: 70, lineOfSight: false },
       { type: 'ApplyDirectDamage', damage: 12, tag: 'direct' },
@@ -477,7 +529,13 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
     cone: 35,
     energyPerShot: 2,
     heatPerShot: 9,
-    params: { durationSeconds: 2, damageOverTime: 14, heatApplied: 20 },
+    params: {
+      durationSeconds: 2,
+      damageOverTime: 14,
+      heatApplied: 20,
+      burnLingerSeconds: 0.3,
+      ignitesOil: true,
+    },
     actions: [
       { type: 'ApplyDamageOverTime', damage: 14, seconds: 2, tag: 'burn' },
       { type: 'ApplyHeat', heat: 20, tag: 'heat_status' },
@@ -501,7 +559,15 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
     cone: 0,
     energyPerShot: 6,
     heatPerShot: 0,
-    params: { gripReduction: 0.2, gripSeconds: 2.5, projectileSpeed: 340 },
+    params: {
+      gripReduction: 0.2,
+      gripSeconds: 2.5,
+      projectileSpeed: 340,
+      projectileRadius: 4,
+      patchRadius: 26,
+      patchLifeSeconds: 5,
+      wetPatchFactor: 1.3,
+    },
     actions: [
       { type: 'SpawnProjectile', count: 1, damage: 0, speed: 340, tag: 'direct' },
       { type: 'ApplyGripDebuff', family: 'grip_loss', magnitude: 0.2, seconds: 2.5 },
@@ -578,7 +644,15 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
     cone: 30,
     energyPerShot: 5,
     heatPerShot: 1,
-    params: { tetherSeconds: 2, pullAccel: 160, selfPullShare: 0.35, hardStun: false },
+    params: {
+      tetherSeconds: 2,
+      pullAccel: 160,
+      selfPullShare: 0.35,
+      hardStun: false,
+      projectileSpeed: 420,
+      projectileRadius: 3,
+      breakDistance: 260,
+    },
     actions: [
       { type: 'SpawnProjectile', count: 1, damage: 0, speed: 420, tag: 'direct' },
       { type: 'ApplyTether', seconds: 2, pullAccel: 160, selfPullShare: 0.35 },
@@ -602,7 +676,7 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
     cone: 60,
     energyPerShot: 6,
     heatPerShot: 1,
-    params: { knockbackImpulse: 170, damage: 2 },
+    params: { knockbackImpulse: 170, damage: 2, falloffMinFactor: 0.5, projectileImpulse: 120 },
     actions: [
       { type: 'ApplyImpulse', impulse: 170, direction: 'away' },
       { type: 'ApplyDirectDamage', damage: 2, tag: 'direct' },
@@ -626,7 +700,17 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
     cone: 0,
     energyPerShot: 3,
     heatPerShot: 1,
-    params: { damagePerHit: 12, phases: 2, hitsPerPhase: 1, projectileSpeed: 320 },
+    params: {
+      damagePerHit: 12,
+      phases: 2,
+      hitsPerPhase: 1,
+      projectileSpeed: 320,
+      projectileRadius: 6,
+      returnTurnDegPerSecond: 5400,
+      catchRadius: 18,
+      catchRefundSeconds: 2,
+      lifeSeconds: 4,
+    },
     actions: [
       {
         type: 'SpawnProjectile',
@@ -666,6 +750,8 @@ export const WEAPON_LIST: AccessoryDefinition[] = [
       blastRadius: 60,
       flightSeconds: 1.4,
       minRange: 90,
+      lockSeconds: 0.4,
+      leadFactor: 0.8,
     },
     actions: [
       { type: 'AcquireTarget', arcDegrees: 360, range: 320, lineOfSight: false, minRange: 90 },

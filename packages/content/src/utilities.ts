@@ -208,7 +208,7 @@ export const UTILITY_LIST: AccessoryDefinition[] = [
     description: 'Holds 30 energy in reserve for weapons that take a lot at once.',
     drawback: 'The reserve is for bursts only. It never feeds the engine or the fan.',
     modifiers: [{ type: 'ModifyEnergyCapacity', add: 30, reserve: true }],
-    params: { reserveEnergy: 30, minShotEnergy: 6 },
+    params: { reserveEnergy: 30, minShotEnergy: 6, rechargePerSecond: 5 },
   }),
   utility({
     id: 'utility_nitro',
@@ -332,7 +332,7 @@ export const UTILITY_LIST: AccessoryDefinition[] = [
     behaviorId: 'missile_decoy',
     description: 'Launches a drone that draws a guided missile away from you.',
     drawback: 'Two a match, and useless against unguided weapons.',
-    params: { decoys: 2, decoyLifeSeconds: 3 },
+    params: { decoys: 2, decoyLifeSeconds: 3, decoyRange: 160, dropDistance: 46 },
     actions: [
       { type: 'InterceptProjectile', kind: 'guided', mode: 'decoy', lifeSeconds: 3 },
       { type: 'ConsumeCharge', charges: 2 },
@@ -369,7 +369,13 @@ export const UTILITY_LIST: AccessoryDefinition[] = [
     behaviorId: 'winch_pull',
     description: 'Pulls you free when you have been stuck on something for 1.5 seconds.',
     drawback: 'A short pull forward, once every 20 seconds.',
-    params: { trappedSeconds: 1.5, pullDistance: 60, cooldownSeconds: 20 },
+    params: {
+      trappedSeconds: 1.5,
+      trappedSpeed: 25,
+      pullDistance: 60,
+      pullSeconds: 0.6,
+      cooldownSeconds: 20,
+    },
     actions: [
       { type: 'ApplyTether', target: 'self', pullDistance: 60 },
       { type: 'StartCooldown', seconds: 20 },

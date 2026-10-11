@@ -1,8 +1,17 @@
 import { ServerError } from '@colyseus/core';
-import { CATALOG, conditionsFor, environmentFor, getTrack } from '@bolt/content';
+import {
+  CATALOG,
+  conditionsFor,
+  environmentFor,
+  getScenario,
+  getTemplate,
+  getTrack,
+} from '@bolt/content';
 import type {
   BlueprintIssue,
+  BuildConditions,
   RaceEnvironment,
+  ResolvedBuild,
   TrackDefinition,
   VehicleBlueprint,
   VehicleParams,
@@ -85,8 +94,14 @@ export function resolveCourse(trackId: string, weatherPresetId: string): DriveCo
   return { track, env };
 }
 
+export { getScenario, getTemplate };
+
 export type ResolvedCar = {
   params: VehicleParams;
+  /** The resolved build, for the race's combat state. */
+  build: ResolvedBuild;
+  /** The published conditions the coefficients were derived under. */
+  conditions: BuildConditions;
   /** The canonical form of the accepted blueprint. */
   blueprint: VehicleBlueprint;
   buildHash: string;
@@ -126,6 +141,8 @@ export function resolveCar(
   if (!check.ok) throw buildRefusal(check.issues);
   return {
     params: deriveVehicleParams(check.build, conditions),
+    build: check.build,
+    conditions,
     blueprint: check.blueprint,
     buildHash: check.buildHash,
     totalCost: check.totalCost,
@@ -142,4 +159,9 @@ export type DriveAuth = {
   trackId: string;
   weatherPresetId: string;
   blueprint: VehicleBlueprint;
+  /** Debug and test options: which shipped template to race, and the seed for its choices. */
+  rivalTemplateId?: string;
+  seed?: number;
+  /** Debug and test option: a showcase scenario to host instead of a race. */
+  scenarioId?: string;
 };

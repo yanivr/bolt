@@ -1,15 +1,17 @@
 import { CATALOG, STRINGS } from '@bolt/content';
-import { mountedPartSprites, resolveCarSprites } from '@bolt/shared';
+import { mountedPartSprites, resolveBlueprint, resolveCarSprites } from '@bolt/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TRACK_ID, WEATHER_PRESET_ID, bootAssets } from '../app/App.js';
+import { debugEnabled } from '../app/flags.js';
 import { useApp, useHud } from '../app/store.js';
 import { PixelText } from '../components/PixelText.js';
 import type { RaceGameHandle } from '../game/RaceGame.js';
 import { createRaceGame } from '../game/RaceGame.js';
 import type { GameManifests } from '../game/assets.js';
 import { EngineAudio } from '../game/audio/EngineAudio.js';
-import type { DriveSetupError } from '../game/startDrive.js';
+import type { DriveOptions, DriveSetupError } from '../game/startDrive.js';
 import { startDrive } from '../game/startDrive.js';
+import type { HudActions } from '../hud/Hud.js';
 import { Hud, formatRaceTime } from '../hud/Hud.js';
 import { SettingsPanel } from '../hud/SettingsPanel.js';
 import { DriveInput } from '../input/driveInput.js';
@@ -18,6 +20,56 @@ type LoadState =
   | { kind: 'loading'; stage: 'connecting' | 'track'; progress: number }
   | { kind: 'ready' }
   | { kind: 'error'; reason: DriveSetupError | 'assets' };
+
+/**
+ * Debug switches for the race, read from the query string (ignored in a production build
+ * without `?debug=1`): `rival=<template id>` picks the sparring rival, `seed=<n>` its seed,
+ * and `scenario=<id>` plays a showcase scenario in the page with both cars scripted.
+ */
+function driveOptions(): DriveOptions {
+  const options: DriveOptions = {};
+  if (!debugEnabled()) return options;
+  const query = new URLSearchParams(window.location.search);
+  const rival = query.get('rival');
+  if (rival && /^[a-z0-9_]{1,48}$/.test(rival)) options.rivalTemplateId = rival;
+  const seed = Number(query.get('seed'));
+  if (query.has('seed') && Number.isInteger(seed) && seed >= 0 && seed <= 0x7fffffff)
+    options.seed = seed;
+  const scenario = query.get('scenario');
+  if (scenario && /^[a-z0-9_]{1,48}$/.test(scenario)) options.scenarioId = scenario;
+  return options;
+}
+
+/**
+ * The buttons a car's blueprint gives its driver: which weapon is on each fire button, and its
+ * manual utilities in the order of their input bits.
+ */
+function actionsFor(
+  blueprint: Parameters<typeof resolveBlueprint>[0],
+  input: DriveInput,
+): HudActions {
+  const build = resolveBlueprint(blueprint, CATALOG);
+  const fire: HudActions['fire'] = [];
+  const use: HudActions['use'] = [];
+  let repairMask = 0;
+  for (const placed of build?.parts ?? []) {
+    const { def, instance } = placed;
+    if (def.category === 'weapon' && instance.assignedActionSlot !== undefined)
+      fire.push({ slot: instance.assignedActionSlot, label: def.displayName });
+    if (def.category === 'utility' && def.triggerMode === 'manual') {
+      if (def.params.repairUnits !== undefined) repairMask |= 1 << use.length;
+      use.push({ bit: use.length, label: def.displayName });
+    }
+  }
+  input.repairMask = repairMask;
+  fire.sort((a, b) => a.slot - b.slot);
+  return {
+    fire,
+    use,
+    onFire: (slot) => input.tapFire(slot),
+    onUse: (bit) => input.tapUse(bit),
+  };
+}
 
 function usePortrait(): boolean {
   const [portrait, setPortrait] = useState(() => window.innerHeight > window.innerWidth * 1.05);
@@ -39,6 +91,7 @@ export function RaceScreen() {
     progress: 0,
   });
   const [manifests, setManifests] = useState<GameManifests | null>(null);
+  const [actions, setActions] = useState<HudActions | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [portraitOk, setPortraitOk] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -69,7 +122,7 @@ export function RaceScreen() {
       try {
         const [m, setup] = await Promise.all([
           bootAssets(),
-          startDrive(TRACK_ID, WEATHER_PRESET_ID, useApp.getState().blueprint),
+          startDrive(TRACK_ID, WEATHER_PRESET_ID, useApp.getState().blueprint, driveOptions()),
         ]);
         if ('error' in setup) {
           if (!cancelled) setLoad({ kind: 'error', reason: setup.error });
@@ -88,7 +141,12 @@ export function RaceScreen() {
           setLoad({ kind: 'error', reason: 'content' });
           return;
         }
+        // The rival is drawn with the same compositor; without art for it, it is left out.
+        const rivalSprites = setup.rival
+          ? resolveCarSprites(m.cars, setup.rival.blueprint).loadout
+          : null;
         setManifests(m);
+        setActions(actionsFor(setup.blueprint, input));
         setLoad({ kind: 'loading', stage: 'track', progress: 0 });
         input.attach(touch);
         game.current = createRaceGame(host, {
@@ -97,6 +155,17 @@ export function RaceScreen() {
           link: setup.link,
           loadout: sprites,
           parts: mountedPartSprites(m.cars, setup.blueprint, CATALOG),
+          build: setup.build,
+          conditions: setup.conditions,
+          rival:
+            setup.rival && rivalSprites
+              ? {
+                  loadout: rivalSprites,
+                  parts: mountedPartSprites(m.cars, setup.rival.blueprint, CATALOG),
+                  params: setup.rival.params,
+                }
+              : null,
+          script: setup.script,
           input,
           audio,
           autopilot: new URLSearchParams(window.location.search).get('autopilot') === '1',
@@ -149,7 +218,7 @@ export function RaceScreen() {
       <div className="race-canvas" ref={canvasHost} />
       <div className="race-surface" ref={surface} />
       {load.kind === 'ready' && manifests && (
-        <Hud manifests={manifests} onPause={() => setPaused(true)} />
+        <Hud manifests={manifests} onPause={() => setPaused(true)} actions={actions} />
       )}
 
       {load.kind === 'loading' && (

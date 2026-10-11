@@ -51,6 +51,11 @@ export class DriveInput {
   steered = false;
   braked = false;
   enabled = true;
+  /** Utility bits the repair key (R) presses: the car's spare wheel and repair kits. */
+  repairMask = 0;
+  /** Ticks left on a tapped fire button, per slot, and on a tapped utility button, per bit. */
+  private readonly firePulse = [0, 0];
+  private readonly usePulse = [0, 0, 0, 0, 0, 0, 0, 0];
 
   attach(surface: HTMLElement): void {
     this.surface = surface;
@@ -144,6 +149,48 @@ export class DriveInput {
     return control;
   }
 
+  /**
+   * Holds a fire button for a few ticks, for an on-screen button that reports a tap rather
+   * than a press and a release. Keys hold for as long as they are down.
+   */
+  tapFire(slot: 0 | 1, ticks = 6): void {
+    this.firePulse[slot] = Math.max(this.firePulse[slot]!, ticks);
+  }
+
+  /** Presses a manual utility's button: the server acts on the press, not on the hold. */
+  tapUse(bit: number, ticks = 3): void {
+    if (bit >= 0 && bit < this.usePulse.length)
+      this.usePulse[bit] = Math.max(this.usePulse[bit]!, ticks);
+  }
+
+  /**
+   * Fire and utility buttons for the next simulation tick (Section 7.2: Space fires weapon 1,
+   * E fires weapon 2, R repairs; the digit keys press the manual utilities in order). Call
+   * once per tick: tapped buttons count down here.
+   */
+  buttons(out: { fire: number; use: number }): void {
+    out.fire = 0;
+    out.use = 0;
+    const k = this.keys;
+    for (let slot = 0; slot < 2; slot++) {
+      if (this.firePulse[slot]! > 0) {
+        this.firePulse[slot]!--;
+        if (this.enabled) out.fire |= 1 << slot;
+      }
+    }
+    for (let bit = 0; bit < this.usePulse.length; bit++) {
+      if (this.usePulse[bit]! > 0) {
+        this.usePulse[bit]!--;
+        if (this.enabled) out.use |= 1 << bit;
+      }
+      if (this.enabled && k.has(`Digit${bit + 1}`)) out.use |= 1 << bit;
+    }
+    if (!this.enabled) return;
+    if (k.has('Space')) out.fire |= 1;
+    if (k.has('KeyE')) out.fire |= 2;
+    if (k.has('KeyR')) out.use |= this.repairMask;
+  }
+
   private block = (event: Event): void => {
     event.preventDefault();
   };
@@ -217,7 +264,7 @@ export class DriveInput {
 
   private onKeyDown = (event: KeyboardEvent): void => {
     if (event.repeat) return;
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code))
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code))
       event.preventDefault();
     this.keys.add(event.code);
   };

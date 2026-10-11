@@ -5,13 +5,16 @@ import {
   EXAMPLE_TEMPLATES,
   baselineBlueprint,
   conditionsFor,
+  createSparringRace,
   environmentFor,
+  raceEntry,
   resolveLoadout,
 } from '@bolt/content';
 import type {
   CarSnapshot,
   DriveSession,
   InputSample,
+  RaceSnapshot,
   VehicleBlueprint,
   VehicleParams,
 } from '@bolt/shared';
@@ -221,15 +224,29 @@ describe('prediction with heat, energy and engine state', () => {
 
 describe('offline link', () => {
   it('reports the same snapshots and events as an authority and ignores replayed samples', () => {
-    const authority = createDriveSession(track, env, defaultParams);
-    const link = new OfflineLink(authority);
+    const conditions = conditionsFor(CITY_01.id, 'city_clear_night')!;
+    const sparring = createSparringRace(
+      track,
+      env,
+      conditions,
+      raceEntry(baselineBlueprint(), conditions)!,
+      1,
+      'baseline',
+    )!;
+    const link = new OfflineLink(sparring.race, sparring.brains);
     const snaps: CarSnapshot[] = [];
+    const races: RaceSnapshot[] = [];
     link.onSnapshot = (s) => snaps.push(s);
+    link.onRace = (r) => races.push(r);
     const sample: InputSample = { sequence: 1, clientTick: 1, steer: 0, brake: 0, coast: false };
     link.sendInputs([sample]);
     link.sendInputs([sample]);
-    expect(authority.tick).toBe(1);
+    expect(sparring.race.tick).toBe(1);
     expect(snaps.at(-1)!.ackSequence).toBe(1);
+    // The race around the car arrives with every snapshot, and carries that same snapshot.
+    expect(races).toHaveLength(snaps.length);
+    expect(races.at(-1)!.car).toBe(snaps.at(-1));
+    expect(races.at(-1)!.rival.x).toBe(track.spawns[1]!.x);
     link.resetCar();
     expect(snaps.at(-1)!.phase).toBe('COUNTDOWN');
   });

@@ -10,6 +10,9 @@ export class InputQueue {
   private readonly steers: Float64Array;
   private readonly brakes: Float64Array;
   private readonly coasts: Uint8Array;
+  private readonly fires: Uint8Array;
+  private readonly uses: Uint8Array;
+  private readonly targets: Uint8Array;
   private head = 0;
   private count = 0;
 
@@ -18,6 +21,9 @@ export class InputQueue {
     this.steers = new Float64Array(capacity);
     this.brakes = new Float64Array(capacity);
     this.coasts = new Uint8Array(capacity);
+    this.fires = new Uint8Array(capacity);
+    this.uses = new Uint8Array(capacity);
+    this.targets = new Uint8Array(capacity);
   }
 
   get size(): number {
@@ -35,6 +41,9 @@ export class InputQueue {
     this.steers[slot] = sample.steer;
     this.brakes[slot] = sample.brake;
     this.coasts[slot] = sample.coast ? 1 : 0;
+    this.fires[slot] = sample.fire ?? 0;
+    this.uses[slot] = sample.use ?? 0;
+    this.targets[slot] = sample.target ?? 0;
     this.count += 1;
   }
 
@@ -47,6 +56,9 @@ export class InputQueue {
     out.steer = this.steers[slot]!;
     out.brake = this.brakes[slot]!;
     out.coast = this.coasts[slot] === 1;
+    out.fire = this.fires[slot]!;
+    out.use = this.uses[slot]!;
+    out.target = this.targets[slot]!;
     this.head = (this.head + 1) % this.capacity;
     this.count -= 1;
     return this.sequences[slot]!;

@@ -6,6 +6,7 @@ import type { TrackDefinition } from '@bolt/shared';
  */
 export function makeProvingGround(
   surface: TrackDefinition['main']['surface'] = 'asphalt',
+  obstacles: TrackDefinition['obstacles'] = [],
 ): TrackDefinition {
   const w = 600;
   return {
@@ -42,7 +43,7 @@ export function makeProvingGround(
     shortcuts: [],
     checkpointCount: 8,
     startNear: { x: 10900, y: 5000 },
-    obstacles: [],
+    obstacles,
     props: [],
     landmarks: [],
     weatherPresetIds: ['city_clear_night'],

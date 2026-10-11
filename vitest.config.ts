@@ -17,6 +17,8 @@ export default defineConfig({
       'tests/integration/**/*.test.ts',
       // Handling, frame pacing and netcode benches with their acceptance thresholds.
       'tests/feel/**/*.test.ts',
+      // Combat balance: every shipped build against every other, and the weapon bench.
+      'tests/balance/**/*.test.ts',
     ],
     environment: 'node',
     // Colyseus loads @pm2/io, which writes its own messages to the parent IPC channel

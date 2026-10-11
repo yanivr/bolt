@@ -19,6 +19,12 @@ export type DriveRoomTuning = {
   maxMalformedMessages: number;
   /** Seconds without any input after which an abandoned room closes itself. */
   idleSeconds: number;
+  /**
+   * Whether a join may choose its rival, its seed or a showcase scenario. On everywhere but
+   * production by default: reviews and tests need specific matchups, players do not get to
+   * pick an opponent that suits them.
+   */
+  debugOptions: boolean;
 };
 
 export type GameServerConfig = {
@@ -72,6 +78,7 @@ export function resolveConfig(config: GameServerConfig): ResolvedConfig {
       reconnectSeconds: config.drive?.reconnectSeconds ?? 20,
       maxMalformedMessages: config.drive?.maxMalformedMessages ?? 12,
       idleSeconds: config.drive?.idleSeconds ?? 300,
+      debugOptions: config.drive?.debugOptions ?? nodeEnv !== 'production',
     },
   };
 }

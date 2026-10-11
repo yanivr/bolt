@@ -22,6 +22,9 @@ the specification is the requirement list; rows are added here as milestones lan
 | `npx tsx tests/feel/buildsReport.ts` | Race time, top speed, launch, heat and stability of every shipped build |
 | `npx tsx tests/tools/syncGarageDoc.ts` | Regenerates the part and chassis tables in `docs/GARAGE_API.md` |
 | `npx tsx tests/feel/netcodeReport.ts` | Prediction corrections under latency, jitter and frame hitches      |
+| `npx tsx tests/scenarios/run.ts [id \| all]` | Lists the combat showcase scenarios, prints the event timeline of one, or runs every one and reports unmet expectations |
+| `npx tsx tests/balance/report.ts [seeds] [clear \| rain] [bench]` | Combat balance: every starter and example build against every other on Neon Cut, and the twenty-weapon bench, as Markdown |
+| `npx tsx tests/tools/combatTimelines.ts` | The per-weapon event sequence table of `docs/COMBAT_API.md` |
 
 ## Automated coverage in Milestone A
 
@@ -301,6 +304,30 @@ help paragraph is gone.
 Not automated here: whether the redrawn parts read on a real phone (developer review of the
 preview sheets only), and the combat use of the anchors (Milestone C).
 
+## Automated coverage added in Milestone C part 1 (the combat simulation)
+
+Rules only. Nothing here checks what combat looks or sounds like; that is part 2.
+
+| File | What it holds |
+| :-- | :-- |
+| `tests/unit/combat.test.ts` (69) | Section 19.1 rows for damage and combat rules, apart from any one part: component states and what each does to the car, hit localisation by position and arc, the order of shield, breakaway armor, arc armor and component, penetration, status stacking and caps, the 45 percent slow cap, crowd-control immunity, knockout and limp, ramming by mass and the spawn grace, heat and energy limits on firing, swept projectiles against cars, walls and obstacles, line of sight, hazards and their weather, two-car determinism |
+| `tests/unit/combatParts.test.ts` (127) | All sixty weapons, defenses and utilities: for each, one test of what it is for and one of a limit or of what answers it (ammunition, cooldown, arc, range, a counter), with the catalog's own numbers. The last test is table-driven over the catalog and fails if any part has no behavior test or no limit test registered. Also that every part compiles from its `params` and a missing number fails loudly, and the wheel kits and engine with a combat property |
+| `tests/unit/race.test.ts` (29) | Protocol 4 input and join shapes; the grid (side by side, equal distance to the first gate) and the countdown; positions and gaps from both sides; leader changes; finishing, the eight-second window and DNF; the 180-second limit and the tie-breaks in order; whole-race determinism twice over, in rain, across seeds and after a reset; the sparring rival (three clean laps in 110 to 140 s, fires only with the target in arc and range, drops traps only for a car close behind, fits its spare wheel, acts only through a valid control sample); the scenarios (one per weapon, legal builds of 1,000 credits or less, expectations met, identical on a second run, documented); event visibility per driver; the tick budget; entity caps |
+| `tests/integration/combatRoom.test.ts` (10) | Through a real room. All 33 scenarios are played with the fire and utility buttons crossing the wire, and the room's event stream must equal, id for id and field for field, the stream of the same scenario stepped in the test process: every event once and in order, and the server and offline paths the same race. Every one of the twenty weapons fires and takes effect. The server refuses a fire button with no weapon, firing during a cooldown, and any sample that carries ammunition, cooldowns or damage of its own. A connection dropped while a mortar shell is in the air comes back to the server's state, and the explosion and hit that happened meanwhile arrive once, in order |
+| `tests/integration/debugOptions.test.ts` (2) | A server with debug options off refuses a chosen rival, seed or scenario and still runs an ordinary two-car race |
+| `tests/integration/snapshotSize.test.ts` (1) | Bytes of the room's schema over whole races, with the room's own encoder: full state under 2 kB, a patch 159 bytes on average in the heaviest shipped pairing (p95 212, worst 290) |
+| `tests/balance/balance.test.ts` (7) | 110 bot races and the weapon bench at one seed: every pairing ends, mean race length inside 100 to 140 s, no timeouts, knockouts under 3 percent, the harness flags exactly what is outside its thresholds, the sparring driver gets all twenty weapons to go off |
+| `tests/e2e/combat.spec.ts` (2) | In the browser: `?debug=1&scenario=rocket_hit` plays and the other car loses chassis; an ordinary online race has the rival chosen by `?rival=` on the grid and answers the fire key. No console errors |
+
+Tick cost, measured in `race.test.ts` on this machine over three whole bot races (11,847
+ticks, two cars, two brains): mean 76 to 95 microseconds, 99th percentile 0.27 to 0.34 ms,
+worst 1.8 to 2.9 ms across runs (the higher means are with the rest of the suite running
+beside it). A tick is 33.3 ms.
+
+Not automated here: anything visual or audible about combat; two human drivers in one room
+(Milestone E); the rival against a human who fights back; whether the balance numbers match
+what players do.
+
 ## Cannot be verified from this repository
 
 These are requirements, not optional extras, and they stay open in the release checklist
@@ -324,6 +351,6 @@ runs say nothing about frame rate on a phone.
 
 ## Later milestones
 
-Section 19.1 rows for damage, armor in combat, weapons, repairs and AI; the fourteen-step two-client match in 19.2; the stress test in 19.5;
+Section 19.1 rows for the full AI; the fourteen-step two-client match in 19.2; the stress test in 19.5;
 the security list in 19.6 beyond what the drive room already covers; and the 100-room load
 exercise arrive with the features they test.

@@ -27,7 +27,9 @@ describe('drive room input policy', () => {
       expect(tick()).toBe(1);
       expect(pacer.ackSequence).toBe(i);
     }
-    expect(applied.map((c) => c.steer)).toEqual(Array.from({ length: 20 }, (_, i) => (i + 1) / 1000));
+    expect(applied.map((c) => c.steer)).toEqual(
+      Array.from({ length: 20 }, (_, i) => (i + 1) / 1000),
+    );
   });
 
   it('waits when a sample is late, then catches up without repeating or skipping anything', () => {
@@ -76,7 +78,7 @@ describe('drive room input policy', () => {
     for (let i = 0; i < MAX_STALL_TICKS; i++) expect(tick()).toBe(0);
     // Allowance used up: the car moves again on the held sample, unacknowledged.
     expect(tick()).toBe(1);
-    expect(applied.at(-1)).toEqual({ steer: 0.5, brake: 0, coast: false });
+    expect(applied.at(-1)).toMatchObject({ steer: 0.5, brake: 0, coast: false });
     expect(pacer.ackSequence).toBe(1);
     for (let i = 0; i < STALE_INPUT_TICKS + MAX_STALL_TICKS + 4; i++) tick();
     expect(applied.at(-1)!.coast).toBe(true);

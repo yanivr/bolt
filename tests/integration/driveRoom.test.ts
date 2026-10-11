@@ -71,6 +71,9 @@ function joinOptions(overrides: Record<string, unknown> = {}): DriveJoinOptions 
     trackId: TRACK_ID,
     weatherPresetId: WEATHER_ID,
     blueprint: BASELINE_BLUEPRINT,
+    // The room is a two-car race now. These tests are about one driver's car, so the other
+    // slot is the unarmed baseline car; tests/integration/combatRoom.test.ts covers combat.
+    rivalTemplateId: 'baseline',
     ...overrides,
   } as DriveJoinOptions;
 }
