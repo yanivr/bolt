@@ -4,6 +4,90 @@ Catalog and balance data use semantic versions (`CATALOG_VERSION` in
 `packages/content/src/catalog.ts`). Every change to a price, mass, coefficient or track is
 listed here with the measurement that motivated it.
 
+## 0.4.0 (five chassis, by product-owner decision of October 11, 2026)
+
+The catalog is 105 parts: 5 chassis, 20 engines, 20 wheel kits, 20 weapons, 20 defenses and
+20 utilities. Fifteen chassis are gone (Needle, Turtle, Crab, Cobra, Scorpion, Buggy,
+Chameleon, Brick, Wagon, Rammer, Drifter, Kangaroo, Horseshoe, Twins, Platform); see
+`docs/DECISIONS.md` entry 87. Engines, wheel kits and accessories are untouched. The wire
+format did not change, so the protocol is still version 3; a blueprint stamped 0.3.0 is
+refused as out of date, and one that names a retired chassis as an unknown part.
+
+The five that remain were reviewed as a set, so that each is clearly best at one thing and
+pays for it in a number the garage shows. `tests/unit/catalog.test.ts` ("five chassis, each
+with a clear strength and a clear cost") holds every claim in this table to the data.
+
+| Chassis | Price | Mass kg | Load rec / max kg | Mounts | Drag | Yaw | Stability | Integrity | Best at | Cost |
+| :-- | --: | --: | :-- | --: | --: | --: | --: | --: | :-- | :-- |
+| Beetle | 150 | 250 | 460 / 730 | 5 | 1.00 | 1.00 | 0 | 110 | Cheapest four-wheel frame; the only one with a nose, a roof, a side and a tail mount | Tops no chart |
+| Arrow | 180 | 230 | 360 / 600 | 4 | 0.84 | 1.00 | 0 | 95 | Lowest drag by 0.16, so the highest top speed | Fewest mounts, none for a utility pod, smallest four-wheel load limit |
+| Pickup | 185 | 390 | 780 / 1200 | 6 | 1.08 | 1.00 | 0 | 122 | Highest load by 150 kg; the largest mount in the game, which takes any part | Heavy and draggy, no nose mount, parts in the bed take 15% more damage |
+| Spider | 235 | 420 | 700 / 1050 | 8 | 1.10 | 0.94 | +18 | 115 | Most stable by 18 points; most mounts; the only side mounts | Priciest frame, six wheels cost half again, most drag, slowest steering |
+| Trike | 120 | 145 | 280 / 460 | 4 | 1.00 | 1.08 | -16 | 80 | Cheapest and lightest; a wheel kit costs a quarter less | Least stable, weakest, smallest load limit |
+
+Changes from 0.3.0, each kept modest:
+
+| Chassis | Value | 0.3.0 | 0.4.0 | Why |
+| :-- | :-- | :-- | :-- | :-- |
+| Arrow | Load rec / max | 420 / 680 | 360 / 600 | "Little room for equipment" was a 50 kg difference from the Beetle that nobody would notice. Now 130 kg. |
+| Arrow | Integrity | 100 | 95 | A light wedge should not be as tough as the Beetle (110) for the asking. |
+| Arrow | `roof_mid` | 12 x 14 at y 2 | 10 x 18 at y 0 | The railgun (8 x 18) lost its only homes with the Needle. The Arrow's spine is the one place it fits lengthwise; 10 wide keeps the box 2 px clear of the front wheel wells. Turrets and other 12 x 12 parts go on `roof_rear`. |
+| Pickup | Mass | 365 | 390 | "Heavy hauler": the frame itself now weighs clearly more than the ordinary two. |
+| Pickup | Load rec / max | 690 / 1080 | 780 / 1200 | It carried less than the Spider (1150). It now carries the most, by 150 kg. |
+| Pickup | Drag | 1.07 | 1.08 | With the mass, the cost of the bed. |
+| Pickup | Mounts | 8: hood, two sill pods, two bed racks, two rails, tailgate | 6: cab roof, bed rack, two rails, bed floor, tailgate | Six tiles fit the garage. The hood mount sat on top of the engine, which stands through the hood, and is gone with the two sill pods; a small `roof_cab` mount (14 x 10) replaces them. |
+| Pickup | `bed_front` | UTILITY, 18 x 14, holds two | UNIVERSAL, 18 x 12, holds two | The rack behind the cab takes any two small parts, not only utilities. |
+| Pickup | `bed_rear` | UTILITY, 18 x 14, holds two | UNIVERSAL, 18 x 16, holds one | The bed floor is the largest mount in the game and takes any one part. It is the only home of the Arc Mortar (16 x 16), which lost all of its mounts with the retired frames. |
+| Spider | Load rec / max | 760 / 1150 | 700 / 1050 | So the Pickup, not the Spider, is the hauler. The Spider still carries 320 kg more than the Beetle. |
+| Trike | Drag | 0.94 | 1.00 | Low drag is the Arrow's alone. This also answers the open question below: Tiny Trouble no longer matches the Straight-Line Rocket in the dry (106.6 s against 104.5 s, was 105.5 s against 104.5 s) for two thirds of the price. |
+
+Not changed: every price, the Beetle in full (its handling bench and Section 6.5 targets are
+untouched: 0 to 60 MPH 3.97 s, 84.6 MPH, Neon Cut 120.7 s dry), the Spider's and the Trike's
+stability figures, and all wheel anchors, body bounds and engine bays. With the retired
+frames went their one-off rules: the reduced armor allowances of the Needle and the Buggy,
+the Horseshoe's any-weapon cavity and the Crab's and Scorpion's aim overrides. The rules
+that read them are still in `packages/shared` and are still tested as data; no chassis uses
+them. Every accessory still fits at least one mount of at least one frame.
+
+Shipped blueprints. Baseline and Rookie are unchanged. The starters are now one for each
+chassis: Rookie (Beetle), Sprinter (Arrow, unchanged), Packhorse (Pickup), Longlegs (Spider)
+and Tinker (now a Trike). Of the six example builds, four are as Section 11.9 lists them;
+Sticky Turtle is replaced by Iron Mule (Pickup, Four-Cylinder, Armored Tires, Arc Mortar, Oil
+Slick, Energy Shield, Repair Kit), and Back-Alley Trap moves from the Scorpion to the Beetle
+with the same engine, tires and parts.
+
+Measured on Neon Cut with the centerline driver, three laps, clear night and rainy night
+(`npx tsx tests/feel/buildsReport.ts`; `tests/unit/docs.test.ts` fails if this table and the
+simulator disagree):
+
+| Build | Cost | Mass kg | Stability | Dry race s | Dry best lap s | Dry top MPH | 0 to 60 s | Rain race s | Rain top MPH | Peak slip dry / rain | Peak heat dry | Low power s dry | Walls dry / rain |
+| :-- | --: | --: | --: | --: | --: | --: | --: | --: | --: | :-- | --: | --: | :-- |
+| Baseline Beetle | 370 | 393 | 76 | 120.7 | 39.1 | 84.6 | 3.97 | 125.4 | 84.5 | 10.4 / 9.9 | 45 | 0.0 | 0 / 0 |
+| Rookie | 480 | 456 | 68 | 122.4 | 39.5 | 84.1 | 4.67 | 127.5 | 84.0 | 10.4 / 9.5 | 45 | 0.0 | 0 / 0 |
+| Sprinter | 560 | 459 | 70 | 110.7 | 35.8 | 95.8 | 3.40 | 117.2 | 95.6 | 10.9 / 10.3 | 38 | 0.0 | 0 / 0 |
+| Packhorse | 710 | 742 | 80 | 121.5 | 38.8 | 88.1 | 5.93 | 127.6 | 87.8 | 10.3 / 9.4 | 73 | 0.0 | 0 / 0 |
+| Longlegs | 735 | 756 | 100 | 122.2 | 39.0 | 87.6 | 6.07 | 128.3 | 87.3 | 10.2 / 9.2 | 73 | 0.0 | 0 / 0 |
+| Tinker | 565 | 370 | 48 | 115.9 | 37.8 | 88.9 | 3.13 | 120.6 | 89.0 | 12.5 / 12.0 | 94 | 0.0 | 0 / 0 |
+| Straight-Line Rocket | 725 | 549 | 71 | 104.5 | 33.7 | 101.1 | 3.10 | 116.8 | 100.2 | 11.4 / 10.1 | 63 | 0.0 | 0 / 0 |
+| Iron Mule | 920 | 812 | 69 | 135.5 | 43.0 | 79.5 | 9.20 | 142.5 | 78.9 | 9.8 / 9.0 | 45 | 0.0 | 0 / 0 |
+| Dust Spider | 763 | 761 | 100 | 132.5 | 42.6 | 79.4 | 6.60 | 138.5 | 79.2 | 9.5 / 8.7 | 63 | 0.0 | 0 / 0 |
+| Rain Runner | 715 | 517 | 66 | 120.3 | 39.3 | 84.9 | 3.07 | 120.8 | 84.9 | 10.3 / 10.1 | 57 | 99.3 | 0 / 0 |
+| Back-Alley Trap | 630 | 526 | 66 | 118.4 | 38.3 | 87.6 | 3.97 | 123.8 | 87.4 | 10.5 / 9.7 | 54 | 0.0 | 0 / 0 |
+| Tiny Trouble | 479 | 317 | 49 | 106.6 | 34.6 | 98.4 | 2.67 | 112.9 | 98.3 | 12.9 / 13.2 | 75 | 0.0 | 0 / 0 |
+
+What the table says:
+
+- The six example builds span 104.5 to 135.5 s dry and 112.9 to 142.5 s in rain, top speeds
+  79 to 101 MPH, launches 2.67 to 9.20 s and stability 49 to 100.
+- The five starters, one a chassis, are spread the way their frames promise: the Sprinter is
+  quickest (110.7 s, 95.8 MPH), the Tinker next and the least stable of them (48), Longlegs
+  cannot be tipped (100), and the Packhorse carries 742 kg at the pace of the stock Beetle on
+  a V6.
+- Iron Mule is the slowest and heaviest example, as Sticky Turtle was (135.5 s, 812 kg, 9.20 s
+  to 60 MPH). Its armor, shield and mortar are not scored by this bench: combat arrives in
+  Milestone C.
+- No build touched a wall in either condition.
+
 ## 0.3.0 (Milestone B: the full catalog and the engineering model)
 
 All 120 parts now carry data: 20 chassis, 20 engines, 20 wheel kits, 20 weapons, 20 defenses
@@ -45,8 +129,8 @@ What the table says:
   race short of power, as Section 11.9 describes both.
 - Sticky Turtle and Dust Spider are slow by design. They carry armor and weapons that this
   bench cannot score, because combat arrives in Milestone C.
-- **Open balance question.** Tiny Trouble costs 479 credits and is within a second of the
-  725-credit Rocket in the dry and faster in the rain. Its stated price is fragility and
+- **Open balance question (answered in part in 0.4.0).** Tiny Trouble costs 479 credits and
+  is within a second of the 725-credit Rocket in the dry and faster in the rain. Its stated price is fragility and
   instability (49, below its chassis threshold), which a lone car on a clean line never
   pays. It needs looking at again once damage and opponents exist. No value was tuned to
   hide it.

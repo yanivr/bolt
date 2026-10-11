@@ -42,7 +42,7 @@ describe('the stored car (store migration)', () => {
   it('migrates the Milestone A loadout to a blueprint and removes the old key', () => {
     const old = storage({
       [LEGACY_LOADOUT_KEY]: JSON.stringify({
-        chassisId: 'chassis_turtle',
+        chassisId: 'chassis_spider',
         engineId: 'engine_four_cylinder',
         tireKitId: 'tires_street',
         paintId: 'paint_mint',
@@ -50,7 +50,7 @@ describe('the stored car (store migration)', () => {
     });
     const restored = restoreBlueprint(old);
     expect(blueprintLoadout(restored)).toEqual({
-      chassisId: 'chassis_turtle',
+      chassisId: 'chassis_spider',
       engineId: 'engine_four_cylinder',
       tireKitId: 'tires_street',
       paintId: 'paint_mint',
@@ -101,6 +101,19 @@ describe('the stored car (store migration)', () => {
       },
       { [BLUEPRINT_KEY]: 'x'.repeat(100_000) },
       { [LEGACY_LOADOUT_KEY]: 'not json' },
+      // A Milestone A pick of a chassis that has since been retired.
+      {
+        [LEGACY_LOADOUT_KEY]: JSON.stringify({
+          chassisId: 'chassis_turtle',
+          engineId: 'engine_four_cylinder',
+          tireKitId: 'tires_street',
+          paintId: 'paint_mint',
+        }),
+      },
+      // A stored car on a retired chassis: never restored as the current car.
+      {
+        [BLUEPRINT_KEY]: JSON.stringify({ ...ROOKIE_BLUEPRINT, chassisId: 'chassis_turtle' }),
+      },
       { [LEGACY_LOADOUT_KEY]: '"chassis_turtle"' },
       { [LEGACY_LOADOUT_KEY]: '[1,2,3]' },
       { [LEGACY_LOADOUT_KEY]: JSON.stringify({ chassisId: 'chassis_from_the_future' }) },

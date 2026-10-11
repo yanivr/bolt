@@ -17,10 +17,12 @@ type Props = {
  */
 export function PartIcon({ manifests, partId, category, size = 40 }: Props) {
   const sheets = manifests?.cars.icons ?? [];
-  const sheet =
-    [...sheets]
-      .filter((s) => Object.prototype.hasOwnProperty.call(s.index, partId))
-      .sort((a, b) => b.size - a.size)[0] ?? null;
+  // The largest sheet that fits the box at its own size; a box smaller than every sheet takes
+  // the smallest, so a 24 pixel icon is the 24 pixel drawing and never a cropped 32.
+  const drawn = [...sheets]
+    .filter((s) => Object.prototype.hasOwnProperty.call(s.index, partId))
+    .sort((a, b) => b.size - a.size);
+  const sheet = drawn.find((s) => s.size <= size) ?? drawn[drawn.length - 1] ?? null;
   if (manifests && sheet) {
     const index = sheet.index[partId] ?? 0;
     // Whole and half steps: one and a half is exact on a 2x screen and all but exact on a 3x

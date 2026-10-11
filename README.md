@@ -16,12 +16,13 @@ Milestone A of Section 20 is implemented and awaiting hardware sign-off. What ru
   predicts with the same shared code and reconciles to the server.
 - A fixed north-up camera with look-ahead, and a floating joystick that points where the car
   should go, with a wheel-style option, keyboard and mouse fallbacks and a left-handed layout.
-- Four composited cars (Beetle plus the Arrow, Turtle and Spider benchmark frames), drawn from
-  separate body, wheel, engine, shadow and light layers at 64 headings.
+- Five composited cars (Beetle, Arrow, Pickup, Spider and Trike: the whole chassis list, by
+  product-owner decision, see `docs/DECISIONS.md` entry 87), drawn from separate body, wheel,
+  engine, shadow and light layers at 64 headings.
 - Anonymous guest sessions, a versioned HTTP API, and automated unit, integration and
   end-to-end tests.
 
-Everything else in the specification (garage, 120-part catalog, weapons, AI rivals, friend
+Everything else in the specification (garage, 105-part catalog, weapons, AI rivals, friend
 rooms, seven more tracks, blueprints, deployment) belongs to Milestones B through G and is
 tracked in `docs/RELEASE_CHECKLIST.md`. Nothing in this build pretends to be those features.
 

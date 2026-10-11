@@ -30,7 +30,7 @@ type LibraryState = {
   duplicate: (id: string) => LibraryChange;
   rename: (id: string, name: string) => LibraryChange;
   remove: (id: string) => void;
-  repair: (id: string) => { ok: boolean; removed: RemovedPart[] };
+  repair: (id: string) => { ok: boolean; removed: RemovedPart[]; rebuiltOn: string | null };
 };
 
 /** My Blueprints as the screens see it: the validated list plus actions that persist. */
@@ -51,9 +51,9 @@ export const useLibrary = create<LibraryState>((set, get) => {
     remove: (id) => commit(deleteSaved(get().entries, id)),
     repair: (id) => {
       const result = repairSaved(get().entries, id, CATALOG);
-      if (!result.ok) return { ok: false, removed: [] };
+      if (!result.ok) return { ok: false, removed: [], rebuiltOn: null };
       commit(result.entries);
-      return { ok: true, removed: result.removed };
+      return { ok: true, removed: result.removed, rebuiltOn: result.rebuiltOn };
     },
   };
 });

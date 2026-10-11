@@ -1,6 +1,7 @@
 import {
   ACCESSORIES,
   CATALOG,
+  CHASSIS_LIST,
   DEFENSE_LIST,
   UTILITY_LIST,
   WEAPON_LIST,
@@ -37,9 +38,9 @@ import { FULL, paramsOf, rig, sprint, statsOf } from '../helpers/rig.js';
  * the way a part of that kind must.
  */
 
-/** The bench: a Platform, whose universal mounts take any part, on stock essentials. */
+/** The bench: a Pickup, whose open bed takes any part, on stock essentials. */
 const BENCH: VehicleBlueprint = baselineBlueprint(
-  { chassisId: 'chassis_platform', engineId: 'engine_four_cylinder' },
+  { chassisId: 'chassis_pickup', engineId: 'engine_four_cylinder' },
   'Bench',
 );
 
@@ -191,12 +192,12 @@ describe('weapons (Section 11.5)', () => {
 
   it('counts a weapon toward Firepower only when it can actually fire', () => {
     const armed = statsOf(
-      car('chassis_platform', [
-        { partId: 'weapon_front_mg', mountId: 'deck_front', assignedActionSlot: 0 },
+      car('chassis_pickup', [
+        { partId: 'weapon_front_mg', mountId: 'bed_rear', assignedActionSlot: 0 },
       ]),
     );
     const idle = statsOf(
-      car('chassis_platform', [{ partId: 'weapon_front_mg', mountId: 'deck_front' }]),
+      car('chassis_pickup', [{ partId: 'weapon_front_mg', mountId: 'bed_rear' }]),
     );
     expect(armed.scores.firepower).toBeGreaterThan(20);
     expect(idle.scores.firepower).toBe(0);
@@ -205,12 +206,12 @@ describe('weapons (Section 11.5)', () => {
     expect(idle.details.firepower.lines.join(' ')).toContain('Give it a fire button');
     // A hybrid on automatic counts for a little less than one under the driver's thumb.
     const manual = statsOf(
-      car('chassis_platform', [
-        { partId: 'weapon_turret', mountId: 'deck_fore', assignedActionSlot: 0 },
+      car('chassis_pickup', [
+        { partId: 'weapon_turret', mountId: 'bed_rear', assignedActionSlot: 0 },
       ]),
     );
     const auto = statsOf(
-      car('chassis_platform', [{ partId: 'weapon_turret', mountId: 'deck_fore', autoMode: true }]),
+      car('chassis_pickup', [{ partId: 'weapon_turret', mountId: 'bed_rear', autoMode: true }]),
     );
     expect(auto.details.firepower.threat).toBeLessThan(manual.details.firepower.threat);
     expect(auto.details.firepower.threat).toBeGreaterThan(manual.details.firepower.threat * 0.8);
@@ -233,47 +234,23 @@ describe('weapons (Section 11.5)', () => {
     expect(last).toBeLessThanOrEqual(100);
   });
 
-  it('applies the Crab and Scorpion aim overrides to weapons on the mounts they name', () => {
+  it('aims every weapon by its own cone and range, and still honors an aim override as data', () => {
+    const resolved = (bp: VehicleBlueprint) => resolveBlueprint(bp, CATALOG)!;
     const aimOf = (bp: VehicleBlueprint) => {
-      const build = resolveBlueprint(bp, CATALOG)!;
+      const build = resolved(bp);
       return effectiveAim(aggregateModifiers(build), build.parts[0]!);
     };
-    // Crab: side weapon rotation freedom +45 degrees.
-    expect(
-      aimOf(
-        car('chassis_crab', [
-          { partId: 'weapon_front_mg', mountId: 'left_mid', assignedActionSlot: 0 },
-        ]),
-      ),
-    ).toEqual({ coneDegrees: 130, range: 220 });
-    expect(
-      aimOf(
-        car('chassis_crab', [
-          { partId: 'weapon_front_mg', mountId: 'roof_mid', assignedActionSlot: 0 },
-        ]),
-      ),
-    ).toEqual({ coneDegrees: 85, range: 220 });
-    expect(
-      aimOf(
-        car('chassis_turtle', [
-          { partId: 'weapon_front_mg', mountId: 'left_mid', assignedActionSlot: 0 },
-        ]),
-      ),
-    ).toEqual({ coneDegrees: 85, range: 220 });
-    // Scorpion: rear weapon range +8%.
-    const boom = aimOf(
-      car('chassis_scorpion', [
-        { partId: 'weapon_rear_mg', mountId: 'rear_boom', rotationQuarterTurns: 2 },
-      ]),
-    );
-    expect(boom.range).toBeCloseTo(220 * 1.08, 9);
-    expect(
-      aimOf(
-        car('chassis_scorpion', [
-          { partId: 'weapon_rear_mg', mountId: 'roof_mid', rotationQuarterTurns: 2 },
-        ]),
-      ).range,
-    ).toBe(220);
+    // None of the five chassis changes a weapon's aim.
+    for (const chassis of CHASSIS_LIST)
+      expect(aggregateModifiers(resolved(car(chassis.id))).aimArcs, chassis.id).toEqual([]);
+    const side = car('chassis_spider', [
+      { partId: 'weapon_front_mg', mountId: 'left_front', assignedActionSlot: 0 },
+    ]);
+    const roof = car('chassis_spider', [
+      { partId: 'weapon_front_mg', mountId: 'roof_mid', assignedActionSlot: 0 },
+    ]);
+    expect(aimOf(side)).toEqual({ coneDegrees: 85, range: 220 });
+    expect(aimOf(roof)).toEqual({ coneDegrees: 85, range: 220 });
     expect(
       aimOf(
         car('chassis_beetle', [
@@ -281,18 +258,17 @@ describe('weapons (Section 11.5)', () => {
         ]),
       ).range,
     ).toBe(220);
-    // And the Firepower score sees the difference.
-    const side = statsOf(
-      car('chassis_crab', [
-        { partId: 'weapon_front_mg', mountId: 'left_mid', assignedActionSlot: 0 },
-      ]),
-    );
-    const roof = statsOf(
-      car('chassis_crab', [
-        { partId: 'weapon_front_mg', mountId: 'roof_mid', assignedActionSlot: 0 },
-      ]),
-    );
-    expect(side.details.firepower.threat).toBeGreaterThan(roof.details.firepower.threat * 1.1);
+    // The override primitive is still read: a frame that widened side mounts by 45 degrees and
+    // lengthened them by 8% would change exactly the weapons on those mounts.
+    const widened = (bp: VehicleBlueprint) => {
+      const build = resolved(bp);
+      const totals = aggregateModifiers(build);
+      totals.aimArcs.push({ mounts: ['LEFT', 'RIGHT'], addDegrees: 45, rangeFactor: 1.08 });
+      return effectiveAim(totals, build.parts[0]!);
+    };
+    expect(widened(side).coneDegrees).toBe(130);
+    expect(widened(side).range).toBeCloseTo(220 * 1.08, 9);
+    expect(widened(roof)).toEqual({ coneDegrees: 85, range: 220 });
   });
 });
 
@@ -346,9 +322,13 @@ describe('defenses (Section 11.6)', () => {
   );
 
   it('puts plate armor on the arc the plate faces', () => {
+    // The Beetle has the nose and tail mounts, the Spider the side ones.
     const armor = (parts: Parameters<typeof car>[1]) =>
-      totalsOf(car('chassis_turtle', parts)).armor;
+      totalsOf(car('chassis_beetle', parts)).armor;
+    const sides = (parts: Parameters<typeof car>[1]) =>
+      totalsOf(car('chassis_spider', parts)).armor;
     expect(armor([])).toEqual({ front: 0, rear: 0, left: 0, right: 0 });
+    expect(sides([])).toEqual({ front: 0, rear: 0, left: 0, right: 0 });
     expect(
       armor([{ partId: 'defense_light_plate', mountId: 'front_center', rotationQuarterTurns: 0 }]),
     ).toEqual({ front: 25, rear: 0, left: 0, right: 0 });
@@ -356,44 +336,44 @@ describe('defenses (Section 11.6)', () => {
       armor([{ partId: 'defense_light_plate', mountId: 'rear_center', rotationQuarterTurns: 2 }]),
     ).toEqual({ front: 0, rear: 25, left: 0, right: 0 });
     expect(
-      armor([{ partId: 'defense_heavy_plate', mountId: 'left_mid', rotationQuarterTurns: 3 }]),
+      sides([{ partId: 'defense_heavy_plate', mountId: 'left_front', rotationQuarterTurns: 3 }]),
     ).toEqual({ front: 0, rear: 0, left: 75, right: 0 });
     expect(
-      armor([{ partId: 'defense_heavy_plate', mountId: 'right_mid', rotationQuarterTurns: 1 }]),
+      sides([{ partId: 'defense_heavy_plate', mountId: 'right_front', rotationQuarterTurns: 1 }]),
     ).toEqual({ front: 0, rear: 0, left: 0, right: 75 });
     // A plate on a side mount may be turned to face forward instead: it then guards the front.
     expect(
-      armor([
-        { partId: 'defense_light_plate', mountId: 'left_mid', rotationQuarterTurns: 3 },
-        { partId: 'defense_light_plate', mountId: 'front_center' },
+      sides([
+        { partId: 'defense_light_plate', mountId: 'left_front', rotationQuarterTurns: 3 },
+        { partId: 'defense_light_plate', mountId: 'left_rear', rotationQuarterTurns: 0 },
       ]),
     ).toEqual({ front: 25, rear: 0, left: 25, right: 0 });
     // Side Shields are a matched pair: 40 on each side from one part, whichever side holds it.
-    expect(armor([{ partId: 'defense_side_panels', mountId: 'left_mid' }])).toEqual({
+    expect(sides([{ partId: 'defense_side_panels', mountId: 'left_front' }])).toEqual({
       front: 0,
       rear: 0,
       left: 40,
       right: 40,
     });
-    expect(armor([{ partId: 'defense_side_panels', mountId: 'right_mid' }])).toEqual({
+    expect(sides([{ partId: 'defense_side_panels', mountId: 'right_front' }])).toEqual({
       front: 0,
       rear: 0,
       left: 40,
       right: 40,
     });
     // Plates stack on an arc; the Defense detail reports the total.
-    const stacked = car('chassis_turtle', [
-      { partId: 'defense_heavy_plate', mountId: 'front_center' },
-      { partId: 'defense_light_plate', mountId: 'left_mid', rotationQuarterTurns: 0 },
+    const stacked = car('chassis_spider', [
+      { partId: 'defense_heavy_plate', mountId: 'left_front', rotationQuarterTurns: 0 },
+      { partId: 'defense_light_plate', mountId: 'left_rear', rotationQuarterTurns: 0 },
     ]);
     expect(totalsOf(stacked).armor.front).toBe(100);
     expect(statsOf(stacked).details.defense.armorHp).toBe(100);
   });
 
   it('expresses every passive reduction as a damage tag the damage model will read', () => {
-    // The bench Platform has a damage tag of its own (exposed parts); it is set aside here.
+    // The bench Pickup has a damage tag of its own (the open bed); it is set aside here.
     const tags = (partId: string) => {
-      const { mounted_part: _platform, ...rest } = totalsOf(fitted(partId)).damage;
+      const { rear_mounted_part: _pickup, ...rest } = totalsOf(fitted(partId)).damage;
       return rest;
     };
     expect(tags('defense_front_bumper')).toEqual({ ram_front: 0.65 });
@@ -594,7 +574,7 @@ describe('utilities (Section 11.7)', () => {
 
   it('Extra Battery: +65 energy, which delays a shortage and does not prevent one', () => {
     const base = baselineBlueprint(
-      { chassisId: 'chassis_platform', engineId: 'engine_electric_sport' },
+      { chassisId: 'chassis_pickup', engineId: 'engine_electric_sport' },
       'Bench',
     );
     const plain = paramsOf(base);
@@ -622,7 +602,7 @@ describe('utilities (Section 11.7)', () => {
 
   it('Auxiliary Generator: +12 power a second and +3 heat a second', () => {
     const base = baselineBlueprint(
-      { chassisId: 'chassis_platform', engineId: 'engine_electric_sport' },
+      { chassisId: 'chassis_pickup', engineId: 'engine_electric_sport' },
       'Bench',
     );
     const p = paramsOf(fitted('utility_generator', base));

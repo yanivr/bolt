@@ -1,4 +1,4 @@
-import { CATALOG } from '@bolt/content';
+import { CATALOG, baselineBlueprint } from '@bolt/content';
 import type {
   CarPose,
   ChassisSpriteManifest,
@@ -286,46 +286,29 @@ export function measuredBounds(chassisId: string, frame: number): SpriteBox | un
 }
 
 /**
- * Measures what a chassis really draws at some heading frames: the opaque pixels of its body
- * and shadow, in sprite pixels from the car's centre. The workbench sizes the car from this,
- * so the scale is as large as the art allows rather than as large as a guess allows.
+ * Measures what a bare car on a chassis really draws at some heading frames: the opaque
+ * pixels of the whole composition (shadow, wheels, body, engine and lights, on the chassis'
+ * default engine and Street Tires), in sprite pixels from the car's centre. The workbench
+ * sizes the car from this, so the scale is as large as the art allows rather than as large as
+ * a guess allows, and wheels that stand outside the body, as the Spider's do, are counted.
  */
 export async function measureChassis(
   manifests: GameManifests,
   chassisId: string,
   frames: readonly number[],
 ): Promise<void> {
-  const chassis = manifests.cars.chassis[chassisId];
-  if (!chassis || frames.every((frame) => measured.has(`${chassisId}:${frame}`))) return;
-  const [body, shadow] = await Promise.all([
-    loadImage(`${manifests.carsBase}/${chassis.body.file}`),
-    loadImage(`${manifests.carsBase}/${chassis.shadow.file}`),
-  ]);
-  const size = chassis.body.frameWidth;
+  if (!manifests.cars.chassis[chassisId]) return;
+  if (frames.every((frame) => measured.has(`${chassisId}:${frame}`))) return;
+  const sheets = await loadCarSheets(manifests, baselineBlueprint({ chassisId }));
+  if (!sheets) return;
+  const size = sheets.size;
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return;
   for (const frame of frames) {
-    ctx.clearRect(0, 0, size, size);
-    for (const [image, ref, ox, oy] of [
-      [shadow, chassis.shadow, 2, 3],
-      [body, chassis.body, 0, 0],
-    ] as const) {
-      const columns = ref.columns || CAR_SHEET_COLUMNS;
-      ctx.drawImage(
-        image,
-        (frame % columns) * ref.frameWidth,
-        Math.floor(frame / columns) * ref.frameHeight,
-        ref.frameWidth,
-        ref.frameHeight,
-        Math.round(size / 2 - ref.frameWidth / 2) + ox,
-        Math.round(size / 2 - ref.frameHeight / 2) + oy,
-        ref.frameWidth,
-        ref.frameHeight,
-      );
-    }
+    drawCar(ctx, sheets, { frame, headlights: true });
     const data = ctx.getImageData(0, 0, size, size).data;
     const box: SpriteBox = { left: size, top: size, right: -1, bottom: -1 };
     for (let y = 0; y < size; y++)

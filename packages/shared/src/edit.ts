@@ -653,20 +653,94 @@ export type RepairResult =
   | { ok: true; blueprint: VehicleBlueprint; removed: RemovedPart[]; spend: SpendBreakdown }
   | { ok: false; blueprint: VehicleBlueprint; removed: RemovedPart[]; issues: BlueprintIssue[] };
 
+export type RepairOptions = {
+  /**
+   * A chassis to rebuild on when the blueprint names one the catalog no longer has (a frame
+   * retired by a later catalog). Without it such a blueprint cannot be repaired.
+   */
+  fallbackChassisId?: string;
+};
+
+/**
+ * Moves a blueprint whose chassis has left the catalog onto a fallback frame. The engine,
+ * wheel kit, paint and name are kept. Every part the catalog still has is bought again on
+ * the new frame, most expensive first, wherever `suggestMount` finds room, keeping its fire
+ * button when the rules still allow one; whatever has no home, no budget or no weight
+ * allowance left is reported as removed. Returns null when the essentials cannot be saved.
+ */
+function rehomeOnFallback(
+  blueprint: VehicleBlueprint,
+  catalog: Catalog,
+  fallbackChassisId: string,
+): { blueprint: VehicleBlueprint; removed: RemovedPart[] } | null {
+  if (!own(catalog.chassis, fallbackChassisId)) return null;
+  let next: VehicleBlueprint = canonicalizeBlueprint({
+    ...blueprint,
+    catalogVersion: catalog.version,
+    chassisId: fallbackChassisId,
+    parts: [],
+  });
+  if (validateBlueprint(next, catalog).issues.some((i) => i.severity === 'error')) return null;
+  const removed: RemovedPart[] = [];
+  const price = (p: BlueprintPart) => own(catalog.parts, p.partId)?.price ?? -1;
+  const queue = [...blueprint.parts].sort(
+    (a, b) => price(b) - price(a) || (a.instanceId < b.instanceId ? -1 : 1),
+  );
+  for (const part of queue) {
+    const result = installPart(next, catalog, part.partId);
+    if (!result.ok) {
+      removed.push({
+        instance: part,
+        refund: Math.max(0, price(part)),
+        reason: result.issue.code,
+        message: result.issue.message,
+      });
+      continue;
+    }
+    next = result.blueprint;
+    // Keep the player's own fire button or automatic mode where it is still legal.
+    const placed = next.parts.find((p) => p.instanceId === result.instanceId);
+    const wanted = part.autoMode ? 'auto' : (part.assignedActionSlot ?? null);
+    const has = placed?.autoMode ? 'auto' : (placed?.assignedActionSlot ?? null);
+    if (placed && wanted !== has) {
+      const assigned = assignActionSlot(next, catalog, placed.instanceId, wanted);
+      if (
+        assigned.ok &&
+        !validateBlueprint(assigned.blueprint, catalog).issues.some((i) => i.severity === 'error')
+      )
+        next = assigned.blueprint;
+    }
+  }
+  return { blueprint: next, removed };
+}
+
 /**
  * The explicit auto-repair of Section 15.6. The blueprint is re-stamped with the current
  * catalog version, then optional parts are removed until it is legal: first any part an
  * error points at, otherwise any part, always the most expensive first. The chassis, engine
  * and wheel kit are never touched, so a blueprint whose essentials are themselves illegal
- * cannot be repaired and comes back with its remaining issues. The input is not modified;
- * save the result as a new revision.
+ * cannot be repaired and comes back with its remaining issues. The one exception is a chassis
+ * that has left the catalog: given `fallbackChassisId`, the build is moved onto that frame
+ * (see `rehomeOnFallback`) and what could not come along is listed. The input is not
+ * modified; save the result as a new revision.
  */
-export function repairBlueprint(blueprint: VehicleBlueprint, catalog: Catalog): RepairResult {
+export function repairBlueprint(
+  blueprint: VehicleBlueprint,
+  catalog: Catalog,
+  options: RepairOptions = {},
+): RepairResult {
   let next: VehicleBlueprint = canonicalizeBlueprint({
     ...blueprint,
     catalogVersion: catalog.version,
   });
   const removed: RemovedPart[] = [];
+  if (options.fallbackChassisId !== undefined && !own(catalog.chassis, blueprint.chassisId)) {
+    const rehomed = rehomeOnFallback(blueprint, catalog, options.fallbackChassisId);
+    if (rehomed) {
+      next = rehomed.blueprint;
+      removed.push(...rehomed.removed);
+    }
+  }
   const price = (p: BlueprintPart) => own(catalog.parts, p.partId)?.price;
   for (;;) {
     const check = validateBlueprint(next, catalog);

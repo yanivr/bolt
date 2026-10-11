@@ -98,35 +98,42 @@
           "x": 9.9,
           "y": 26
         }
-      ]
+      ],
+      "mountHeights": {
+        "front_center": 11.5,
+        "roof_mid": 16,
+        "left_utility": 7,
+        "right_utility": 7,
+        "rear_center": 11
+      }
     },
-    "chassis_needle": {
-      "id": "chassis_needle",
+    "chassis_arrow": {
+      "id": "chassis_arrow",
       "body": {
-        "file": "chassis_needle_body.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
+        "file": "chassis_arrow_body.png",
+        "frameWidth": 96,
+        "frameHeight": 96,
         "columns": 8,
         "rows": 8
       },
       "shadow": {
-        "file": "chassis_needle_shadow.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
+        "file": "chassis_arrow_shadow.png",
+        "frameWidth": 96,
+        "frameHeight": 96,
         "columns": 8,
         "rows": 8
       },
       "brakeLights": {
-        "file": "chassis_needle_brake.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
+        "file": "chassis_arrow_brake.png",
+        "frameWidth": 96,
+        "frameHeight": 96,
         "columns": 8,
         "rows": 8
       },
       "headlights": {
-        "file": "chassis_needle_head.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
+        "file": "chassis_arrow_head.png",
+        "frameWidth": 96,
+        "frameHeight": 96,
         "columns": 8,
         "rows": 8
       },
@@ -141,97 +148,97 @@
       "wheelAnchors": [
         {
           "id": "front_left",
-          "x": -11,
-          "y": -11,
+          "x": -11.5,
+          "y": -14,
           "steers": true
         },
         {
           "id": "front_right",
-          "x": 11,
-          "y": -11,
+          "x": 11.5,
+          "y": -14,
           "steers": true
         },
         {
           "id": "rear_left",
-          "x": -11.5,
-          "y": 22,
+          "x": -13,
+          "y": 19,
           "steers": false
         },
         {
           "id": "rear_right",
-          "x": 11.5,
-          "y": 22,
+          "x": 13,
+          "y": 19,
           "steers": false
         }
       ],
       "engineAnchor": {
         "x": 0,
-        "y": 22
+        "y": 20
       },
       "exhausts": [
         {
           "x": -4.6,
-          "y": 33
+          "y": 31
         },
         {
           "x": 4.6,
-          "y": 33
+          "y": 31
         }
       ],
       "headlightAnchors": [
         {
-          "x": -4.9,
-          "y": -16.5
+          "x": -5.5,
+          "y": -23
         },
         {
-          "x": 4.9,
-          "y": -16.5
+          "x": 5.5,
+          "y": -23
         }
       ],
       "brakeLightAnchors": [
         {
-          "x": -3.6,
-          "y": 31.4
+          "x": -7.4,
+          "y": 30
         },
         {
-          "x": 3.6,
-          "y": 31.4
+          "x": 7.4,
+          "y": 30
         }
       ],
       "mountHeights": {
-        "front_nose": 8,
-        "front_spine": 8.6,
-        "roof_mid": 12.9,
-        "roof_rear": 12
+        "front_center": 7.5,
+        "roof_mid": 13,
+        "roof_rear": 11.5,
+        "rear_center": 13
       }
     },
-    "chassis_turtle": {
-      "id": "chassis_turtle",
+    "chassis_pickup": {
+      "id": "chassis_pickup",
       "body": {
-        "file": "chassis_turtle_body.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
+        "file": "chassis_pickup_body.png",
+        "frameWidth": 112,
+        "frameHeight": 112,
         "columns": 8,
         "rows": 8
       },
       "shadow": {
-        "file": "chassis_turtle_shadow.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
+        "file": "chassis_pickup_shadow.png",
+        "frameWidth": 112,
+        "frameHeight": 112,
         "columns": 8,
         "rows": 8
       },
       "brakeLights": {
-        "file": "chassis_turtle_brake.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
+        "file": "chassis_pickup_brake.png",
+        "frameWidth": 112,
+        "frameHeight": 112,
         "columns": 8,
         "rows": 8
       },
       "headlights": {
-        "file": "chassis_turtle_head.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
+        "file": "chassis_pickup_head.png",
+        "frameWidth": 112,
+        "frameHeight": 112,
         "columns": 8,
         "rows": 8
       },
@@ -247,62 +254,71 @@
         {
           "id": "front_left",
           "x": -15.5,
-          "y": -19,
+          "y": -23,
           "steers": true
         },
         {
           "id": "front_right",
           "x": 15.5,
-          "y": -19,
+          "y": -23,
           "steers": true
         },
         {
           "id": "rear_left",
           "x": -15.5,
-          "y": 19.5,
+          "y": 22,
           "steers": false
         },
         {
           "id": "rear_right",
           "x": 15.5,
-          "y": 19.5,
+          "y": 22,
           "steers": false
         }
       ],
       "engineAnchor": {
         "x": 0,
-        "y": 21.5
+        "y": -22
       },
+      "engineInBay": true,
       "exhausts": [
         {
           "x": -4.6,
-          "y": 32.5
+          "y": 36.6
         },
         {
           "x": 4.6,
-          "y": 32.5
+          "y": 36.6
         }
       ],
       "headlightAnchors": [
         {
-          "x": -13.2,
-          "y": -23
+          "x": -12.6,
+          "y": -32.4
         },
         {
-          "x": 13.2,
-          "y": -23
+          "x": 12.6,
+          "y": -32.4
         }
       ],
       "brakeLightAnchors": [
         {
-          "x": -13.2,
-          "y": 23.5
+          "x": -14.4,
+          "y": 32.4
         },
         {
-          "x": 13.2,
-          "y": 23.5
+          "x": 14.4,
+          "y": 32.4
         }
-      ]
+      ],
+      "mountHeights": {
+        "roof_cab": 16.2,
+        "bed_front": 6,
+        "left_bed": 10,
+        "right_bed": 10,
+        "bed_rear": 6,
+        "rear_center": 6.6
+      }
     },
     "chassis_spider": {
       "id": "chassis_spider",
@@ -413,656 +429,16 @@
           "x": 5,
           "y": 32
         }
-      ]
-    },
-    "chassis_crab": {
-      "id": "chassis_crab",
-      "body": {
-        "file": "chassis_crab_body.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "shadow": {
-        "file": "chassis_crab_shadow.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "brakeLights": {
-        "file": "chassis_crab_brake.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "headlights": {
-        "file": "chassis_crab_head.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "paintKey": [
-        "#2b0a1f",
-        "#5c1230",
-        "#941f34",
-        "#cf3440",
-        "#f0604c",
-        "#ffb08a"
-      ],
-      "wheelAnchors": [
-        {
-          "id": "front_left",
-          "x": -12,
-          "y": -18,
-          "steers": true
-        },
-        {
-          "id": "front_right",
-          "x": 12,
-          "y": -18,
-          "steers": true
-        },
-        {
-          "id": "rear_left",
-          "x": -12,
-          "y": 18,
-          "steers": false
-        },
-        {
-          "id": "rear_right",
-          "x": 12,
-          "y": 18,
-          "steers": false
-        }
-      ],
-      "engineAnchor": {
-        "x": 0,
-        "y": 20
-      },
-      "exhausts": [
-        {
-          "x": -4.6,
-          "y": 31
-        },
-        {
-          "x": 4.6,
-          "y": 31
-        }
-      ],
-      "headlightAnchors": [
-        {
-          "x": -4.4,
-          "y": -27.6
-        },
-        {
-          "x": 4.4,
-          "y": -27.6
-        }
-      ],
-      "brakeLightAnchors": [
-        {
-          "x": -5.4,
-          "y": 27.4
-        },
-        {
-          "x": 5.4,
-          "y": 27.4
-        }
       ],
       "mountHeights": {
-        "left_front": 7,
-        "right_front": 7,
-        "left_mid": 7,
-        "right_mid": 7,
-        "left_rear": 7,
-        "right_rear": 7,
-        "roof_front": 11.4,
-        "roof_mid": 11.4
-      }
-    },
-    "chassis_cobra": {
-      "id": "chassis_cobra",
-      "body": {
-        "file": "chassis_cobra_body.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "shadow": {
-        "file": "chassis_cobra_shadow.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "brakeLights": {
-        "file": "chassis_cobra_brake.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "headlights": {
-        "file": "chassis_cobra_head.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "paintKey": [
-        "#2b0a1f",
-        "#5c1230",
-        "#941f34",
-        "#cf3440",
-        "#f0604c",
-        "#ffb08a"
-      ],
-      "wheelAnchors": [
-        {
-          "id": "front_left",
-          "x": -13,
-          "y": -12,
-          "steers": true
-        },
-        {
-          "id": "front_right",
-          "x": 13,
-          "y": -12,
-          "steers": true
-        },
-        {
-          "id": "rear_left",
-          "x": -13.5,
-          "y": 23,
-          "steers": false
-        },
-        {
-          "id": "rear_right",
-          "x": 13.5,
-          "y": 23,
-          "steers": false
-        }
-      ],
-      "engineAnchor": {
-        "x": 0,
-        "y": 22
-      },
-      "exhausts": [
-        {
-          "x": -4.6,
-          "y": 33
-        },
-        {
-          "x": 4.6,
-          "y": 33
-        }
-      ],
-      "headlightAnchors": [
-        {
-          "x": -5.4,
-          "y": -32
-        },
-        {
-          "x": 5.4,
-          "y": -32
-        }
-      ],
-      "brakeLightAnchors": [
-        {
-          "x": -6,
-          "y": 35.4
-        },
-        {
-          "x": 6,
-          "y": 35.4
-        }
-      ],
-      "mountHeights": {
-        "front_nose": 10,
-        "front_spine": 11.5,
-        "roof_front": 14.6,
-        "roof_rear": 14.6,
-        "rear_deck": 11.6,
-        "rear_center": 6
-      }
-    },
-    "chassis_scorpion": {
-      "id": "chassis_scorpion",
-      "body": {
-        "file": "chassis_scorpion_body.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "shadow": {
-        "file": "chassis_scorpion_shadow.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "brakeLights": {
-        "file": "chassis_scorpion_brake.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "headlights": {
-        "file": "chassis_scorpion_head.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "paintKey": [
-        "#2b0a1f",
-        "#5c1230",
-        "#941f34",
-        "#cf3440",
-        "#f0604c",
-        "#ffb08a"
-      ],
-      "wheelAnchors": [
-        {
-          "id": "front_left",
-          "x": -13,
-          "y": -18,
-          "steers": true
-        },
-        {
-          "id": "front_right",
-          "x": 13,
-          "y": -18,
-          "steers": true
-        },
-        {
-          "id": "rear_left",
-          "x": -14.5,
-          "y": 14,
-          "steers": false
-        },
-        {
-          "id": "rear_right",
-          "x": 14.5,
-          "y": 14,
-          "steers": false
-        }
-      ],
-      "engineAnchor": {
-        "x": 0,
-        "y": 10
-      },
-      "engineInBay": true,
-      "exhausts": [
-        {
-          "x": -4.6,
-          "y": 21
-        },
-        {
-          "x": 4.6,
-          "y": 21
-        }
-      ],
-      "headlightAnchors": [
-        {
-          "x": -5.3,
-          "y": -27.6
-        },
-        {
-          "x": 5.3,
-          "y": -27.6
-        }
-      ],
-      "brakeLightAnchors": [
-        {
-          "x": -6.6,
-          "y": 20.6
-        },
-        {
-          "x": 6.6,
-          "y": 20.6
-        }
-      ],
-      "mountHeights": {
-        "roof_front": 10,
-        "roof_mid": 14.4,
-        "left_utility": 6.5,
-        "right_utility": 6.5,
-        "rear_center": 12,
-        "rear_boom": 17.8
-      }
-    },
-    "chassis_buggy": {
-      "id": "chassis_buggy",
-      "body": {
-        "file": "chassis_buggy_body.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "shadow": {
-        "file": "chassis_buggy_shadow.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "brakeLights": {
-        "file": "chassis_buggy_brake.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "headlights": {
-        "file": "chassis_buggy_head.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "paintKey": [
-        "#2b0a1f",
-        "#5c1230",
-        "#941f34",
-        "#cf3440",
-        "#f0604c",
-        "#ffb08a"
-      ],
-      "wheelAnchors": [
-        {
-          "id": "front_left",
-          "x": -17,
-          "y": -17,
-          "steers": true
-        },
-        {
-          "id": "front_right",
-          "x": 17,
-          "y": -17,
-          "steers": true
-        },
-        {
-          "id": "rear_left",
-          "x": -17,
-          "y": 17,
-          "steers": false
-        },
-        {
-          "id": "rear_right",
-          "x": 17,
-          "y": 17,
-          "steers": false
-        }
-      ],
-      "engineAnchor": {
-        "x": 0,
-        "y": 19
-      },
-      "exhausts": [
-        {
-          "x": -4.6,
-          "y": 30
-        },
-        {
-          "x": 4.6,
-          "y": 30
-        }
-      ],
-      "headlightAnchors": [
-        {
-          "x": -4.2,
-          "y": -27
-        },
-        {
-          "x": 4.2,
-          "y": -27
-        }
-      ],
-      "brakeLightAnchors": [
-        {
-          "x": -6.2,
-          "y": 26.6
-        },
-        {
-          "x": 6.2,
-          "y": 26.6
-        }
-      ],
-      "mountHeights": {
-        "front_center": 8.6,
-        "roof_front": 17,
-        "roof_rear": 17,
-        "left_utility": 6.5,
-        "right_utility": 6.5,
-        "rear_center": 12
-      }
-    },
-    "chassis_chameleon": {
-      "id": "chassis_chameleon",
-      "body": {
-        "file": "chassis_chameleon_body.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "shadow": {
-        "file": "chassis_chameleon_shadow.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "brakeLights": {
-        "file": "chassis_chameleon_brake.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "headlights": {
-        "file": "chassis_chameleon_head.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "paintKey": [
-        "#2b0a1f",
-        "#5c1230",
-        "#941f34",
-        "#cf3440",
-        "#f0604c",
-        "#ffb08a"
-      ],
-      "wheelAnchors": [
-        {
-          "id": "front_left",
-          "x": -15,
-          "y": -18,
-          "steers": true
-        },
-        {
-          "id": "front_right",
-          "x": 15,
-          "y": -18,
-          "steers": true
-        },
-        {
-          "id": "rear_left",
-          "x": -15,
-          "y": 20,
-          "steers": false
-        },
-        {
-          "id": "rear_right",
-          "x": 15,
-          "y": 20,
-          "steers": false
-        }
-      ],
-      "engineAnchor": {
-        "x": 0,
-        "y": 20
-      },
-      "exhausts": [
-        {
-          "x": -4.6,
-          "y": 31
-        },
-        {
-          "x": 4.6,
-          "y": 31
-        }
-      ],
-      "headlightAnchors": [
-        {
-          "x": -7.4,
-          "y": -33
-        },
-        {
-          "x": 7.6,
-          "y": -32.4
-        }
-      ],
-      "brakeLightAnchors": [
-        {
-          "x": -6.6,
-          "y": 33.4
-        },
-        {
-          "x": 7.6,
-          "y": 33.2
-        }
-      ],
-      "mountHeights": {
-        "rail_front": 10.3,
-        "rail_hood": 10.3,
-        "rail_roof": 14.4,
-        "rail_right": 8,
-        "pod_left_front": 7,
-        "pod_left_rear": 7,
-        "rail_deck": 10.3,
-        "rail_rear": 11.6
-      }
-    },
-    "chassis_brick": {
-      "id": "chassis_brick",
-      "body": {
-        "file": "chassis_brick_body.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "shadow": {
-        "file": "chassis_brick_shadow.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "brakeLights": {
-        "file": "chassis_brick_brake.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "headlights": {
-        "file": "chassis_brick_head.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "paintKey": [
-        "#2b0a1f",
-        "#5c1230",
-        "#941f34",
-        "#cf3440",
-        "#f0604c",
-        "#ffb08a"
-      ],
-      "wheelAnchors": [
-        {
-          "id": "front_left",
-          "x": -20,
-          "y": -24,
-          "steers": true
-        },
-        {
-          "id": "front_right",
-          "x": 20,
-          "y": -24,
-          "steers": true
-        },
-        {
-          "id": "rear_left",
-          "x": -20,
-          "y": 24,
-          "steers": false
-        },
-        {
-          "id": "rear_right",
-          "x": 20,
-          "y": 24,
-          "steers": false
-        }
-      ],
-      "engineAnchor": {
-        "x": 0,
-        "y": 26
-      },
-      "exhausts": [
-        {
-          "x": -4.6,
-          "y": 37
-        },
-        {
-          "x": 4.6,
-          "y": 37
-        }
-      ],
-      "headlightAnchors": [
-        {
-          "x": -16.6,
-          "y": -37.4
-        },
-        {
-          "x": 16.6,
-          "y": -37.4
-        }
-      ],
-      "brakeLightAnchors": [
-        {
-          "x": -16.8,
-          "y": 37.4
-        },
-        {
-          "x": 16.8,
-          "y": 37.4
-        }
-      ],
-      "mountHeights": {
-        "front_center": 9.6,
-        "front_utility": 16,
-        "left_front": 14,
-        "right_front": 14,
-        "roof_mid": 16.7,
-        "left_rear": 14,
-        "right_rear": 14,
-        "rear_utility": 16,
-        "rear_center": 11.6
+        "front_utility": 10,
+        "left_front": 6,
+        "right_front": 6,
+        "roof_front": 13,
+        "roof_mid": 14.5,
+        "left_rear": 6.5,
+        "right_rear": 6.5,
+        "rear_utility": 11.5
       }
     },
     "chassis_trike": {
@@ -1155,975 +531,6 @@
         "roof_mid": 12,
         "left_rear": 6.5,
         "right_rear": 6.5
-      }
-    },
-    "chassis_arrow": {
-      "id": "chassis_arrow",
-      "body": {
-        "file": "chassis_arrow_body.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "shadow": {
-        "file": "chassis_arrow_shadow.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "brakeLights": {
-        "file": "chassis_arrow_brake.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "headlights": {
-        "file": "chassis_arrow_head.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "paintKey": [
-        "#2b0a1f",
-        "#5c1230",
-        "#941f34",
-        "#cf3440",
-        "#f0604c",
-        "#ffb08a"
-      ],
-      "wheelAnchors": [
-        {
-          "id": "front_left",
-          "x": -11.5,
-          "y": -14,
-          "steers": true
-        },
-        {
-          "id": "front_right",
-          "x": 11.5,
-          "y": -14,
-          "steers": true
-        },
-        {
-          "id": "rear_left",
-          "x": -13,
-          "y": 19,
-          "steers": false
-        },
-        {
-          "id": "rear_right",
-          "x": 13,
-          "y": 19,
-          "steers": false
-        }
-      ],
-      "engineAnchor": {
-        "x": 0,
-        "y": 20
-      },
-      "exhausts": [
-        {
-          "x": -4.6,
-          "y": 31
-        },
-        {
-          "x": 4.6,
-          "y": 31
-        }
-      ],
-      "headlightAnchors": [
-        {
-          "x": -5.5,
-          "y": -23
-        },
-        {
-          "x": 5.5,
-          "y": -23
-        }
-      ],
-      "brakeLightAnchors": [
-        {
-          "x": -7.4,
-          "y": 30
-        },
-        {
-          "x": 7.4,
-          "y": 30
-        }
-      ]
-    },
-    "chassis_wagon": {
-      "id": "chassis_wagon",
-      "body": {
-        "file": "chassis_wagon_body.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "shadow": {
-        "file": "chassis_wagon_shadow.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "brakeLights": {
-        "file": "chassis_wagon_brake.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "headlights": {
-        "file": "chassis_wagon_head.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "paintKey": [
-        "#2b0a1f",
-        "#5c1230",
-        "#941f34",
-        "#cf3440",
-        "#f0604c",
-        "#ffb08a"
-      ],
-      "wheelAnchors": [
-        {
-          "id": "front_left",
-          "x": -16.5,
-          "y": -24,
-          "steers": true
-        },
-        {
-          "id": "front_right",
-          "x": 16.5,
-          "y": -24,
-          "steers": true
-        },
-        {
-          "id": "rear_left",
-          "x": -16.5,
-          "y": 22,
-          "steers": false
-        },
-        {
-          "id": "rear_right",
-          "x": 16.5,
-          "y": 22,
-          "steers": false
-        }
-      ],
-      "engineAnchor": {
-        "x": 0,
-        "y": -24
-      },
-      "engineInBay": true,
-      "exhausts": [
-        {
-          "x": -6.4,
-          "y": 40.4
-        },
-        {
-          "x": 6.4,
-          "y": 40.4
-        }
-      ],
-      "headlightAnchors": [
-        {
-          "x": -9,
-          "y": -39.2
-        },
-        {
-          "x": 9,
-          "y": -39.2
-        }
-      ],
-      "brakeLightAnchors": [
-        {
-          "x": -10,
-          "y": 32.2
-        },
-        {
-          "x": 10,
-          "y": 32.2
-        }
-      ],
-      "mountHeights": {
-        "roof_front": 12,
-        "roof_mid": 16,
-        "rack_upper": 13.9,
-        "left_utility": 6.8,
-        "right_utility": 6.8,
-        "rack_deck": 11.3,
-        "rear_rack": 8.7,
-        "rear_center": 6.4
-      }
-    },
-    "chassis_rammer": {
-      "id": "chassis_rammer",
-      "body": {
-        "file": "chassis_rammer_body.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "shadow": {
-        "file": "chassis_rammer_shadow.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "brakeLights": {
-        "file": "chassis_rammer_brake.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "headlights": {
-        "file": "chassis_rammer_head.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "paintKey": [
-        "#2b0a1f",
-        "#5c1230",
-        "#941f34",
-        "#cf3440",
-        "#f0604c",
-        "#ffb08a"
-      ],
-      "wheelAnchors": [
-        {
-          "id": "front_left",
-          "x": -18,
-          "y": -18,
-          "steers": true
-        },
-        {
-          "id": "front_right",
-          "x": 18,
-          "y": -18,
-          "steers": true
-        },
-        {
-          "id": "rear_left",
-          "x": -18,
-          "y": 20,
-          "steers": false
-        },
-        {
-          "id": "rear_right",
-          "x": 18,
-          "y": 20,
-          "steers": false
-        }
-      ],
-      "engineAnchor": {
-        "x": 0,
-        "y": 4
-      },
-      "engineInBay": true,
-      "exhausts": [
-        {
-          "x": -4.6,
-          "y": 15
-        },
-        {
-          "x": 4.6,
-          "y": 15
-        }
-      ],
-      "headlightAnchors": [
-        {
-          "x": -8.6,
-          "y": -28.2
-        },
-        {
-          "x": 8.6,
-          "y": -28.2
-        }
-      ],
-      "brakeLightAnchors": [
-        {
-          "x": -8.4,
-          "y": 33.2
-        },
-        {
-          "x": 8.4,
-          "y": 33.2
-        }
-      ],
-      "mountHeights": {
-        "front_ram": 8,
-        "front_left": 9,
-        "front_right": 9,
-        "left_shoulder": 8.6,
-        "right_shoulder": 8.6,
-        "left_rear": 9,
-        "right_rear": 9
-      }
-    },
-    "chassis_drifter": {
-      "id": "chassis_drifter",
-      "body": {
-        "file": "chassis_drifter_body.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "shadow": {
-        "file": "chassis_drifter_shadow.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "brakeLights": {
-        "file": "chassis_drifter_brake.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "headlights": {
-        "file": "chassis_drifter_head.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "paintKey": [
-        "#2b0a1f",
-        "#5c1230",
-        "#941f34",
-        "#cf3440",
-        "#f0604c",
-        "#ffb08a"
-      ],
-      "wheelAnchors": [
-        {
-          "id": "front_left",
-          "x": -14,
-          "y": -17,
-          "steers": true
-        },
-        {
-          "id": "front_right",
-          "x": 14,
-          "y": -17,
-          "steers": true
-        },
-        {
-          "id": "rear_left",
-          "x": -15.5,
-          "y": 18,
-          "steers": false
-        },
-        {
-          "id": "rear_right",
-          "x": 15.5,
-          "y": 18,
-          "steers": false
-        }
-      ],
-      "engineAnchor": {
-        "x": 0,
-        "y": -16
-      },
-      "engineInBay": true,
-      "exhausts": [
-        {
-          "x": 7.6,
-          "y": 33.6
-        },
-        {
-          "x": 10.9,
-          "y": 33
-        }
-      ],
-      "headlightAnchors": [
-        {
-          "x": -7.4,
-          "y": -29.6
-        },
-        {
-          "x": 7.4,
-          "y": -29.6
-        }
-      ],
-      "brakeLightAnchors": [
-        {
-          "x": -6.5,
-          "y": 30
-        },
-        {
-          "x": 6.5,
-          "y": 30
-        }
-      ],
-      "mountHeights": {
-        "roof_front": 12,
-        "roof_mid": 13.6,
-        "left_mid": 6.5,
-        "right_mid": 6.5,
-        "rear_deck": 10.2,
-        "rear_center": 10.2
-      }
-    },
-    "chassis_kangaroo": {
-      "id": "chassis_kangaroo",
-      "body": {
-        "file": "chassis_kangaroo_body.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "shadow": {
-        "file": "chassis_kangaroo_shadow.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "brakeLights": {
-        "file": "chassis_kangaroo_brake.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "headlights": {
-        "file": "chassis_kangaroo_head.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "paintKey": [
-        "#2b0a1f",
-        "#5c1230",
-        "#941f34",
-        "#cf3440",
-        "#f0604c",
-        "#ffb08a"
-      ],
-      "wheelAnchors": [
-        {
-          "id": "front_left",
-          "x": -16.5,
-          "y": -19,
-          "steers": true
-        },
-        {
-          "id": "front_right",
-          "x": 16.5,
-          "y": -19,
-          "steers": true
-        },
-        {
-          "id": "rear_left",
-          "x": -16.5,
-          "y": 20,
-          "steers": false
-        },
-        {
-          "id": "rear_right",
-          "x": 16.5,
-          "y": 20,
-          "steers": false
-        }
-      ],
-      "engineAnchor": {
-        "x": 0,
-        "y": 20
-      },
-      "exhausts": [
-        {
-          "x": -4.6,
-          "y": 31
-        },
-        {
-          "x": 4.6,
-          "y": 31
-        }
-      ],
-      "headlightAnchors": [
-        {
-          "x": -6,
-          "y": -29.6
-        },
-        {
-          "x": 6,
-          "y": -29.6
-        }
-      ],
-      "brakeLightAnchors": [
-        {
-          "x": -6.4,
-          "y": 29.8
-        },
-        {
-          "x": 6.4,
-          "y": 29.8
-        }
-      ],
-      "mountHeights": {
-        "front_center": 12.4,
-        "utility_front": 18,
-        "utility_mid": 18,
-        "utility_rear": 12,
-        "rear_center": 11
-      }
-    },
-    "chassis_horseshoe": {
-      "id": "chassis_horseshoe",
-      "body": {
-        "file": "chassis_horseshoe_body.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "shadow": {
-        "file": "chassis_horseshoe_shadow.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "brakeLights": {
-        "file": "chassis_horseshoe_brake.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "headlights": {
-        "file": "chassis_horseshoe_head.png",
-        "frameWidth": 96,
-        "frameHeight": 96,
-        "columns": 8,
-        "rows": 8
-      },
-      "paintKey": [
-        "#2b0a1f",
-        "#5c1230",
-        "#941f34",
-        "#cf3440",
-        "#f0604c",
-        "#ffb08a"
-      ],
-      "wheelAnchors": [
-        {
-          "id": "front_left",
-          "x": -18,
-          "y": -14,
-          "steers": true
-        },
-        {
-          "id": "front_right",
-          "x": 18,
-          "y": -14,
-          "steers": true
-        },
-        {
-          "id": "rear_left",
-          "x": -18,
-          "y": 22,
-          "steers": false
-        },
-        {
-          "id": "rear_right",
-          "x": 18,
-          "y": 22,
-          "steers": false
-        }
-      ],
-      "engineAnchor": {
-        "x": 0,
-        "y": 20
-      },
-      "exhausts": [
-        {
-          "x": -4.6,
-          "y": 31
-        },
-        {
-          "x": 4.6,
-          "y": 31
-        }
-      ],
-      "headlightAnchors": [
-        {
-          "x": -16.2,
-          "y": -35
-        },
-        {
-          "x": 16.2,
-          "y": -35
-        }
-      ],
-      "brakeLightAnchors": [
-        {
-          "x": -5.4,
-          "y": 34.2
-        },
-        {
-          "x": 5.4,
-          "y": 34.2
-        }
-      ],
-      "mountHeights": {
-        "front_cavity": 3.2,
-        "left_prong": 10,
-        "right_prong": 10,
-        "front_brace": 11.2,
-        "left_mid": 10,
-        "right_mid": 10
-      }
-    },
-    "chassis_pickup": {
-      "id": "chassis_pickup",
-      "body": {
-        "file": "chassis_pickup_body.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "shadow": {
-        "file": "chassis_pickup_shadow.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "brakeLights": {
-        "file": "chassis_pickup_brake.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "headlights": {
-        "file": "chassis_pickup_head.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "paintKey": [
-        "#2b0a1f",
-        "#5c1230",
-        "#941f34",
-        "#cf3440",
-        "#f0604c",
-        "#ffb08a"
-      ],
-      "wheelAnchors": [
-        {
-          "id": "front_left",
-          "x": -15.5,
-          "y": -23,
-          "steers": true
-        },
-        {
-          "id": "front_right",
-          "x": 15.5,
-          "y": -23,
-          "steers": true
-        },
-        {
-          "id": "rear_left",
-          "x": -15.5,
-          "y": 22,
-          "steers": false
-        },
-        {
-          "id": "rear_right",
-          "x": 15.5,
-          "y": 22,
-          "steers": false
-        }
-      ],
-      "engineAnchor": {
-        "x": 0,
-        "y": -22
-      },
-      "engineInBay": true,
-      "exhausts": [
-        {
-          "x": -4.6,
-          "y": 36.6
-        },
-        {
-          "x": 4.6,
-          "y": 36.6
-        }
-      ],
-      "headlightAnchors": [
-        {
-          "x": -12.6,
-          "y": -32.4
-        },
-        {
-          "x": 12.6,
-          "y": -32.4
-        }
-      ],
-      "brakeLightAnchors": [
-        {
-          "x": -14.4,
-          "y": 32.4
-        },
-        {
-          "x": 14.4,
-          "y": 32.4
-        }
-      ],
-      "mountHeights": {
-        "utility_hood": 12,
-        "left_utility": 6.5,
-        "right_utility": 6.5,
-        "bed_front": 6,
-        "left_bed": 10,
-        "right_bed": 10,
-        "bed_rear": 6,
-        "rear_center": 6.6
-      }
-    },
-    "chassis_twins": {
-      "id": "chassis_twins",
-      "body": {
-        "file": "chassis_twins_body.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "shadow": {
-        "file": "chassis_twins_shadow.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "brakeLights": {
-        "file": "chassis_twins_brake.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "headlights": {
-        "file": "chassis_twins_head.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "paintKey": [
-        "#2b0a1f",
-        "#5c1230",
-        "#941f34",
-        "#cf3440",
-        "#f0604c",
-        "#ffb08a"
-      ],
-      "wheelAnchors": [
-        {
-          "id": "front_left",
-          "x": -22,
-          "y": -22,
-          "steers": true
-        },
-        {
-          "id": "front_right",
-          "x": 22,
-          "y": -22,
-          "steers": true
-        },
-        {
-          "id": "rear_left",
-          "x": -22,
-          "y": 22,
-          "steers": false
-        },
-        {
-          "id": "rear_right",
-          "x": 22,
-          "y": 22,
-          "steers": false
-        }
-      ],
-      "engineAnchor": {
-        "x": 0,
-        "y": 20
-      },
-      "exhausts": [
-        {
-          "x": -4.6,
-          "y": 31
-        },
-        {
-          "x": 4.6,
-          "y": 31
-        }
-      ],
-      "headlightAnchors": [
-        {
-          "x": -21.2,
-          "y": -34
-        },
-        {
-          "x": 21.2,
-          "y": -34
-        }
-      ],
-      "brakeLightAnchors": [
-        {
-          "x": -21.2,
-          "y": 34.2
-        },
-        {
-          "x": 21.2,
-          "y": 34.2
-        }
-      ],
-      "mountHeights": {
-        "left_nose": 8.6,
-        "right_nose": 8.6,
-        "roof_front": 11.4,
-        "left_front": 10,
-        "right_front": 10,
-        "roof_rear": 11.4,
-        "left_rear": 10,
-        "right_rear": 10
-      }
-    },
-    "chassis_platform": {
-      "id": "chassis_platform",
-      "body": {
-        "file": "chassis_platform_body.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "shadow": {
-        "file": "chassis_platform_shadow.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "brakeLights": {
-        "file": "chassis_platform_brake.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "headlights": {
-        "file": "chassis_platform_head.png",
-        "frameWidth": 112,
-        "frameHeight": 112,
-        "columns": 8,
-        "rows": 8
-      },
-      "paintKey": [
-        "#2b0a1f",
-        "#5c1230",
-        "#941f34",
-        "#cf3440",
-        "#f0604c",
-        "#ffb08a"
-      ],
-      "wheelAnchors": [
-        {
-          "id": "front_left",
-          "x": -20,
-          "y": -24,
-          "steers": true
-        },
-        {
-          "id": "front_right",
-          "x": 20,
-          "y": -24,
-          "steers": true
-        },
-        {
-          "id": "rear_left",
-          "x": -20,
-          "y": 24,
-          "steers": false
-        },
-        {
-          "id": "rear_right",
-          "x": 20,
-          "y": 24,
-          "steers": false
-        }
-      ],
-      "engineAnchor": {
-        "x": 0,
-        "y": 18
-      },
-      "exhausts": [
-        {
-          "x": -4.6,
-          "y": 29
-        },
-        {
-          "x": 4.6,
-          "y": 29
-        }
-      ],
-      "headlightAnchors": [
-        {
-          "x": -8.6,
-          "y": -37.2
-        },
-        {
-          "x": 8.6,
-          "y": -37.2
-        }
-      ],
-      "brakeLightAnchors": [
-        {
-          "x": -9,
-          "y": 37.2
-        },
-        {
-          "x": 9,
-          "y": 37.2
-        }
-      ],
-      "mountHeights": {
-        "deck_front": 7.8,
-        "deck_fore": 7.8,
-        "left_edge_front": 7.8,
-        "right_edge_front": 7.8,
-        "left_edge_mid": 7.8,
-        "right_edge_mid": 7.8,
-        "left_edge_rear": 7.8,
-        "right_edge_rear": 7.8,
-        "deck_aft": 7.8,
-        "deck_rear": 7.8
       }
     }
   },
@@ -3370,125 +1777,110 @@
       "columns": 16,
       "index": {
         "chassis_beetle": 0,
-        "chassis_needle": 1,
-        "chassis_turtle": 2,
+        "chassis_arrow": 1,
+        "chassis_pickup": 2,
         "chassis_spider": 3,
-        "chassis_crab": 4,
-        "chassis_cobra": 5,
-        "chassis_scorpion": 6,
-        "chassis_buggy": 7,
-        "chassis_chameleon": 8,
-        "chassis_brick": 9,
-        "chassis_trike": 10,
-        "chassis_arrow": 11,
-        "chassis_wagon": 12,
-        "chassis_rammer": 13,
-        "chassis_drifter": 14,
-        "chassis_kangaroo": 15,
-        "chassis_horseshoe": 16,
-        "chassis_pickup": 17,
-        "chassis_twins": 18,
-        "chassis_platform": 19,
-        "engine_four_cylinder": 20,
-        "engine_mini_electric": 21,
-        "engine_v6": 22,
-        "engine_v8": 23,
-        "engine_v12": 24,
-        "engine_small_turbo": 25,
-        "engine_twin_turbo": 26,
-        "engine_supercharger": 27,
-        "engine_diesel": 28,
-        "engine_electric_sport": 29,
-        "engine_electric_eco": 30,
-        "engine_hybrid": 31,
-        "engine_rotary": 32,
-        "engine_turbine": 33,
-        "engine_rocket": 34,
-        "engine_twin": 35,
-        "engine_spring": 36,
-        "engine_offroad": 37,
-        "engine_resilient": 38,
-        "engine_experimental": 39,
-        "tires_street": 40,
-        "tires_slick": 41,
-        "tires_rain": 42,
-        "tires_sand": 43,
-        "tires_mud": 44,
-        "tires_snow": 45,
-        "tires_ice": 46,
-        "tires_soft": 47,
-        "tires_hard": 48,
-        "tires_drift": 49,
-        "tires_armored": 50,
-        "tires_solid": 51,
-        "tires_balloon": 52,
-        "tires_monster": 53,
-        "tires_micro": 54,
-        "tires_halftrack": 55,
-        "tires_track": 56,
-        "tires_magnetic": 57,
-        "tires_adaptive": 58,
-        "tires_blades": 59,
-        "weapon_front_mg": 60,
-        "weapon_rear_mg": 61,
-        "weapon_turret": 62,
-        "weapon_shotgun": 63,
-        "weapon_railshot": 64,
-        "weapon_rocket": 65,
-        "weapon_homing": 66,
-        "weapon_mine": 67,
-        "weapon_oil": 68,
-        "weapon_foam": 69,
-        "weapon_emp": 70,
-        "weapon_tesla": 71,
-        "weapon_flame": 72,
-        "weapon_frost": 73,
-        "weapon_hammer": 74,
-        "weapon_saw": 75,
-        "weapon_harpoon": 76,
-        "weapon_air": 77,
-        "weapon_boomerang": 78,
-        "weapon_mortar": 79,
-        "defense_light_plate": 80,
-        "defense_heavy_plate": 81,
-        "defense_front_bumper": 82,
-        "defense_rear_bumper": 83,
-        "defense_side_panels": 84,
-        "defense_wheel_cage": 85,
-        "defense_engine_case": 86,
-        "defense_ceramic": 87,
-        "defense_breakaway": 88,
-        "defense_composite": 89,
-        "defense_energy_shield": 90,
-        "defense_faraday": 91,
-        "defense_heatguard": 92,
-        "defense_antimissile": 93,
-        "defense_minesweeper": 94,
-        "defense_fireproof": 95,
-        "defense_oilproof": 96,
-        "defense_damper": 97,
-        "defense_steer_assist": 98,
-        "defense_reactive": 99,
-        "utility_spare": 100,
-        "utility_repair": 101,
-        "utility_fan": 102,
-        "utility_radiator": 103,
-        "utility_battery": 104,
-        "utility_generator": 105,
-        "utility_capacitor": 106,
-        "utility_nitro": 107,
-        "utility_overdrive": 108,
-        "utility_traction": 109,
-        "utility_gyro": 110,
-        "utility_radar": 111,
-        "utility_minesensor": 112,
-        "utility_decoy": 113,
-        "utility_jump": 114,
-        "utility_winch": 115,
-        "utility_ballast": 116,
-        "utility_spoiler": 117,
-        "utility_targeting": 118,
-        "utility_solar": 119
+        "chassis_trike": 4,
+        "engine_four_cylinder": 5,
+        "engine_mini_electric": 6,
+        "engine_v6": 7,
+        "engine_v8": 8,
+        "engine_v12": 9,
+        "engine_small_turbo": 10,
+        "engine_twin_turbo": 11,
+        "engine_supercharger": 12,
+        "engine_diesel": 13,
+        "engine_electric_sport": 14,
+        "engine_electric_eco": 15,
+        "engine_hybrid": 16,
+        "engine_rotary": 17,
+        "engine_turbine": 18,
+        "engine_rocket": 19,
+        "engine_twin": 20,
+        "engine_spring": 21,
+        "engine_offroad": 22,
+        "engine_resilient": 23,
+        "engine_experimental": 24,
+        "tires_street": 25,
+        "tires_slick": 26,
+        "tires_rain": 27,
+        "tires_sand": 28,
+        "tires_mud": 29,
+        "tires_snow": 30,
+        "tires_ice": 31,
+        "tires_soft": 32,
+        "tires_hard": 33,
+        "tires_drift": 34,
+        "tires_armored": 35,
+        "tires_solid": 36,
+        "tires_balloon": 37,
+        "tires_monster": 38,
+        "tires_micro": 39,
+        "tires_halftrack": 40,
+        "tires_track": 41,
+        "tires_magnetic": 42,
+        "tires_adaptive": 43,
+        "tires_blades": 44,
+        "weapon_front_mg": 45,
+        "weapon_rear_mg": 46,
+        "weapon_turret": 47,
+        "weapon_shotgun": 48,
+        "weapon_railshot": 49,
+        "weapon_rocket": 50,
+        "weapon_homing": 51,
+        "weapon_mine": 52,
+        "weapon_oil": 53,
+        "weapon_foam": 54,
+        "weapon_emp": 55,
+        "weapon_tesla": 56,
+        "weapon_flame": 57,
+        "weapon_frost": 58,
+        "weapon_hammer": 59,
+        "weapon_saw": 60,
+        "weapon_harpoon": 61,
+        "weapon_air": 62,
+        "weapon_boomerang": 63,
+        "weapon_mortar": 64,
+        "defense_light_plate": 65,
+        "defense_heavy_plate": 66,
+        "defense_front_bumper": 67,
+        "defense_rear_bumper": 68,
+        "defense_side_panels": 69,
+        "defense_wheel_cage": 70,
+        "defense_engine_case": 71,
+        "defense_ceramic": 72,
+        "defense_breakaway": 73,
+        "defense_composite": 74,
+        "defense_energy_shield": 75,
+        "defense_faraday": 76,
+        "defense_heatguard": 77,
+        "defense_antimissile": 78,
+        "defense_minesweeper": 79,
+        "defense_fireproof": 80,
+        "defense_oilproof": 81,
+        "defense_damper": 82,
+        "defense_steer_assist": 83,
+        "defense_reactive": 84,
+        "utility_spare": 85,
+        "utility_repair": 86,
+        "utility_fan": 87,
+        "utility_radiator": 88,
+        "utility_battery": 89,
+        "utility_generator": 90,
+        "utility_capacitor": 91,
+        "utility_nitro": 92,
+        "utility_overdrive": 93,
+        "utility_traction": 94,
+        "utility_gyro": 95,
+        "utility_radar": 96,
+        "utility_minesensor": 97,
+        "utility_decoy": 98,
+        "utility_jump": 99,
+        "utility_winch": 100,
+        "utility_ballast": 101,
+        "utility_spoiler": 102,
+        "utility_targeting": 103,
+        "utility_solar": 104
       }
     },
     {
@@ -3497,125 +1889,110 @@
       "columns": 16,
       "index": {
         "chassis_beetle": 0,
-        "chassis_needle": 1,
-        "chassis_turtle": 2,
+        "chassis_arrow": 1,
+        "chassis_pickup": 2,
         "chassis_spider": 3,
-        "chassis_crab": 4,
-        "chassis_cobra": 5,
-        "chassis_scorpion": 6,
-        "chassis_buggy": 7,
-        "chassis_chameleon": 8,
-        "chassis_brick": 9,
-        "chassis_trike": 10,
-        "chassis_arrow": 11,
-        "chassis_wagon": 12,
-        "chassis_rammer": 13,
-        "chassis_drifter": 14,
-        "chassis_kangaroo": 15,
-        "chassis_horseshoe": 16,
-        "chassis_pickup": 17,
-        "chassis_twins": 18,
-        "chassis_platform": 19,
-        "engine_four_cylinder": 20,
-        "engine_mini_electric": 21,
-        "engine_v6": 22,
-        "engine_v8": 23,
-        "engine_v12": 24,
-        "engine_small_turbo": 25,
-        "engine_twin_turbo": 26,
-        "engine_supercharger": 27,
-        "engine_diesel": 28,
-        "engine_electric_sport": 29,
-        "engine_electric_eco": 30,
-        "engine_hybrid": 31,
-        "engine_rotary": 32,
-        "engine_turbine": 33,
-        "engine_rocket": 34,
-        "engine_twin": 35,
-        "engine_spring": 36,
-        "engine_offroad": 37,
-        "engine_resilient": 38,
-        "engine_experimental": 39,
-        "tires_street": 40,
-        "tires_slick": 41,
-        "tires_rain": 42,
-        "tires_sand": 43,
-        "tires_mud": 44,
-        "tires_snow": 45,
-        "tires_ice": 46,
-        "tires_soft": 47,
-        "tires_hard": 48,
-        "tires_drift": 49,
-        "tires_armored": 50,
-        "tires_solid": 51,
-        "tires_balloon": 52,
-        "tires_monster": 53,
-        "tires_micro": 54,
-        "tires_halftrack": 55,
-        "tires_track": 56,
-        "tires_magnetic": 57,
-        "tires_adaptive": 58,
-        "tires_blades": 59,
-        "weapon_front_mg": 60,
-        "weapon_rear_mg": 61,
-        "weapon_turret": 62,
-        "weapon_shotgun": 63,
-        "weapon_railshot": 64,
-        "weapon_rocket": 65,
-        "weapon_homing": 66,
-        "weapon_mine": 67,
-        "weapon_oil": 68,
-        "weapon_foam": 69,
-        "weapon_emp": 70,
-        "weapon_tesla": 71,
-        "weapon_flame": 72,
-        "weapon_frost": 73,
-        "weapon_hammer": 74,
-        "weapon_saw": 75,
-        "weapon_harpoon": 76,
-        "weapon_air": 77,
-        "weapon_boomerang": 78,
-        "weapon_mortar": 79,
-        "defense_light_plate": 80,
-        "defense_heavy_plate": 81,
-        "defense_front_bumper": 82,
-        "defense_rear_bumper": 83,
-        "defense_side_panels": 84,
-        "defense_wheel_cage": 85,
-        "defense_engine_case": 86,
-        "defense_ceramic": 87,
-        "defense_breakaway": 88,
-        "defense_composite": 89,
-        "defense_energy_shield": 90,
-        "defense_faraday": 91,
-        "defense_heatguard": 92,
-        "defense_antimissile": 93,
-        "defense_minesweeper": 94,
-        "defense_fireproof": 95,
-        "defense_oilproof": 96,
-        "defense_damper": 97,
-        "defense_steer_assist": 98,
-        "defense_reactive": 99,
-        "utility_spare": 100,
-        "utility_repair": 101,
-        "utility_fan": 102,
-        "utility_radiator": 103,
-        "utility_battery": 104,
-        "utility_generator": 105,
-        "utility_capacitor": 106,
-        "utility_nitro": 107,
-        "utility_overdrive": 108,
-        "utility_traction": 109,
-        "utility_gyro": 110,
-        "utility_radar": 111,
-        "utility_minesensor": 112,
-        "utility_decoy": 113,
-        "utility_jump": 114,
-        "utility_winch": 115,
-        "utility_ballast": 116,
-        "utility_spoiler": 117,
-        "utility_targeting": 118,
-        "utility_solar": 119
+        "chassis_trike": 4,
+        "engine_four_cylinder": 5,
+        "engine_mini_electric": 6,
+        "engine_v6": 7,
+        "engine_v8": 8,
+        "engine_v12": 9,
+        "engine_small_turbo": 10,
+        "engine_twin_turbo": 11,
+        "engine_supercharger": 12,
+        "engine_diesel": 13,
+        "engine_electric_sport": 14,
+        "engine_electric_eco": 15,
+        "engine_hybrid": 16,
+        "engine_rotary": 17,
+        "engine_turbine": 18,
+        "engine_rocket": 19,
+        "engine_twin": 20,
+        "engine_spring": 21,
+        "engine_offroad": 22,
+        "engine_resilient": 23,
+        "engine_experimental": 24,
+        "tires_street": 25,
+        "tires_slick": 26,
+        "tires_rain": 27,
+        "tires_sand": 28,
+        "tires_mud": 29,
+        "tires_snow": 30,
+        "tires_ice": 31,
+        "tires_soft": 32,
+        "tires_hard": 33,
+        "tires_drift": 34,
+        "tires_armored": 35,
+        "tires_solid": 36,
+        "tires_balloon": 37,
+        "tires_monster": 38,
+        "tires_micro": 39,
+        "tires_halftrack": 40,
+        "tires_track": 41,
+        "tires_magnetic": 42,
+        "tires_adaptive": 43,
+        "tires_blades": 44,
+        "weapon_front_mg": 45,
+        "weapon_rear_mg": 46,
+        "weapon_turret": 47,
+        "weapon_shotgun": 48,
+        "weapon_railshot": 49,
+        "weapon_rocket": 50,
+        "weapon_homing": 51,
+        "weapon_mine": 52,
+        "weapon_oil": 53,
+        "weapon_foam": 54,
+        "weapon_emp": 55,
+        "weapon_tesla": 56,
+        "weapon_flame": 57,
+        "weapon_frost": 58,
+        "weapon_hammer": 59,
+        "weapon_saw": 60,
+        "weapon_harpoon": 61,
+        "weapon_air": 62,
+        "weapon_boomerang": 63,
+        "weapon_mortar": 64,
+        "defense_light_plate": 65,
+        "defense_heavy_plate": 66,
+        "defense_front_bumper": 67,
+        "defense_rear_bumper": 68,
+        "defense_side_panels": 69,
+        "defense_wheel_cage": 70,
+        "defense_engine_case": 71,
+        "defense_ceramic": 72,
+        "defense_breakaway": 73,
+        "defense_composite": 74,
+        "defense_energy_shield": 75,
+        "defense_faraday": 76,
+        "defense_heatguard": 77,
+        "defense_antimissile": 78,
+        "defense_minesweeper": 79,
+        "defense_fireproof": 80,
+        "defense_oilproof": 81,
+        "defense_damper": 82,
+        "defense_steer_assist": 83,
+        "defense_reactive": 84,
+        "utility_spare": 85,
+        "utility_repair": 86,
+        "utility_fan": 87,
+        "utility_radiator": 88,
+        "utility_battery": 89,
+        "utility_generator": 90,
+        "utility_capacitor": 91,
+        "utility_nitro": 92,
+        "utility_overdrive": 93,
+        "utility_traction": 94,
+        "utility_gyro": 95,
+        "utility_radar": 96,
+        "utility_minesensor": 97,
+        "utility_decoy": 98,
+        "utility_jump": 99,
+        "utility_winch": 100,
+        "utility_ballast": 101,
+        "utility_spoiler": 102,
+        "utility_targeting": 103,
+        "utility_solar": 104
       }
     }
   ]

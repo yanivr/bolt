@@ -133,4 +133,12 @@ export const BEETLE_ART: ChassisArt = {
     { x: -9.9, y: 26 },
     { x: 9.9, y: 26 },
   ],
+  // Measured from the model: the height of the bodywork under each mount.
+  mountHeights: {
+    front_center: 11.5,
+    roof_mid: 16,
+    left_utility: 7,
+    right_utility: 7,
+    rear_center: 11,
+  },
 };

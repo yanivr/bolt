@@ -191,12 +191,26 @@ export function BlueprintsView({
                       className="btn btn-primary btn-small"
                       onClick={() => {
                         const result = repair(entry.id);
+                        const removedNames = names(result.removed.map((r) => r.instance.partId));
+                        const chassis = result.rebuiltOn
+                          ? (CATALOG.chassis[result.rebuiltOn]?.displayName ?? '')
+                          : '';
                         if (!result.ok) say('warn', STRINGS.blueprints.cannotRepair);
+                        else if (result.rebuiltOn)
+                          say(
+                            'warn',
+                            result.removed.length > 0
+                              ? fill(STRINGS.blueprints.rebuiltRemoved, {
+                                  chassis,
+                                  names: removedNames,
+                                })
+                              : fill(STRINGS.blueprints.rebuilt, { chassis }),
+                          );
                         else if (result.removed.length > 0)
                           say(
                             'warn',
                             fill(STRINGS.blueprints.repairedRemoved, {
-                              names: names(result.removed.map((r) => r.instance.partId)),
+                              names: removedNames,
                             }),
                           );
                         else say('ok', STRINGS.blueprints.repaired);

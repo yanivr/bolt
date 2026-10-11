@@ -1,5 +1,6 @@
 import { STRINGS, getTrack, getWeatherPreset } from '@bolt/content';
 import type { BuildStats } from '@bolt/shared';
+import type { ReactNode } from 'react';
 import { TRACK_ID, WEATHER_PRESET_ID } from '../../app/App.js';
 import { Glyph } from '../../components/Glyph.js';
 import { weatherGlyph } from '../../pages/TrackPreviewScreen.js';
@@ -18,6 +19,12 @@ type Props = {
   onRedo: () => void;
   /** Opens the working behind the credits number. */
   onCredits: () => void;
+  /**
+   * The status line, in the free middle of the bar (landscape). It has the bar's height
+   * reserved for it whether or not there is anything to say, so nothing ever shifts and the
+   * message never lies over the car.
+   */
+  statusLine?: ReactNode;
 };
 
 function clock(seconds: number): string {
@@ -28,8 +35,9 @@ function clock(seconds: number): string {
 
 /**
  * The garage header (Section 5.6), kept to what is needed at every moment: Back, Undo, Redo,
- * the build timer, the track and weather badge where there is width for it, and Credits Left
- * with the change the previewed part would make. Ready sits at its right end.
+ * the build timer, the track and weather badge where there is width for it, the status line
+ * in the space between, and Credits Left with the change the previewed part would make. Ready
+ * sits at its right end.
  */
 export function TopBar({
   stats,
@@ -42,6 +50,7 @@ export function TopBar({
   onUndo,
   onRedo,
   onCredits,
+  statusLine,
 }: Props) {
   const g = STRINGS.garage;
   const track = getTrack(TRACK_ID);
@@ -100,7 +109,7 @@ export function TopBar({
           </span>
         </div>
       )}
-      <span className="g-top-space" />
+      <div className="g-top-space">{statusLine}</div>
       <button
         type="button"
         className={`g-credits is-${status}`}

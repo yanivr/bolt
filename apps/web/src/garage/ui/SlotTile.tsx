@@ -11,9 +11,12 @@ type Props = {
   manifests: GameManifests;
   /** `chassis`, `engine`, `tires` or `mount:<id>`. */
   slotKey: string;
-  /** The few letters under the icon. */
+  /** The few letters under the icon, or the category above the name. */
   label: string;
-  /** The item's name beside the icon, where the tile has width for it. */
+  /**
+   * The item's name. A tile that has one is laid out as the category small on top and the
+   * icon and the name on one line under it, the name cut with an ellipsis and never wrapped.
+   */
   name?: string;
   ariaLabel: string;
   /** What the slot holds. Null for an empty mount. */
@@ -36,9 +39,9 @@ type Props = {
 };
 
 /**
- * One slot of the car as a touch target: the icon of what it holds (or a plus on its category
- * glyph when empty) over a short label. The same tile is used for an accessory mount beside
- * the car and for the chassis, engine and wheels under it.
+ * One slot of the car as a touch target. An accessory mount beside the car is the icon of
+ * what it holds (or a plus on its category glyph when empty) over a short label. The chassis,
+ * engine and wheels under the car carry their category and the item's name.
  */
 export function SlotTile({
   manifests,
@@ -85,22 +88,42 @@ export function SlotTile({
       onClick={onPress}
       onKeyDown={onKeyDown}
     >
-      <span className="slot-art">
-        {part ? (
-          <PartIcon manifests={manifests} partId={part.id} category={part.category} size={32} />
-        ) : (
-          <>
-            <Glyph name={glyph} size={24} />
-            <span className="slot-plus">
-              <Glyph name="plus" size={12} />
+      {name !== undefined ? (
+        <>
+          <span className="slot-label">{label}</span>
+          <span className="slot-line">
+            <span className="slot-art">
+              {part && (
+                <PartIcon
+                  manifests={manifests}
+                  partId={part.id}
+                  category={part.category}
+                  size={24}
+                />
+              )}
             </span>
-          </>
-        )}
-      </span>
-      <span className="slot-text">
-        <span className="slot-label">{label}</span>
-        {name !== undefined && <span className="slot-name">{name}</span>}
-      </span>
+            <span className="slot-name">{name}</span>
+          </span>
+        </>
+      ) : (
+        <>
+          <span className="slot-art">
+            {part ? (
+              <PartIcon manifests={manifests} partId={part.id} category={part.category} size={32} />
+            ) : (
+              <>
+                <Glyph name={glyph} size={24} />
+                <span className="slot-plus">
+                  <Glyph name="plus" size={12} />
+                </span>
+              </>
+            )}
+          </span>
+          <span className="slot-text">
+            <span className="slot-label">{label}</span>
+          </span>
+        </>
+      )}
       {count > 1 && <span className="slot-count">{count}</span>}
       {bad && (
         <span className="slot-alert">

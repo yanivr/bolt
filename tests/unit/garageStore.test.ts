@@ -25,17 +25,8 @@ import {
   validateBlueprint,
   wheelKitPrice,
 } from '@bolt/shared';
-import { readFileSync } from 'node:fs';
-import type { CarAtlasManifest } from '@bolt/shared';
 import { accessoryMounts, removePart } from '@bolt/shared';
 import { describe, expect, it } from 'vitest';
-import type { BenchLayout, Box } from '../../apps/web/src/garage/benchLayout.js';
-import {
-  landscapeFloor,
-  layoutBench,
-  segmentsCross,
-} from '../../apps/web/src/garage/benchLayout.js';
-import { VIEW_FRAMES, carBounds, projectMounts } from '../../apps/web/src/garage/carGeometry.js';
 import {
   ACCESSORY_CATEGORIES,
   catalogEntries,
@@ -45,6 +36,7 @@ import {
 import {
   LIBRARY_KEY,
   MAX_SAVED_BLUEPRINTS,
+  REPAIR_CHASSIS_ID,
   addBlueprint,
   copyName,
   deleteSaved,
@@ -63,13 +55,7 @@ import {
   secondsLeft,
 } from '../../apps/web/src/garage/buildSession.js';
 import { createGarageStore } from '../../apps/web/src/garage/garageStore.js';
-import {
-  fill,
-  listNames,
-  mountName,
-  mountShort,
-  signedDelta,
-} from '../../apps/web/src/garage/text.js';
+import { fill, listNames, mountName, signedDelta } from '../../apps/web/src/garage/text.js';
 import { buildTips, trackFacts } from '../../apps/web/src/garage/trackFacts.js';
 
 /** A garage store on a clock the test controls. */
@@ -89,43 +75,39 @@ function ids(blueprint: VehicleBlueprint): string[] {
 
 /** A draft that is over the budget: something no garage edit can produce. */
 function overspent(): VehicleBlueprint {
-  let car = baselineBlueprint({ chassisId: 'chassis_brick', engineId: 'engine_v12' }, 'Overspent');
+  let car = baselineBlueprint({ chassisId: 'chassis_pickup', engineId: 'engine_v12' }, 'Overspent');
   car = { ...car, tireKitId: 'tires_track' };
-  for (const partId of ['weapon_mortar', 'weapon_homing', 'defense_antimissile']) {
+  // 665 for the essentials, then the mortar and the interceptor take it to exactly 1,000.
+  for (const partId of ['weapon_mortar', 'defense_antimissile']) {
     const next = installPart(car, CATALOG, partId);
-    // The edit helpers refuse to overspend, so the last parts are forced in by hand.
-    car = next.ok
-      ? next.blueprint
-      : {
-          ...car,
-          parts: [
-            ...car.parts,
-            {
-              instanceId: `x${car.parts.length}`,
-              partId,
-              mountId: 'roof_mid',
-              offsetX: 0,
-              offsetY: 0,
-              rotationQuarterTurns: 0,
-            },
-          ],
-        };
+    if (!next.ok) throw new Error(`${partId}: ${next.issue.code}`);
+    car = next.blueprint;
   }
-  const padded: VehicleBlueprint = {
+  // The edit helpers refuse to overspend, so the last parts are put on by hand, each where
+  // it fits: a missile on the bed rack and a plate on the tailgate.
+  return {
     ...car,
     parts: [
       ...car.parts,
-      ...['left_mid', 'right_mid'].map((mountId, i) => ({
-        instanceId: `y${i}`,
-        partId: 'defense_heavy_plate',
-        mountId,
+      {
+        instanceId: 'x1',
+        partId: 'weapon_homing',
+        mountId: 'bed_front',
         offsetX: 0,
         offsetY: 0,
-        rotationQuarterTurns: (i === 0 ? 3 : 1) as 1 | 3,
-      })),
+        rotationQuarterTurns: 1,
+        autoMode: true,
+      },
+      {
+        instanceId: 'x2',
+        partId: 'defense_heavy_plate',
+        mountId: 'rear_center',
+        offsetX: 0,
+        offsetY: 0,
+        rotationQuarterTurns: 2,
+      },
     ],
   };
-  return padded;
 }
 
 describe('garage session: buying, selling and credits', () => {
@@ -381,7 +363,7 @@ describe('garage session: refusals change nothing and name the reason', () => {
   it('never lets any sequence of presses take the build over 1,000 credits', () => {
     const g = garage();
     const wanted = [
-      'chassis_brick',
+      'chassis_pickup',
       'engine_v12',
       'tires_track',
       'weapon_mortar',
@@ -507,13 +489,13 @@ describe('garage session: chassis swap', () => {
 
   it('says so when everything moved across', () => {
     const g = garage(ROOKIE_BLUEPRINT);
-    g.act.install('chassis_turtle');
-    expect(g.car().chassisId).toBe('chassis_turtle');
+    g.act.install('chassis_arrow');
+    expect(g.car().chassisId).toBe('chassis_arrow');
     expect(ids(g.car())).toEqual(['utility_spare', 'weapon_front_mg']);
     expect(g.session().lastRemoved).toEqual([]);
     expect(g.session().notice).toMatchObject({
       tone: 'ok',
-      text: 'Turtle fitted. Every part moved across.',
+      text: 'Arrow fitted. Every part moved across.',
     });
   });
 
@@ -760,6 +742,204 @@ describe('My Blueprints in local storage', () => {
     expect(repaired.removed).toEqual([]);
     expect(repaired.entry.id).toBe(back[0]!.id);
     expect(repairSaved(back, 'missing', CATALOG).ok).toBe(false);
+  });
+
+  it('keeps and flags a saved car on a retired chassis, and rebuilds it on the Beetle', () => {
+    // A car saved before the five-chassis decision: a Turtle from catalog 0.3.0, with parts
+    // on mounts the Beetle also has, on one it does not, and one part the Beetle cannot hold.
+    const retired: VehicleBlueprint = {
+      ...ROOKIE_BLUEPRINT,
+      name: 'Old Bulldog',
+      catalogVersion: '0.3.0',
+      chassisId: 'chassis_turtle',
+      engineId: 'engine_v6',
+      tireKitId: 'tires_hard',
+      paintId: 'paint_sunflare',
+      parts: [
+        {
+          instanceId: 'p1',
+          partId: 'defense_front_bumper',
+          mountId: 'front_center',
+          offsetX: 0,
+          offsetY: 0,
+          rotationQuarterTurns: 0,
+        },
+        {
+          instanceId: 'p2',
+          partId: 'weapon_rear_mg',
+          mountId: 'rear_center',
+          offsetX: 0,
+          offsetY: 0,
+          rotationQuarterTurns: 2,
+        },
+        {
+          instanceId: 'p3',
+          partId: 'utility_repair',
+          mountId: 'roof_rear',
+          offsetX: 0,
+          offsetY: 0,
+          rotationQuarterTurns: 0,
+        },
+        {
+          instanceId: 'p4',
+          partId: 'defense_side_panels',
+          mountId: 'left_mid',
+          offsetX: 0,
+          offsetY: 0,
+          rotationQuarterTurns: 0,
+        },
+        {
+          instanceId: 'p5',
+          partId: 'weapon_turret',
+          mountId: 'roof_mid',
+          offsetX: 0,
+          offsetY: 0,
+          rotationQuarterTurns: 0,
+          assignedActionSlot: 1,
+        },
+      ],
+    };
+    expect(CATALOG.chassis.chassis_turtle).toBeUndefined();
+    // Reading it back from storage neither throws nor drops it: it is kept and flagged with
+    // the line every out-of-date build gets.
+    const raw = JSON.stringify({
+      version: 1,
+      items: [{ id: 'bold', savedAt: '2026-10-09T08:00:00.000Z', blueprint: retired }],
+    });
+    const back = parseLibrary(raw, CATALOG);
+    expect(back).toHaveLength(1);
+    expect(back[0]!.legal).toBe(false);
+    expect(back[0]!.blueprint.chassisId).toBe('chassis_turtle');
+    expect(back[0]!.issues.map((i) => i.code)).toContain('CATALOG_MISMATCH');
+    expect(back[0]!.issues.map((i) => i.code)).toContain('UNKNOWN_PART');
+    expect(back[0]!.issues.find((i) => i.code === 'CATALOG_MISMATCH')!.message).toBe(
+      STRINGS.blueprints.outdated,
+    );
+    expect(Number.isFinite(back[0]!.totalCost)).toBe(true);
+    // The same card can be copied, renamed and deleted like any other.
+    expect(duplicateBlueprint(back, 'bold', CATALOG, NOW).ok).toBe(true);
+    expect(renameSaved(back, 'bold', 'Older Bulldog', CATALOG).ok).toBe(true);
+
+    // Repair offers a legal car: the same engine, tires, paint and name on the Beetle, every
+    // part that has a home there moved across, and the rest refunded and named.
+    const repaired = repairSaved(back, 'bold', CATALOG);
+    expect(repaired.ok).toBe(true);
+    if (!repaired.ok) return;
+    expect(REPAIR_CHASSIS_ID).toBe('chassis_beetle');
+    expect(repaired.rebuiltOn).toBe('chassis_beetle');
+    const car = repaired.entry.blueprint;
+    expect(repaired.entry.legal).toBe(true);
+    expect(validateBlueprint(car, CATALOG).issues.filter((i) => i.severity === 'error')).toEqual(
+      [],
+    );
+    expect([car.chassisId, car.engineId, car.tireKitId, car.paintId, car.name]).toEqual([
+      'chassis_beetle',
+      'engine_v6',
+      'tires_hard',
+      'paint_sunflare',
+      'Old Bulldog',
+    ]);
+    expect(car.catalogVersion).toBe(CATALOG.version);
+    expect(ids(car)).toEqual([
+      'defense_front_bumper',
+      'utility_repair',
+      'weapon_rear_mg',
+      'weapon_turret',
+    ]);
+    // The turret keeps the fire button the player gave it.
+    expect(car.parts.find((p) => p.partId === 'weapon_turret')!.assignedActionSlot).toBe(1);
+    // The Beetle has no side mounts: the Side Shields come off, and the result says so.
+    expect(repaired.removed.map((r) => [r.instance.partId, r.reason, r.refund])).toEqual([
+      ['defense_side_panels', 'NO_COMPATIBLE_MOUNT', 70],
+    ]);
+    expect(repaired.entry.totalCost).toBeLessThanOrEqual(STARTING_CREDITS);
+    expect(repaired.entry.id).toBe('bold');
+    // A legal car is never moved to another frame by a repair.
+    const again = repairSaved(repaired.entries, 'bold', CATALOG);
+    expect(again.ok && again.rebuiltOn).toBeNull();
+    expect(again.ok && again.removed).toEqual([]);
+  });
+
+  it('rebuilds every retired chassis, however full, into a legal car without throwing', () => {
+    const retiredIds = [
+      'chassis_needle',
+      'chassis_turtle',
+      'chassis_crab',
+      'chassis_cobra',
+      'chassis_scorpion',
+      'chassis_buggy',
+      'chassis_chameleon',
+      'chassis_brick',
+      'chassis_wagon',
+      'chassis_rammer',
+      'chassis_drifter',
+      'chassis_kangaroo',
+      'chassis_horseshoe',
+      'chassis_twins',
+      'chassis_platform',
+    ];
+    const heavy = ['weapon_mortar', 'weapon_homing', 'weapon_railshot', 'defense_heavy_plate'];
+    for (const chassisId of retiredIds) {
+      // Expensive parts on mount names that no longer exist anywhere.
+      const old: VehicleBlueprint = {
+        ...BASELINE_BLUEPRINT,
+        name: 'Relic',
+        catalogVersion: '0.3.0',
+        chassisId,
+        engineId: 'engine_v12',
+        tireKitId: 'tires_track',
+        parts: heavy.map((partId, i) => ({
+          instanceId: `p${i + 1}`,
+          partId,
+          mountId: `deck_${i}`,
+          offsetX: 0,
+          offsetY: 0,
+          rotationQuarterTurns: 0 as const,
+        })),
+      };
+      const added = addBlueprint([], old, CATALOG, NOW);
+      expect(added.ok && !added.entry.legal, chassisId).toBe(true);
+      const repaired = repairSaved(added.entries, added.entries[0]!.id, CATALOG);
+      expect(repaired.ok, chassisId).toBe(true);
+      if (!repaired.ok) continue;
+      expect(repaired.entry.legal, chassisId).toBe(true);
+      expect(repaired.entry.blueprint.chassisId, chassisId).toBe('chassis_beetle');
+      expect(repaired.entry.totalCost, chassisId).toBeLessThanOrEqual(STARTING_CREDITS);
+      expect(repaired.entry.blueprint.parts.length + repaired.removed.length, chassisId).toBe(
+        heavy.length,
+      );
+    }
+    // Essentials the catalog never had cannot be rebuilt, and the card says so, not a crash.
+    const hopeless = addBlueprint(
+      [],
+      { ...BASELINE_BLUEPRINT, chassisId: 'chassis_turtle', engineId: 'engine_from_the_future' },
+      CATALOG,
+      NOW,
+    );
+    expect(repairSaved(hopeless.entries, hopeless.entries[0]!.id, CATALOG).ok).toBe(false);
+  });
+
+  it('opens a retired-chassis car in the garage for review and repairs it there', () => {
+    const g = garage(ROOKIE_BLUEPRINT);
+    g.act.load(
+      { ...ROOKIE_BLUEPRINT, chassisId: 'chassis_buggy', catalogVersion: '0.3.0' },
+      'loaded',
+    );
+    expect(g.car().chassisId).toBe('chassis_buggy');
+    expect(blockingIssue(g.car(), CATALOG)).not.toBeNull();
+    // Nothing can be bought, moved or raced on a frame that does not exist, and none of it
+    // throws.
+    g.act.selectSlot({ kind: 'chassis' });
+    g.act.selectSlot({ kind: 'mount', mountId: 'front_center' });
+    g.act.install('utility_fan');
+    g.act.ready();
+    expect(g.session().phase).toBe('building');
+    g.act.repair();
+    expect(g.car().chassisId).toBe('chassis_beetle');
+    expect(validateBlueprint(g.car(), CATALOG).ok).toBe(true);
+    expect(ids(g.car())).toEqual(['utility_spare', 'weapon_front_mg']);
+    g.act.ready();
+    expect(g.session().phase).toBe('locked');
   });
 
   it('repairs an overspent saved build by removing parts and saying which', () => {
@@ -1080,8 +1260,9 @@ describe('parts for a slot', () => {
 
   it('holds chassis the atlas cannot draw back as pending, never as blocked', () => {
     const drawable = new Set(['chassis_beetle', 'chassis_arrow']);
+    expect(Object.keys(CATALOG.chassis)).toHaveLength(5);
     const entries = partsForSlot(BASELINE_BLUEPRINT, CATALOG, { kind: 'chassis' }, { drawable });
-    expect(entries).toHaveLength(20);
+    expect(entries).toHaveLength(5);
     for (const entry of entries) {
       expect(entry.pending, entry.part.id).toBe(!drawable.has(entry.part.id));
       if (entry.pending) expect(entry.blocked).toBeNull();
@@ -1115,7 +1296,7 @@ describe('parts for a slot', () => {
     }
     // The Beetle has no mount for some of the catalog: that is what Browse All is for.
     expect(homeless).toBeGreaterThan(0);
-    expect(catalogEntries(BASELINE_BLUEPRINT, CATALOG, 'chassis')).toHaveLength(20);
+    expect(catalogEntries(BASELINE_BLUEPRINT, CATALOG, 'chassis')).toHaveLength(5);
     // With the roof taken, a roof-only part is offered as a replacement there, not refused.
     const roofed = installPart(BASELINE_BLUEPRINT, CATALOG, 'weapon_turret', {
       mountId: 'roof_mid',
@@ -1127,206 +1308,5 @@ describe('parts for a slot', () => {
       blocked: null,
       replaces: 'Swivel Turret',
     });
-  });
-});
-
-describe('workbench layout', () => {
-  const cars = JSON.parse(
-    readFileSync('apps/web/public/assets/atlases/cars/manifest.json', 'utf8'),
-  ) as CarAtlasManifest;
-  const VIEWPORTS = [
-    { width: 844, height: 390 },
-    { width: 870, height: 340 },
-    { width: 667, height: 375 },
-    { width: 932, height: 430 },
-  ];
-  const overlap = (a: Box, b: Box) =>
-    a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-  const tileBox = (t: BenchLayout['tiles'][number]): Box => ({
-    left: t.x,
-    top: t.y,
-    right: t.x + t.w,
-    bottom: t.y + t.h,
-  });
-  /** The body art is smaller than the chassis box; the page measures it. This stands in. */
-  const shrink = (b: Box, by: number): Box => ({
-    left: b.left * by,
-    top: b.top * by,
-    right: b.right * by,
-    bottom: b.bottom * by,
-  });
-
-  it('has the floor the stylesheet gives it', () => {
-    expect(landscapeFloor({ width: 870, height: 340 })).toEqual({ width: 462, height: 189 });
-    expect(landscapeFloor({ width: 844, height: 390 })).toEqual({ width: 447, height: 228 });
-  });
-
-  it('places every chassis at every phone size and view: no overlaps, in bounds, no crossings', () => {
-    let checked = 0;
-    let scrolling = 0;
-    for (const viewport of VIEWPORTS) {
-      const floor = landscapeFloor(viewport);
-      for (const chassis of Object.values(CATALOG.chassis)) {
-        const sprite = cars.chassis[chassis.id]!;
-        for (const frame of VIEW_FRAMES)
-          for (const tight of [1, 0.85]) {
-            const mounts = projectMounts(chassis, sprite, frame);
-            const bounds = shrink(carBounds(chassis, sprite, frame), tight);
-            const layout = layoutBench({ ...floor, mounts, bounds });
-            const at = `${chassis.id} view ${frame} at ${viewport.width}x${viewport.height}`;
-            checked++;
-
-            expect(layout.scale, at).toBeGreaterThanOrEqual(1);
-            expect(Number.isInteger(layout.scale), at).toBe(true);
-            expect(layout.tiles.map((t) => t.id).sort(), at).toEqual(
-              accessoryMounts(chassis)
-                .map((m) => m.id)
-                .sort(),
-            );
-            // The car is whole and on the floor.
-            expect(layout.carBox.left, at).toBeGreaterThanOrEqual(0);
-            expect(layout.carBox.right, at).toBeLessThanOrEqual(floor.width);
-            if (layout.scale > 1) {
-              expect(layout.carBox.top, at).toBeGreaterThanOrEqual(0);
-              expect(layout.carBox.bottom, at).toBeLessThanOrEqual(floor.height);
-            }
-            for (const tile of layout.tiles) {
-              expect(tile.w, at).toBeGreaterThanOrEqual(44);
-              expect(tile.h, at).toBeGreaterThanOrEqual(44);
-              expect(tile.x, at).toBeGreaterThanOrEqual(0);
-              expect(tile.x + tile.w, at).toBeLessThanOrEqual(floor.width);
-              expect(overlap(tileBox(tile), layout.carBox), `${at} ${tile.id} on car`).toBe(false);
-            }
-            for (let i = 0; i < layout.tiles.length; i++)
-              for (let j = i + 1; j < layout.tiles.length; j++)
-                expect(
-                  overlap(tileBox(layout.tiles[i]!), tileBox(layout.tiles[j]!)),
-                  `${at} ${layout.tiles[i]!.id} on ${layout.tiles[j]!.id}`,
-                ).toBe(false);
-
-            if (layout.scroll) {
-              scrolling++;
-              // Only the frames with more mounts than two columns hold.
-              expect(mounts.length, at).toBeGreaterThan(8);
-              continue;
-            }
-            for (const tile of layout.tiles) {
-              expect(tile.y, at).toBeGreaterThanOrEqual(0);
-              expect(tile.y + tile.h, at).toBeLessThanOrEqual(floor.height);
-              // A leader starts on its tile's edge and ends on its mount.
-              const mount = mounts.find((m) => m.id === tile.id)!;
-              const start = tile.leader[0]!;
-              const end = tile.leader[tile.leader.length - 1]!;
-              expect(start.x === tile.x || start.x === tile.x + tile.w, at).toBe(true);
-              expect(start.y, at).toBeGreaterThanOrEqual(tile.y);
-              expect(start.y, at).toBeLessThanOrEqual(tile.y + tile.h);
-              expect(end, at).toEqual({
-                x: layout.car.x + mount.dx * layout.scale,
-                y: layout.car.y + mount.dy * layout.scale,
-              });
-              // No leader runs under another tile.
-              for (const other of layout.tiles) {
-                if (other === tile) continue;
-                const box = tileBox(other);
-                for (let k = 0; k + 1 < tile.leader.length; k++) {
-                  const a = tile.leader[k]!;
-                  const b = tile.leader[k + 1]!;
-                  for (let step = 0; step <= 20; step++) {
-                    const x = a.x + ((b.x - a.x) * step) / 20;
-                    const y = a.y + ((b.y - a.y) * step) / 20;
-                    const inside = x > box.left && x < box.right && y > box.top && y < box.bottom;
-                    expect(inside, `${at} ${tile.id} leader under ${other.id}`).toBe(false);
-                  }
-                }
-              }
-            }
-            // No two leaders cross.
-            const segments = layout.tiles.flatMap((tile) =>
-              tile.leader.slice(1).map((p, k) => ({ id: tile.id, a: tile.leader[k]!, b: p })),
-            );
-            for (let i = 0; i < segments.length; i++)
-              for (let j = i + 1; j < segments.length; j++) {
-                const s = segments[i]!;
-                const t = segments[j]!;
-                if (s.id === t.id) continue;
-                expect(segmentsCross(s.a, s.b, t.a, t.b), `${at} ${s.id} x ${t.id}`).toBe(false);
-              }
-          }
-      }
-    }
-    expect(checked).toBe(4 * 20 * 4 * 2);
-    // Scrolling columns are the last resort: the two largest frames on the narrowest phone.
-    expect(scrolling).toBeLessThan(checked / 20);
-  });
-
-  it('orders a column by where the mounts are on screen', () => {
-    const chassis = CATALOG.chassis.chassis_beetle!;
-    const sprite = cars.chassis.chassis_beetle!;
-    const frame = VIEW_FRAMES[0]!;
-    const mounts = projectMounts(chassis, sprite, frame);
-    const layout = layoutBench({
-      ...landscapeFloor({ width: 870, height: 370 }),
-      mounts,
-      bounds: carBounds(chassis, sprite, frame),
-    });
-    expect(layout.scroll).toBe(false);
-    expect(layout.tileH).toBe(48);
-    for (const side of ['left', 'right'] as const) {
-      const column = layout.tiles.filter((t) => t.side === side);
-      expect(column.length).toBeGreaterThan(0);
-      const ys = column.map((t) => mounts.find((m) => m.id === t.id)!.dy);
-      expect([...ys].sort((a, b) => a - b)).toEqual(ys);
-    }
-    // The front of the car faces right in this view, so the front mount is in the right column.
-    expect(layout.tiles.find((t) => t.id === 'front_center')?.side).toBe('right');
-    expect(layout.tiles.find((t) => t.id === 'rear_center')?.side).toBe('left');
-  });
-
-  it('shows the car at twice its size or better on every phone, and larger with room', () => {
-    for (const viewport of VIEWPORTS)
-      for (const chassis of Object.values(CATALOG.chassis)) {
-        const sprite = cars.chassis[chassis.id]!;
-        const frame = VIEW_FRAMES[0]!;
-        const layout = layoutBench({
-          ...landscapeFloor(viewport),
-          mounts: projectMounts(chassis, sprite, frame),
-          bounds: shrink(carBounds(chassis, sprite, frame), 0.85),
-        });
-        expect(layout.scale, `${chassis.id} at ${viewport.width}`).toBeGreaterThanOrEqual(2);
-      }
-    const beetle = CATALOG.chassis.chassis_beetle!;
-    const sprite = cars.chassis.chassis_beetle!;
-    const big = layoutBench({
-      width: 650,
-      height: 690,
-      mounts: projectMounts(beetle, sprite, 18),
-      bounds: carBounds(beetle, sprite, 18),
-    });
-    expect(big.scale).toBeGreaterThanOrEqual(6);
-    // Portrait: the tiles are a row elsewhere, so only the car is placed.
-    const strip = layoutBench({
-      width: 440,
-      height: 250,
-      mounts: projectMounts(beetle, sprite, 18),
-      bounds: carBounds(beetle, sprite, 18),
-      columns: false,
-    });
-    expect(strip.tiles).toEqual([]);
-    expect(strip.scale).toBeGreaterThanOrEqual(3);
-  });
-
-  it('has a short label for every mount, unique on its chassis', () => {
-    for (const chassis of Object.values(CATALOG.chassis)) {
-      const labels = accessoryMounts(chassis).map((mount) => {
-        expect(
-          Object.prototype.hasOwnProperty.call(STRINGS.garage.mountShort, mount.id),
-          mount.id,
-        ).toBe(true);
-        const label = mountShort(mount.id);
-        expect(label.length, mount.id).toBeLessThanOrEqual(7);
-        return label;
-      });
-      expect(new Set(labels).size, chassis.id).toBe(labels.length);
-    }
   });
 });

@@ -349,7 +349,7 @@ test('a pick stored by the Milestone A build is migrated to a blueprint and surv
     window.localStorage.setItem(
       'bolt.loadout.v1',
       JSON.stringify({
-        chassisId: 'chassis_turtle',
+        chassisId: 'chassis_spider',
         engineId: 'engine_four_cylinder',
         tireKitId: 'tires_street',
         paintId: 'paint_mint',
@@ -357,7 +357,7 @@ test('a pick stored by the Milestone A build is migrated to a blueprint and surv
     );
   });
   await page.reload();
-  await expect(page.getByTestId('home-car-chassis')).toHaveText('Turtle');
+  await expect(page.getByTestId('home-car-chassis')).toHaveText('Spider');
   const stored = await page.evaluate(() => ({
     legacy: window.localStorage.getItem('bolt.loadout.v1'),
     blueprint: window.localStorage.getItem('bolt.blueprint.v1'),
@@ -365,12 +365,22 @@ test('a pick stored by the Milestone A build is migrated to a blueprint and surv
   expect(stored.legacy).toBeNull();
   expect(JSON.parse(stored.blueprint ?? '{}')).toMatchObject({
     formatVersion: 1,
-    chassisId: 'chassis_turtle',
+    chassisId: 'chassis_spider',
     paintId: 'paint_mint',
     parts: [],
   });
   await page.reload();
-  await expect(page.getByTestId('home-car-chassis')).toHaveText('Turtle');
+  await expect(page.getByTestId('home-car-chassis')).toHaveText('Spider');
+  // A pick of a chassis that has since been retired falls back to the baseline car.
+  await page.evaluate(() => {
+    window.localStorage.clear();
+    window.localStorage.setItem(
+      'bolt.loadout.v1',
+      JSON.stringify({ chassisId: 'chassis_turtle', paintId: 'paint_mint' }),
+    );
+  });
+  await page.reload();
+  await expect(page.getByTestId('home-car-chassis')).toHaveText('Beetle');
   // Garbage in storage falls back to the baseline car instead of breaking the page.
   await page.evaluate(() =>
     window.localStorage.setItem('bolt.blueprint.v1', '{"chassisId":"<script>","totalCost":0}'),

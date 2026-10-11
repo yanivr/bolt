@@ -8,7 +8,8 @@ import type {
 } from '@bolt/shared';
 import { CAR_HEADINGS, CAR_TILT, CAR_Z_SCALE, TAU, WHEEL_HEADINGS, layoutCar } from '@bolt/shared';
 import { BEETLE_ART } from './cars/beetle.js';
-import { SPIDER_ART, TURTLE_ART } from './cars/benchmarks.js';
+import { SPIDER_ART } from './cars/benchmarks.js';
+import { PICKUP_ART } from './cars/chassis/pickup.js';
 import { PAINTS, PAINT_KEY, PAINT_OUTLINE_KEY } from './cars/materials.js';
 import { ALL_ENGINE_ART } from './cars/registry-engines.js';
 import { ALL_WHEEL_ART } from './cars/registry-wheels.js';
@@ -25,7 +26,7 @@ import { PixelBuffer, hex, writePng } from './lib/pixels.js';
  *   npx tsx art/scripts/preview-drivetrain.ts engine_v8  just the named parts
  *   npx tsx art/scripts/preview-drivetrain.ts --overview only the overviews
  *
- * Per engine: `<id>_6x.png` (eight headings alone) and `<id>_on_cars_4x.png` (Beetle, Turtle).
+ * Per engine: `<id>_6x.png` (eight headings alone) and `<id>_on_cars_4x.png` (Beetle, Pickup).
  * Per wheel kit: `<id>_8x.png` (eight directions by every roll frame), `<id>_dirs_4x.png` (all
  * 32 directions, to check for flicker between neighbours) and `<id>_on_cars_4x.png` (Beetle,
  * Spider, front wheels steered). Every frame is also checked against its cell border.
@@ -309,7 +310,7 @@ function engineSheets(art: EngineArt): void {
   const cars = canvas(win * 4, win * 2);
   const rows: Array<[ChassisArt, string]> = [
     [BEETLE_ART, 'paint_signal'],
-    [TURTLE_ART, 'paint_mint'],
+    [PICKUP_ART, 'paint_mint'],
   ];
   rows.forEach(([chassis, paint], row) => {
     ENGINE_CAR_FRAMES.forEach((frame, col) => {

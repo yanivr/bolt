@@ -13,7 +13,8 @@ the specification is the requirement list; rows are added here as milestones lan
 | `pnpm test:e2e`                   | Playwright against the production build in a phone-sized touch viewport |
 | `pnpm art:check`                  | Car atlases match the pipeline byte for byte                            |
 | `npx tsx tests/visual/capture.ts` | Screenshots and a recording for visual review                           |
-| `npx tsx tests/visual/garage.ts <url> <dir> [sizes]` | Garage states (idle, slot list, compare, part card, rotated, Crab, Platform, Browse All, illegal build, More) at 870x370, 844x390, 667x375, 450x840 and 1440x900 |
+| `npx tsx tests/visual/garage.ts <url> <dir> [sizes]` | Garage states at 870x370, 667x375, 450x840 and 1440x900: the idle overview of each of the five chassis, focus on an empty slot, on a roof weapon, on the part nudged and turned, on the engine, on the outer mounts of a loaded Spider and the bed of a loaded Pickup, the compare pane, Browse All Parts, the idle Your Car panel, an illegal build |
+| `npx tsx tests/visual/loaded.ts <url> <dir>` | A race screenshot of each of the five starter cars, one a chassis |
 | `npx tsx tests/feel/report.ts`    | Handling tables for every chassis (yaw, slip, radius, direction steps)  |
 | `npx tsx tests/feel/pacingReport.ts` | Frame pacing of the shipped render pipeline at 60, 90 and 120 Hz     |
 | `npx tsx tests/feel/buildsReport.ts` | Race time, top speed, launch, heat and stability of every shipped build |
@@ -111,8 +112,10 @@ Before and after output from the October 10 rework is kept in `docs/evidence/fee
 **Unit (`tests/unit`)**
 
 - `sha256.test.ts`: published vectors, block boundaries, agreement with Node.
-- `catalog.test.ts`: exactly 120 parts, 20 per category; every id, name, price and mass
-  against the Section 11 tables; card copy free of em dashes, double hyphens and filler;
+- `catalog.test.ts`: exactly 105 parts (five chassis with the ids of DECISIONS 87, 20 in
+  each other category); every engine, wheel kit and accessory id, name, price and mass against
+  the Section 11 tables and every chassis row against the five-chassis table; the strength and
+  the cost each chassis card claims, held to the data; every chassis used by a starter; card copy free of em dashes, double hyphens and filler;
   every chassis layout (mirrored mounts, clear of wheels and of each other, inside the body);
   every part fits at least one mount on some chassis; templates legal and at their stated
   costs (baseline 370, Rookie 480).
@@ -142,13 +145,15 @@ Before and after output from the October 10 rework is kept in `docs/evidence/fee
 - `builds.test.ts`: every shipped blueprint finishes Neon Cut dry and wet without a wall
   strike; the baseline stays in the Section 9.3 window; the six example builds differ the way
   Section 11.9 says.
-- `handling.test.ts` now runs all 20 chassis (two with loose limits, see Decisions 59).
+- `handling.test.ts` runs all five chassis (the Trike with loose limits, see Decisions 59).
 
 **Integration and end to end**
 
 - Drive room: join with a blueprint; refusal of illegal, unknown-part, stale-catalog and
   malformed builds; the snapshot carries heat, battery and build hash.
-- `GET /api/v1/catalog` returns all 120 parts and the templates.
+- `GET /api/v1/catalog` returns all 105 parts and the templates.
+- A join on any of the fifteen retired chassis ids is refused as `UNKNOWN_PART`, or as
+  `CATALOG_MISMATCH` when the blueprint still carries the old catalog version.
 - Playwright: a pick saved by the Milestone A build is migrated to a blueprint and survives a
   reload; a build with parts that have no art yet races online with stand-in sprites.
 
@@ -157,7 +162,7 @@ and Utility scores are checked for arithmetic and ordering, not against combat o
 
 ## Automated coverage added in Milestone B (garage and flow)
 
-**Unit (`tests/unit/garageStore.test.ts`, 56 tests)** against the garage store on a controlled
+**Unit (`tests/unit/garageStore.test.ts`, 54 tests)** against the garage store on a controlled
 clock: install, replace and remove with exact credits; a mount tap never buys; wheel kits
 priced for the chassis; paint and name leave the hash alone; nudge, rotate and the two-button
 rule; over-budget, overweight, no-mount, one-per-car and unknown-part refusals leave the build
@@ -175,13 +180,36 @@ or a lock); `partsForSlot` against the validator for every mount of every chassi
 part installs or is refused for a reason that is not about fit; an unlisted part is refused
 for a reason that is); blocked reasons equal to the plan the press would run; pending chassis;
 Browse All offering a free mount, a replacement, or "No compatible mount" only when no mount
-fits; `layoutBench` for all 20 chassis at 844 x 390, 870 x 340, 667 x 375 and 932 x 430, in
-all four views and with two body extents (no tile on another tile or on the car, tiles and
-car on the floor, every leader from its tile's edge to its mount, no leader under a tile, no
-two leaders crossing, scrolling only for more than eight mounts); column order; scale of two
-or better on every phone; a unique short label for every mount.
+fits; a unique short label for every mount.
 
-**End to end (`tests/e2e/garage.spec.ts`, 31 tests)** on the production build: the first-run
+Added with the five-chassis decision and focus mode (Decisions 87 to 98):
+
+- `tests/unit/benchLayout.test.ts` (17 tests). The overview, `layoutBench`, for all five
+  chassis at 870 x 370, 870 x 340, 844 x 390, 667 x 375 and 932 x 430, in all four views and
+  with two body extents: every mount has a tile and a two-point leader, one column a side
+  (nothing scrolls, nothing is stacked), no tile on another tile or on the car, tiles and car
+  on the floor, no leader under a tile, no two leaders crossing; the second-column fallback
+  on a floor too short for four tiles. The focus camera, `focusCamera`, as a pure function:
+  the largest scale at which the part and its context fit, the fallback to the smallest, a
+  part centred, the pan stopped before a void, an axis left unpanned when the car fits, and
+  4,000 random floors and cars with the part always on the free floor. Focus mode,
+  `layoutFocus`, for every mount of all five chassis and the engine at those five sizes and
+  450 x 840, four views, two body extents (1,536 cases): whole scales one or two steps above
+  the overview, the mount inside the free floor with 20 px to spare and under no tile, the
+  whole part on the free floor, tiles of 44 px or more that keep their side and order and stay
+  out of the view, a leader for the selected slot only. `summarizeCar` on synthetic scores and
+  on every shipped car. The floor sizes the stylesheet gives (`landscapeFloor`,
+  `portraitFloor`), which the end-to-end tests check against the real page.
+- `garageStore.test.ts`: a saved car on a retired chassis is read back, kept and flagged with
+  the "older part values" line, and `Repair Build` rebuilds it on the Beetle with its engine,
+  tires, paint, name and every part that fits, the rest refunded and named; all fifteen
+  retired ids rebuild into a legal car; the same draft opened in the garage for review cannot
+  be bought on or raced, and repairs there.
+- `edit.test.ts`, `blueprint.test.ts`, `parts.test.ts`, `powertrain.test.ts`, `stats.test.ts`:
+  ported from the retired frames to the five (the Pickup's bed stands in for the Platform's
+  decks and the Brick's rack).
+
+**End to end (`tests/e2e/garage.spec.ts`, 35 tests)** on the production build: the first-run
 flow from a blank browser to a race in a car built in the garage, by slot; Use Starter Car and
 skipped tips; over-budget and overweight attempts; undo and redo by button and keyboard, and
 Reset from More; chassis swap with refund notice; nudge, drag on the clean car, rotate, fire
@@ -198,17 +226,36 @@ targets of 44 px or more and rows of 48, Ready a full 48 px and the only primary
 Ready and credits uncovered, the car drawn whole at an integer scale of two or more, no tile
 on the car's drawn pixels or on another tile, five whole list rows with a slot selected, the
 part card without scrolling from 370 px of height, no shift when messages appear, all four
-views); the Crab and the Platform loaded with parts at five phone sizes; portrait at 450 x
-840 (car strip of about 30 percent, one row of slots in car order, one-line tips, six whole
-rows, gauges directly above Ready); home, preview and blueprints at 667 x 375.
+views); the Spider and the Pickup loaded with parts at five phone sizes; portrait at 450 x
+840 (car strip of a little under 30 percent, a row of mounts in car order and a row of
+essentials with names, Stats and View beside the strip and not over it, the status row under
+the slots, one-line tips, five whole rows, gauges directly above Ready); home, preview and
+blueprints at 667 x 375.
+
+Added with focus mode: `assertLayout` now also fails when the status line touches the car's
+drawn bounds or the floor, when a tile column or a slot row scrolls, when Stats or View is
+over the floor, and, in focus, when the selected mount is within 16 px of the floor's edge
+or under a tile or when more than one leader is drawn. New tests: focus at 870 x 370 for
+every mount of all five chassis (the drawn scale goes up by one or two whole steps, the
+dashed socket is on the floor and under no tile, every other tile is 44 px or more, `Whole
+Car`, Escape and a tap on the bare floor restore the overview scale and every leader, the
+engine has a focus of its own and Chassis and Wheels show the whole car); nudges and turns
+in focus (one step moves the part one sprite pixel on screen while the car stays put, the
+arrow keys do the same, the chevron turns with the part, Rotate view keeps the focus); the
+idle Your Car panel (five scores, five indicator states that open their working, the two
+derived lines, equipment rows that open their slot); a saved car on a retired chassis
+(flagged, `Retired frame`, not usable, rebuilt on the Beetle by Repair Build). The layout
+test also checks that the compare pane does not scroll on any phone 370 px tall or more,
+667 x 375 included, and that the essentials tiles show a category and a one-line name.
 
 `tests/e2e/drive.spec.ts` now reaches a race through the garage (Start Racing, Build Your
 Car, Ready) and picks chassis there, from the Chassis slot.
 
 Not automated: screen-reader output, real touch drag on a phone, Reduced Motion (the styles
 and the still outline are there; nothing asserts them), the redesign on the owner's real
-phone (it has been checked only in headless Chromium at his viewport sizes), and whether a
-child finds the garage clear in 60 seconds.
+phone (it has been checked only in headless Chromium at his viewport sizes), the 150 ms ease
+of the focus move (the tests wait for it and check where it ends, not how it looks), and
+whether a child finds the garage clear in 60 seconds.
 
 ## Cannot be verified from this repository
 

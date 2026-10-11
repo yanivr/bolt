@@ -70,12 +70,22 @@ draws surfaces, kerbs, sidewalks, rooftops, landmarks and props, then lighting i
 hard posterized steps and the result is cut into chunks. Foreground overlays and looping
 ambient strips are separate files with world positions in the manifest.
 
+## The chassis list
+
+The game ships five chassis by product-owner decision (`docs/DECISIONS.md` entry 87): Beetle,
+Arrow, Pickup, Spider and Trike. They are registered in `art/scripts/cars/registry-chassis.ts`
+and are the only ones baked. The models of the fifteen retired frames are kept, unbaked, in
+`art/scripts/cars/chassis/retired` (see the README there). Each chassis states the height of
+the bodywork under every one of its mounts (`mountHeights`); `npx tsx
+art/scripts/preview-chassis.ts <name>` prints any that are missing and draws the mount boxes
+on the car in `art/preview/chassis/<name>_mounts_4x.png`.
+
 ## Adding a chassis
 
 1. Add its definition (price, mass, wheel anchors, mounts, limits) to `packages/content`.
 2. Model it in `art/scripts/cars/` as solids and decals, in chassis-local pixels with the
    front at negative Y. Give it one unmistakable identity mark that reads at any heading.
-3. Register it in `build-art.ts`, run `pnpm art -- --cars`, and review `art/preview/cars`:
+3. Register it in `registry-chassis.ts`, give it `mountHeights`, run `pnpm art -- --cars`, and review `art/preview/cars`:
    `lineup_3x.png` for the whole car, `silhouettes_3x.png` for shape alone.
 4. `pnpm test` checks frames, cell margins, anchors and the paint key.
 
@@ -86,7 +96,7 @@ cannot vouch for its own taste, so these are open until a person signs them off:
 
 | Asset                                                        | State                         | Notes                                                                         |
 | :----------------------------------------------------------- | :---------------------------- | :---------------------------------------------------------------------------- |
-| Beetle, Arrow, Turtle, Spider bodies                         | Awaiting product-owner review | Bare chassis only; "heavily modified" benchmark needs Milestone B and C parts |
+| Beetle, Arrow, Pickup, Spider, Trike bodies                  | Awaiting product-owner review | The five chassis the game keeps (DECISIONS 87). Fifteen retired models are in `art/scripts/cars/chassis/retired`, unbaked |
 | Street wheel kit                                             | Awaiting review               | Tread reads at 4x; subtle at game size                                        |
 | Four-Cylinder engine layer                                   | Awaiting review               | Same sprite on all four frames for now                                        |
 | Neon Cut clear night                                         | Awaiting review               | See known weak spots below                                                    |

@@ -84,7 +84,7 @@ function installSomewhere(part: AccessoryDefinition): {
   throw new Error(`${part.id} installs nowhere`);
 }
 
-describe('price and refund of all 120 parts (Sections 6.1 and 19.1)', () => {
+describe('price and refund of all 105 parts (Sections 6.1 and 19.1)', () => {
   it.each([...WEAPON_LIST, ...DEFENSE_LIST, ...UTILITY_LIST])(
     '$id: install spends its price, remove refunds it in full',
     (part) => {
@@ -189,26 +189,26 @@ describe('price and refund of all 120 parts (Sections 6.1 and 19.1)', () => {
   );
 
   it('charges nothing to move, rotate, repaint, rename or reassign', () => {
-    const start = deepFreeze(TEMPLATES.find((t) => t.id === 'starter_tinker')!.blueprint);
-    const fan = ok(installPart(start, CATALOG, 'utility_fan', { mountId: 'roof_rear' }));
+    const start = deepFreeze(TEMPLATES.find((t) => t.id === 'starter_rookie')!.blueprint);
+    const fan = ok(installPart(start, CATALOG, 'utility_fan', { mountId: 'roof_mid' }));
     const free = { newSpend: 0, refund: 0, net: 0 };
     expect(
       ok(movePart(fan.blueprint, CATALOG, fan.instanceId!, { offsetX: 1 })).spend,
     ).toMatchObject(free);
     expect(ok(setPaint(start, CATALOG, 'paint_cobalt')).spend).toMatchObject(free);
     expect(ok(renameBlueprint(start, CATALOG, 'Dust Devil')).spend).toMatchObject(free);
-    const gun = start.parts.find((p) => p.partId === 'weapon_shotgun')!;
+    const gun = start.parts.find((p) => p.partId === 'weapon_front_mg')!;
     expect(ok(assignActionSlot(start, CATALOG, gun.instanceId, 1)).spend).toMatchObject(free);
     expect(ok(rotatePart(start, CATALOG, gun.instanceId)).spend).toMatchObject(free);
     expect(compareCost(start, start, CATALOG)).toMatchObject(free);
     // Two identical parts swapped for one of another kind: spend and refund stay separate.
-    const a = car('chassis_brick', [
-      { partId: 'utility_fan', mountId: 'front_utility' },
+    const a = car('chassis_spider', [
       { partId: 'utility_fan', mountId: 'rear_utility' },
-    ]);
-    const b = car('chassis_brick', [
       { partId: 'utility_fan', mountId: 'front_utility' },
-      { partId: 'utility_radiator', mountId: 'rear_utility' },
+    ]);
+    const b = car('chassis_spider', [
+      { partId: 'utility_fan', mountId: 'rear_utility' },
+      { partId: 'utility_radiator', mountId: 'front_utility' },
     ]);
     expect(compareCost(a, b, CATALOG)).toMatchObject({ newSpend: 90, refund: 55, net: 35 });
   });
@@ -261,21 +261,22 @@ describe('installPart', () => {
 
   it('never spends past 1,000 credits', () => {
     let bp = baselineBlueprint({
-      chassisId: 'chassis_platform',
+      chassisId: 'chassis_pickup',
       engineId: 'engine_v12',
       tireKitId: 'tires_track',
     });
-    expect(blueprintCost(bp, CATALOG).total).toBe(690);
+    expect(blueprintCost(bp, CATALOG).total).toBe(665);
     bp = ok(installPart(bp, CATALOG, 'weapon_mortar')).blueprint;
-    const refused = refusal(installPart(bp, CATALOG, 'defense_antimissile'));
+    const refused = refusal(installPart(bp, CATALOG, 'weapon_homing'));
     expect(refused.issue).toMatchObject({
       code: 'NOT_ENOUGH_CREDITS',
       message: 'Not enough credits',
     });
-    expect(refused.issue.detail).toMatchObject({ over: 25 });
+    expect(refused.issue.detail).toMatchObject({ over: 10 });
     expect(refused.blueprint).toBe(bp);
-    // Something that fits the 135 credits left is still welcome.
-    expect(installPart(bp, CATALOG, 'weapon_turret').ok).toBe(true);
+    // Something that costs exactly the 160 credits left is still welcome.
+    const exact = ok(installPart(bp, CATALOG, 'defense_antimissile'));
+    expect(blueprintCost(exact.blueprint, CATALOG).total).toBe(1000);
   });
 
   it('refuses weight past the chassis maximum and a second unique part', () => {
@@ -314,7 +315,7 @@ describe('installPart', () => {
 
   it('hands out fire buttons: primary, secondary, then automatic for a hybrid or inactive for a manual', () => {
     let bp = baselineBlueprint({
-      chassisId: 'chassis_platform',
+      chassisId: 'chassis_pickup',
       engineId: 'engine_mini_electric',
       tireKitId: 'tires_micro',
     });
@@ -382,8 +383,8 @@ describe('suggestMount', () => {
         expect(result.ok, `${chassis.id} ${part.id} at ${where.mountId}`).toBe(true);
       }
     }
-    expect(placed).toBeGreaterThan(900);
-    expect(nowhere).toBeGreaterThan(50);
+    expect(placed).toBeGreaterThan(240);
+    expect(nowhere).toBeGreaterThan(20);
     expect(suggestMount(baselineBlueprint(), CATALOG, 'nope')).toBeNull();
     expect(
       suggestMount({ ...baselineBlueprint(), chassisId: 'nope' }, CATALOG, 'utility_fan'),
@@ -410,8 +411,8 @@ describe('suggestMount', () => {
     // With the front taken, the next gun goes to the roof.
     const armed = ok(installPart(beetle, CATALOG, 'weapon_front_mg')).blueprint;
     expect(suggestMount(armed, CATALOG, 'weapon_shotgun')!.mountId).toBe('roof_mid');
-    // On a Brick, small roof parts fill every free mount before two of them share the rack.
-    let brick = baselineBlueprint({ chassisId: 'chassis_brick' });
+    // On a Pickup, small parts fill every free mount before two of them share the rack.
+    let truck = baselineBlueprint({ chassisId: 'chassis_pickup' });
     const homes: string[] = [];
     for (const partId of [
       'utility_radar',
@@ -420,13 +421,13 @@ describe('suggestMount', () => {
       'utility_capacitor',
       'utility_traction',
     ]) {
-      const result = ok(installPart(brick, CATALOG, partId));
-      brick = result.blueprint;
-      homes.push(brick.parts.find((p) => p.instanceId === result.instanceId)!.mountId);
+      const result = ok(installPart(truck, CATALOG, partId));
+      truck = result.blueprint;
+      homes.push(truck.parts.find((p) => p.instanceId === result.instanceId)!.mountId);
     }
     expect(new Set(homes.slice(0, 3)).size).toBe(3);
-    expect(homes.filter((m) => m === 'roof_mid').length).toBeLessThanOrEqual(2);
-    expect(check(brick).ok).toBe(true);
+    expect(homes.filter((m) => m === 'bed_front').length).toBeLessThanOrEqual(2);
+    expect(check(truck).ok).toBe(true);
     // A full car has nowhere left.
     let full = baselineBlueprint();
     for (const partId of [
@@ -447,32 +448,32 @@ describe('suggestMount', () => {
 
 describe('movePart and rotatePart', () => {
   const start = deepFreeze(
-    car('chassis_brick', [
+    car('chassis_pickup', [
       {
         partId: 'weapon_front_mg',
-        mountId: 'roof_mid',
+        mountId: 'bed_front',
         instanceId: 'gun',
         assignedActionSlot: 0,
         offsetX: -5,
       },
-      { partId: 'utility_radar', mountId: 'roof_mid', instanceId: 'radar', offsetX: 5 },
+      { partId: 'utility_radar', mountId: 'bed_front', instanceId: 'radar', offsetX: 5 },
     ]),
   );
 
   it('moves within the region and to another mount, and refuses anything illegal', () => {
     expect(check(start).ok).toBe(true);
-    const nudged = ok(movePart(start, CATALOG, 'gun', { offsetY: 3 }));
+    const nudged = ok(movePart(start, CATALOG, 'gun', { offsetY: 2 }));
     expect(nudged.blueprint.parts.find((p) => p.instanceId === 'gun')).toMatchObject({
       offsetX: -5,
-      offsetY: 3,
+      offsetY: 2,
     });
     expect(buildHash(nudged.blueprint)).not.toBe(buildHash(start));
     // Fractions snap to the pixel grid.
     expect(
-      ok(movePart(start, CATALOG, 'gun', { offsetY: 2.6 })).blueprint.parts.find(
+      ok(movePart(start, CATALOG, 'gun', { offsetY: 1.6 })).blueprint.parts.find(
         (p) => p.instanceId === 'gun',
       )!.offsetY,
-    ).toBe(3);
+    ).toBe(2);
     expect(refusal(movePart(start, CATALOG, 'gun', { offsetX: -9 })).issue.code).toBe(
       'OUT_OF_REGION',
     );
@@ -481,21 +482,21 @@ describe('movePart and rotatePart', () => {
     expect(onto.issue).toMatchObject({ code: 'PART_BLOCKS_ANOTHER', otherInstanceId: 'radar' });
     expect(onto.blueprint).toBe(start);
     // To another mount: the offset resets to the centre.
-    const bay = ok(movePart(start, CATALOG, 'radar', { mountId: 'front_utility' }));
+    const bay = ok(movePart(start, CATALOG, 'radar', { mountId: 'bed_rear' }));
     expect(bay.blueprint.parts.find((p) => p.instanceId === 'radar')).toMatchObject({
-      mountId: 'front_utility',
+      mountId: 'bed_rear',
       offsetX: 0,
       offsetY: 0,
       rotationQuarterTurns: 0,
     });
-    // The Brick's front and rear mounts are wide and shallow: a 12-long gun only fits turned
+    // The cab roof and the tailgate are wide and shallow: a 12-long gun only fits turned
     // sideways, so the move picks the first orientation that is allowed there and fits.
-    const front = ok(movePart(start, CATALOG, 'gun', { mountId: 'front_center' }));
+    const front = ok(movePart(start, CATALOG, 'gun', { mountId: 'roof_cab' }));
     expect(front.blueprint.parts.find((p) => p.instanceId === 'gun')).toMatchObject({
-      mountId: 'front_center',
+      mountId: 'roof_cab',
       offsetX: 0,
       offsetY: 0,
-      rotationQuarterTurns: 3,
+      rotationQuarterTurns: 1,
     });
     const rear = ok(movePart(start, CATALOG, 'gun', { mountId: 'rear_center' }));
     expect(rear.blueprint.parts.find((p) => p.instanceId === 'gun')!.rotationQuarterTurns).toBe(3);
@@ -512,13 +513,13 @@ describe('movePart and rotatePart', () => {
   });
 
   it('steps a part through the orientations its mount allows and its footprint fits', () => {
-    // On the big roof rack every quarter turn is allowed, but the radar is in the way of a
+    // On the bed rack every quarter turn is allowed, but the radar is in the way of a
     // sideways gun, so the gun alone is used here.
     const solo = deepFreeze(
-      car('chassis_brick', [
+      car('chassis_pickup', [
         {
           partId: 'weapon_front_mg',
-          mountId: 'roof_mid',
+          mountId: 'bed_front',
           instanceId: 'gun',
           assignedActionSlot: 0,
         },
@@ -561,14 +562,6 @@ describe('movePart and rotatePart', () => {
 describe('swapChassis (Sections 5.6 and 6.6)', () => {
   it('keeps parts on mounts of the same name and finds homes for the rest', () => {
     const rookie = deepFreeze(ROOKIE_BLUEPRINT);
-    // Beetle to Buggy: both mounts exist under the same names.
-    const buggy = ok(swapChassis(rookie, CATALOG, 'chassis_buggy'));
-    expect(buggy.removed).toEqual([]);
-    expect(buggy.blueprint.parts.map((p) => [p.partId, p.mountId]).sort()).toEqual([
-      ['utility_spare', 'left_utility'],
-      ['weapon_front_mg', 'front_center'],
-    ]);
-    expect(buggy.spend).toMatchObject({ newSpend: 165, refund: 150, totalCost: 495 });
     // Beetle to Arrow: no utility pods, so the spare moves to a roof or rear mount.
     const arrow = ok(swapChassis(rookie, CATALOG, 'chassis_arrow'));
     expect(arrow.removed).toEqual([]);
@@ -578,6 +571,7 @@ describe('swapChassis (Sections 5.6 and 6.6)', () => {
       'front_center',
     );
     expect(check(arrow.blueprint).ok).toBe(true);
+    expect(arrow.spend).toMatchObject({ newSpend: 180, refund: 150, totalCost: 510 });
     // The gun keeps its fire button and both parts keep their instance ids.
     expect(arrow.blueprint.parts.map((p) => p.instanceId).sort()).toEqual(
       rookie.parts.map((p) => p.instanceId).sort(),
@@ -606,22 +600,20 @@ describe('swapChassis (Sections 5.6 and 6.6)', () => {
       ]),
     );
     expect(check(beetle).ok).toBe(true);
-    // The Rammer has no roof and no utility mount: the radar has nowhere to go, and the
-    // turret is too large for its forward mounts.
-    const rammer = ok(swapChassis(beetle, CATALOG, 'chassis_rammer'));
-    expect(rammer.removed.map((r) => [r.instance.instanceId, r.refund, r.reason]).sort()).toEqual([
-      ['radar', 45, 'NO_COMPATIBLE_MOUNT'],
+    // The Trike has no mount a turret fits. The radar moves to its roof, the sentry to a rail.
+    const trike = ok(swapChassis(beetle, CATALOG, 'chassis_trike'));
+    expect(trike.removed.map((r) => [r.instance.instanceId, r.refund, r.reason]).sort()).toEqual([
       ['turret', 130, 'NO_COMPATIBLE_MOUNT'],
     ]);
-    expect(rammer.blueprint.parts.map((p) => p.instanceId)).toEqual(['sentry']);
-    expect(check(rammer.blueprint).issues).toEqual([]);
-    // One atomic step: Beetle and removed parts refunded, Rammer bought.
-    expect(rammer.spend).toEqual({
-      newSpend: 220,
-      refund: 150 + 130 + 45,
-      net: 220 - 325,
-      totalCost: 220 + 140 + 80 + 85,
-      creditsLeft: 1000 - 525,
+    expect(trike.blueprint.parts.map((p) => p.instanceId).sort()).toEqual(['radar', 'sentry']);
+    expect(check(trike.blueprint).issues).toEqual([]);
+    // One atomic step: Beetle, its four tires and the turret refunded; Trike and three bought.
+    expect(trike.spend).toEqual({
+      newSpend: 120 + 60,
+      refund: 150 + 80 + 130,
+      net: 180 - 360,
+      totalCost: 120 + 140 + 60 + 45 + 85,
+      creditsLeft: 1000 - 450,
     });
     expect(beetle.parts).toHaveLength(3);
   });
@@ -638,7 +630,7 @@ describe('swapChassis (Sections 5.6 and 6.6)', () => {
   });
 
   it('is refused whole when the result would be over budget or over weight', () => {
-    // 960 credits on a Beetle; the Brick costs 95 more.
+    // 925 credits on a Beetle; the Spider costs 85 more and its six tires 55 more.
     const dear = deepFreeze(
       car(
         'chassis_beetle',
@@ -652,12 +644,12 @@ describe('swapChassis (Sections 5.6 and 6.6)', () => {
       ),
     );
     expect(check(dear).totalCost).toBe(150 + 290 + 110 + 130 + 100 + 65 + 80);
-    const refused = refusal(swapChassis(dear, CATALOG, 'chassis_brick'));
+    const refused = refusal(swapChassis(dear, CATALOG, 'chassis_spider'));
     expect(refused.issue.code).toBe('NOT_ENOUGH_CREDITS');
     expect(refused.blueprint).toBe(dear);
-    // 505 kg installed on a Turtle; the Trike allows 460.
+    // 545 kg installed on a Beetle; the Trike allows 460.
     const heavy = deepFreeze(
-      car('chassis_turtle', [{ partId: 'defense_heavy_plate', mountId: 'front_center' }], {
+      car('chassis_beetle', [{ partId: 'defense_heavy_plate', mountId: 'front_center' }], {
         engineId: 'engine_twin',
         tireKitId: 'tires_track',
       }),
@@ -671,18 +663,19 @@ describe('swapChassis (Sections 5.6 and 6.6)', () => {
 
   it('takes armor off when the new frame allows less of it', () => {
     const plated = deepFreeze(
-      car('chassis_cobra', [
-        { partId: 'defense_heavy_plate', mountId: 'front_nose', instanceId: 'plate' },
-        { partId: 'defense_ceramic', mountId: 'roof_rear', instanceId: 'ceramic' },
+      car('chassis_beetle', [
+        { partId: 'defense_heavy_plate', mountId: 'front_center', instanceId: 'plate' },
+        { partId: 'defense_wheel_cage', mountId: 'roof_mid', instanceId: 'cage' },
       ]),
     );
     expect(check(plated).ok).toBe(true);
-    const needle = ok(swapChassis(plated, CATALOG, 'chassis_needle'));
-    expect(needle.removed.map((r) => [r.instance.instanceId, r.reason])).toEqual([
-      ['ceramic', 'TOO_MUCH_ARMOR'],
+    // 228 kg of armor: inside the Beetle's 329, over the Trike's 207.
+    const trike = ok(swapChassis(plated, CATALOG, 'chassis_trike'));
+    expect(trike.removed.map((r) => [r.instance.instanceId, r.reason])).toEqual([
+      ['cage', 'TOO_MUCH_ARMOR'],
     ]);
-    expect(needle.blueprint.parts.map((p) => p.instanceId)).toEqual(['plate']);
-    expect(check(needle.blueprint).ok).toBe(true);
+    expect(trike.blueprint.parts.map((p) => p.instanceId)).toEqual(['plate']);
+    expect(check(trike.blueprint).ok).toBe(true);
   });
 
   it('carries every shipped build onto every chassis without ever producing an illegal car', () => {
@@ -706,22 +699,28 @@ describe('swapChassis (Sections 5.6 and 6.6)', () => {
         expect(result.spend.refund).toBeGreaterThanOrEqual(refunded);
       }
     }
-    expect(swaps).toBeGreaterThan(200);
+    expect(swaps).toBeGreaterThan(40);
   });
 });
 
 describe('assignActionSlot (Section 8.3)', () => {
   const armed = deepFreeze(
-    car('chassis_platform', [
-      { partId: 'weapon_front_mg', mountId: 'deck_front', instanceId: 'mg', assignedActionSlot: 0 },
+    car('chassis_pickup', [
+      {
+        partId: 'weapon_front_mg',
+        mountId: 'bed_front',
+        instanceId: 'mg',
+        assignedActionSlot: 0,
+        offsetX: -5,
+      },
       {
         partId: 'weapon_turret',
-        mountId: 'deck_fore',
+        mountId: 'bed_rear',
         instanceId: 'turret',
         assignedActionSlot: 1,
       },
-      { partId: 'weapon_shotgun', mountId: 'deck_aft', instanceId: 'shotgun' },
-      { partId: 'weapon_tesla', mountId: 'left_edge_mid', instanceId: 'tesla' },
+      { partId: 'weapon_shotgun', mountId: 'bed_front', instanceId: 'shotgun', offsetX: 5 },
+      { partId: 'weapon_tesla', mountId: 'roof_cab', instanceId: 'tesla' },
     ]),
   );
   const fire = (bp: VehicleBlueprint) =>
@@ -764,23 +763,23 @@ describe('repairBlueprint (Section 15.6)', () => {
     // A legal build under a catalog where two parts were cheaper: now 1,070 credits.
     const imported = deepFreeze(
       car(
-        'chassis_platform',
+        'chassis_pickup',
         [
-          { partId: 'weapon_mortar', mountId: 'deck_fore', instanceId: 'mortar', autoMode: true },
+          { partId: 'weapon_mortar', mountId: 'bed_rear', instanceId: 'mortar', autoMode: true },
           {
             partId: 'weapon_turret',
-            mountId: 'deck_aft',
+            mountId: 'bed_front',
             instanceId: 'turret',
             assignedActionSlot: 0,
           },
-          { partId: 'utility_fan', mountId: 'left_edge_mid', instanceId: 'fan' },
-          { partId: 'utility_radar', mountId: 'right_edge_mid', instanceId: 'radar' },
+          { partId: 'utility_fan', mountId: 'left_bed', instanceId: 'fan' },
+          { partId: 'utility_radar', mountId: 'roof_cab', instanceId: 'radar' },
         ],
         { engineId: 'engine_v12', tireKitId: 'tires_track' },
       ),
     );
     const before = check(imported);
-    expect(before.totalCost).toBe(690 + 175 + 130 + 55 + 45);
+    expect(before.totalCost).toBe(665 + 175 + 130 + 55 + 45);
     expect(errorCodes(before)).toEqual(['NOT_ENOUGH_CREDITS']);
     const repaired = repairBlueprint(imported, CATALOG);
     expect(repaired.ok).toBe(true);
@@ -789,7 +788,7 @@ describe('repairBlueprint (Section 15.6)', () => {
       ['mortar', 175, 'NOT_ENOUGH_CREDITS'],
     ]);
     expect(check(repaired.blueprint).ok).toBe(true);
-    expect(check(repaired.blueprint).totalCost).toBe(920);
+    expect(check(repaired.blueprint).totalCost).toBe(895);
     if (repaired.ok) expect(repaired.spend).toMatchObject({ newSpend: 0, refund: 175 });
     // The original record is untouched and the essentials are never changed.
     expect(imported.parts).toHaveLength(4);
@@ -805,21 +804,26 @@ describe('repairBlueprint (Section 15.6)', () => {
       ...CATALOG,
       chassis: {
         ...CATALOG.chassis,
-        chassis_platform: { ...CATALOG.chassis.chassis_platform!, price: 510 },
+        chassis_pickup: { ...CATALOG.chassis.chassis_pickup!, price: 545 },
       },
     };
-    const bp = car('chassis_platform', [
-      { partId: 'utility_radar', mountId: 'left_edge_mid', instanceId: 'radar' },
-      { partId: 'weapon_turret', mountId: 'deck_aft', instanceId: 'turret', assignedActionSlot: 0 },
+    const bp = car('chassis_pickup', [
+      { partId: 'utility_radar', mountId: 'roof_cab', instanceId: 'radar' },
+      {
+        partId: 'weapon_turret',
+        mountId: 'bed_front',
+        instanceId: 'turret',
+        assignedActionSlot: 0,
+      },
       {
         partId: 'weapon_rocket',
-        mountId: 'deck_fore',
+        mountId: 'bed_rear',
         instanceId: 'rocket',
         assignedActionSlot: 1,
       },
-      { partId: 'utility_fan', mountId: 'right_edge_mid', instanceId: 'fan' },
+      { partId: 'utility_fan', mountId: 'left_bed', instanceId: 'fan' },
     ]);
-    // 510 + 175 + 80 = 765, plus 130 + 100 + 55 + 45 = 1,095.
+    // 545 + 140 + 80 = 765, plus 130 + 100 + 55 + 45 = 1,095.
     const repaired = repairBlueprint(bp, tight);
     expect(repaired.ok).toBe(true);
     expect(repaired.removed.map((r) => r.instance.instanceId)).toEqual(['turret']);
@@ -827,7 +831,7 @@ describe('repairBlueprint (Section 15.6)', () => {
       ...tight,
       chassis: {
         ...tight.chassis,
-        chassis_platform: { ...tight.chassis.chassis_platform!, price: 650 },
+        chassis_pickup: { ...tight.chassis.chassis_pickup!, price: 685 },
       },
     };
     expect(repairBlueprint(bp, tighter).removed.map((r) => r.instance.instanceId)).toEqual([
@@ -882,16 +886,17 @@ describe('repairBlueprint (Section 15.6)', () => {
 
   it('lets an illegal draft be edited toward legality but never further from it', () => {
     const over = car(
-      'chassis_platform',
+      'chassis_pickup',
       [
-        { partId: 'weapon_mortar', mountId: 'deck_fore', instanceId: 'mortar', autoMode: true },
-        { partId: 'defense_antimissile', mountId: 'deck_aft', instanceId: 'interceptor' },
+        { partId: 'weapon_mortar', mountId: 'bed_rear', instanceId: 'mortar', autoMode: true },
+        { partId: 'defense_antimissile', mountId: 'roof_cab', instanceId: 'interceptor' },
+        { partId: 'utility_radar', mountId: 'bed_front', instanceId: 'radar' },
       ],
       { engineId: 'engine_v12', tireKitId: 'tires_track' },
     );
     expect(errorCodes(check(over))).toEqual(['NOT_ENOUGH_CREDITS']);
     // Spending more is refused; a free move, a cheaper engine and a removal are all allowed.
-    expect(refusal(installPart(over, CATALOG, 'utility_radar')).issue.code).toBe(
+    expect(refusal(installPart(over, CATALOG, 'utility_fan')).issue.code).toBe(
       'NOT_ENOUGH_CREDITS',
     );
     expect(movePart(over, CATALOG, 'mortar', { offsetX: 1 }).ok).toBe(true);
@@ -905,7 +910,7 @@ describe('undo and redo (Section 6.6)', () => {
   it('walks back and forward through immutable blueprints', () => {
     const a = BASELINE_BLUEPRINT;
     const b = ok(installPart(a, CATALOG, 'utility_fan')).blueprint;
-    const c = ok(swapChassis(b, CATALOG, 'chassis_buggy')).blueprint;
+    const c = ok(swapChassis(b, CATALOG, 'chassis_arrow')).blueprint;
     let history = createHistory(a);
     history = pushHistory(history, b);
     history = pushHistory(history, c);

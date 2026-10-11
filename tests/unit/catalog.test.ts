@@ -37,6 +37,7 @@ import {
   rectAround,
   rectsConflict,
   rotatedFootprint,
+  validateBlueprint,
   wheelKitMass,
   wheelKitPrice,
   wheelRect,
@@ -44,9 +45,11 @@ import {
 import { describe, expect, it } from 'vitest';
 
 /**
- * Catalog integrity. The expected values below are transcribed from Sections 6.4 and 11.2
- * to 11.7 of docs/MASTER_SPEC.md by hand, as an independent list: nothing here is derived
- * from the data under test.
+ * Catalog integrity. The expected values below are transcribed by hand as an independent
+ * list: nothing here is derived from the data under test. Engines, wheel kits, weapons,
+ * defenses and utilities are the rows of Sections 11.3 to 11.7 of docs/MASTER_SPEC.md. The
+ * chassis rows are the five frames of the product-owner decision of October 11, 2026
+ * (docs/DECISIONS.md, entry 87) with the values recorded in docs/BALANCE_CHANGELOG.md 0.4.0.
  */
 
 function allNumbers(value: unknown, out: number[] = []): number[] {
@@ -63,52 +66,22 @@ function rows(table: string): string[][] {
     .map((line) => line.split('|').map((cell) => cell.trim()));
 }
 
-// Section 11.2: id | display name | cost | mass kg
+// The five chassis, in garage order: id | display name | cost | mass kg
 const SPEC_CHASSIS = rows(`
 chassis_beetle | Beetle | 150 | 250
-chassis_needle | Needle | 135 | 180
-chassis_turtle | Turtle | 215 | 460
-chassis_spider | Spider | 235 | 420
-chassis_crab | Crab | 195 | 330
-chassis_cobra | Cobra | 170 | 295
-chassis_scorpion | Scorpion | 180 | 310
-chassis_buggy | Buggy | 165 | 240
-chassis_chameleon | Chameleon | 195 | 275
-chassis_brick | Brick | 245 | 560
-chassis_trike | Trike | 120 | 145
 chassis_arrow | Arrow | 180 | 230
-chassis_wagon | Wagon | 190 | 390
-chassis_rammer | Rammer | 220 | 455
-chassis_drifter | Drifter | 155 | 260
-chassis_kangaroo | Kangaroo | 190 | 325
-chassis_horseshoe | Horseshoe | 195 | 350
-chassis_pickup | Pickup | 185 | 365
-chassis_twins | Twins | 230 | 490
-chassis_platform | Platform | 210 | 390
+chassis_pickup | Pickup | 185 | 390
+chassis_spider | Spider | 235 | 420
+chassis_trike | Trike | 120 | 145
 `);
 
-// Section 6.4: family | wheels | bias letters | mounts | recommended | max | handling
+// family | wheels | bias letters | mounts | recommended | max | handling
 const SPEC_LAYOUT = rows(`
-Beetle | 4 | F B T U | 5 | 460 | 730 | Forgiving and compact
-Needle | 4 | F T | 4 | 350 | 560 | High top-speed modifier
-Turtle | 4 | F B L R T | 7 | 720 | 1050 | Durable and slow
-Spider | 6 | L R T U | 8 | 760 | 1150 | Very stable and wide
-Crab | 4 | L R L R T | 8 | 630 | 950 | Side-mounted tricks
-Cobra | 4 | F F T B | 6 | 550 | 850 | Straight-line front attack
-Scorpion | 4 | B B T U | 6 | 550 | 850 | Rear weapon emphasis
-Buggy | 4 | F T B U | 6 | 460 | 780 | Off-road suspension
-Chameleon | 4 | X X X X X X X X | 8 | 520 | 790 | Flexible and fragile
-Brick | 4 | F B L R T U | 9 | 850 | 1250 | Large and heavy
-Trike | 3 | F B T | 4 | 280 | 460 | Agile but unstable
-Arrow | 4 | F B T | 4 | 420 | 680 | Excellent drag coefficient
-Wagon | 4 | B B U U T | 8 | 720 | 1090 | Support and slow turning
-Rammer | 4 | F F L R | 7 | 710 | 1090 | Heavy frontal collision
-Drifter | 4 | B L R T | 6 | 490 | 770 | Controlled slip
-Kangaroo | 4 | F B U | 5 | 530 | 860 | Bumps and jump support
-Horseshoe | 4 | F F L R | 6 | 610 | 940 | Large front cavity
-Pickup | 4 | B B U U | 8 | 690 | 1080 | Rear modular cargo
-Twins | 4 | L R T T | 8 | 790 | 1180 | Very wide and unusual
-Platform | 4 | X X X X X X X X X X | 10 | 680 | 1020 | Maximum freedom, exposed parts
+Beetle | 4 | F B T U | 5 | 460 | 730 | Balanced and forgiving
+Arrow | 4 | F B T | 4 | 360 | 600 | Lowest drag, fastest
+Pickup | 4 | T X X B B | 6 | 780 | 1200 | Heavy hauler
+Spider | 6 | L R T U | 8 | 700 | 1050 | Very stable, slow to turn
+Trike | 3 | F B T | 4 | 280 | 460 | Quick but easy to tip
 `);
 
 const LETTER: Record<string, MountCategory> = {
@@ -260,18 +233,25 @@ function expectRows(list: AnyPartDefinition[], spec: string[][]): void {
   }
 }
 
-describe('catalog: 120 parts with the exact seed values of Section 11', () => {
-  it('has exactly twenty parts in each of the six categories, with unique ids', () => {
+describe('catalog: 105 parts, five chassis and the exact seed values of Sections 11.3 to 11.7', () => {
+  it('has exactly five chassis and twenty parts in each other category, with unique ids', () => {
     expect(PART_CATEGORIES).toHaveLength(6);
     for (const category of PART_CATEGORIES) {
       const list = partsByCategory(category);
-      expect(list, category).toHaveLength(20);
+      expect(list, category).toHaveLength(category === 'chassis' ? 5 : 20);
       for (const part of list) expect(part.category).toBe(category);
     }
     const ids = allParts().map((p) => p.id);
-    expect(ids).toHaveLength(120);
-    expect(new Set(ids).size).toBe(120);
-    expect(Object.keys(CATALOG.chassis)).toHaveLength(20);
+    expect(ids).toHaveLength(105);
+    expect(new Set(ids).size).toBe(105);
+    expect(Object.keys(CATALOG.chassis)).toEqual([
+      'chassis_beetle',
+      'chassis_arrow',
+      'chassis_pickup',
+      'chassis_spider',
+      'chassis_trike',
+    ]);
+    expect(CHASSIS_LIST.map((c) => c.id)).toEqual(Object.keys(CATALOG.chassis));
     expect(Object.keys(CATALOG.engines)).toHaveLength(20);
     expect(Object.keys(CATALOG.tires)).toHaveLength(20);
     expect(Object.keys(CATALOG.parts)).toHaveLength(60);
@@ -280,7 +260,10 @@ describe('catalog: 120 parts with the exact seed values of Section 11', () => {
     expect(Object.keys(PAINTS).length).toBeGreaterThanOrEqual(4);
   });
 
-  it('matches every chassis row of Section 11.2', () => expectRows(CHASSIS_LIST, SPEC_CHASSIS));
+  it('matches every row of the five-chassis table', () => {
+    expect(CHASSIS_LIST).toHaveLength(SPEC_CHASSIS.length);
+    expectRows(CHASSIS_LIST, SPEC_CHASSIS);
+  });
   it('matches every engine row of Section 11.3', () => {
     expectRows(ENGINE_LIST, SPEC_ENGINES);
     for (const [id, , , , force, heat] of SPEC_ENGINES) {
@@ -375,7 +358,7 @@ describe('catalog: 120 parts with the exact seed values of Section 11', () => {
           part.id,
         ).toBe(true);
       }
-      // Installable on at least five different chassis, so nothing is a one-frame curiosity.
+      // Every accessory has a home on at least one of the five frames.
       const homes = CHASSIS_LIST.filter((chassis) =>
         accessoryMounts(chassis).some(
           (mount) =>
@@ -389,7 +372,7 @@ describe('catalog: 120 parts with the exact seed values of Section 11', () => {
       expect(
         homes.length,
         `${part.id} fits on ${homes.map((c) => c.displayName).join(', ')}`,
-      ).toBeGreaterThanOrEqual(5);
+      ).toBeGreaterThanOrEqual(1);
     }
   });
 
@@ -406,7 +389,7 @@ describe('catalog: 120 parts with the exact seed values of Section 11', () => {
   });
 });
 
-describe('chassis layouts (Sections 6.3 and 6.4)', () => {
+describe('chassis layouts (Section 6.3 and the five-chassis decision)', () => {
   it.each(SPEC_LAYOUT)(
     '%s: %s wheels, bias %s, %s mounts, load %s / %s kg',
     (family, wheels, bias, count, recommended, max, handling) => {
@@ -486,14 +469,6 @@ describe('chassis layouts (Sections 6.3 and 6.4)', () => {
       }
       expect(chassis.wheelAnchors.some((w) => w.steers)).toBe(true);
       expect(chassis.wheelAnchors.some((w) => w.driven)).toBe(true);
-      // The Chameleon is the one frame the specification describes as asymmetrical.
-      if (chassis.id === 'chassis_chameleon') {
-        const offCentre = accessoryMounts(chassis).filter((m) => m.x !== 0);
-        expect(
-          offCentre.some((m) => !accessoryMounts(chassis).some((o) => o.x === -m.x && o.y === m.y)),
-        ).toBe(true);
-        return;
-      }
       const swap = (c: MountCategory): MountCategory =>
         c === 'LEFT' ? 'RIGHT' : c === 'RIGHT' ? 'LEFT' : c;
       for (const mount of accessoryMounts(chassis)) {
@@ -514,12 +489,11 @@ describe('chassis layouts (Sections 6.3 and 6.4)', () => {
     },
   );
 
-  it('keeps the wheel anchors, body bounds and engine bay the four shipped sprites were drawn for', () => {
+  it('keeps the wheel anchors, body bounds and engine bay the first three sprites were drawn for', () => {
     const shipped: Record<string, [number, number, number, number, number, number, number]> = {
       // id: front x, front y, rear x, rear y, half width, half length, engine bay y
       chassis_beetle: [14.5, -17, 14.5, 17.5, 17, 29, 20],
       chassis_arrow: [11.5, -14, 13, 19, 14, 31, 20],
-      chassis_turtle: [15.5, -19, 15.5, 19.5, 21, 31, 21],
     };
     for (const [id, [fx, fy, rx, ry, hw, hl, bay]] of Object.entries(shipped)) {
       const c = CHASSIS[id]!;
@@ -565,24 +539,17 @@ describe('chassis layouts (Sections 6.3 and 6.4)', () => {
         expect(Math.abs(wheel.y), chassis.id).toBeLessThanOrEqual(chassis.bodyHalfLength);
       }
     }
-    // The Trike is the smallest body, and Twins is a quarter wider than a typical large frame.
+    // The Trike is the smallest body and the Spider the widest.
     const areas = CHASSIS_LIST.map((c) => c.bodyHalfWidth * c.bodyHalfLength);
     expect(CHASSIS.chassis_trike!.bodyHalfWidth * CHASSIS.chassis_trike!.bodyHalfLength).toBe(
       Math.min(...areas),
     );
-    const others = CHASSIS_LIST.filter(
-      (c) => c.id !== 'chassis_twins' && c.id !== 'chassis_crab',
-    ).map((c) => c.bodyHalfWidth);
-    const typicalLarge =
-      [CHASSIS.chassis_turtle!, CHASSIS.chassis_rammer!, CHASSIS.chassis_horseshoe!]
-        .map((c) => c.bodyHalfWidth)
-        .reduce((a, b) => a + b, 0) / 3;
-    expect(CHASSIS.chassis_twins!.bodyHalfWidth).toBeGreaterThan(Math.max(...others));
-    expect(CHASSIS.chassis_twins!.bodyHalfWidth / typicalLarge).toBeGreaterThan(1.22);
-    expect(CHASSIS.chassis_twins!.bodyHalfWidth / typicalLarge).toBeLessThan(1.32);
+    expect(CHASSIS.chassis_spider!.bodyHalfWidth).toBe(
+      Math.max(...CHASSIS_LIST.map((c) => c.bodyHalfWidth)),
+    );
   });
 
-  it('expresses each defining modifier of Section 11.2 as data the rules read', () => {
+  it('expresses each defining modifier as data the rules read', () => {
     const totals = (id: string) =>
       aggregateModifiers({
         blueprint: TEMPLATES[0]!.blueprint,
@@ -592,85 +559,163 @@ describe('chassis layouts (Sections 6.3 and 6.4)', () => {
         parts: [],
         unresolved: [],
       });
-    expect(totals('chassis_needle').steering.topSpeed).toBeCloseTo(1.08, 9);
-    expect(CHASSIS.chassis_needle!.armorLoadShare).toBeLessThan(
-      CHASSIS.chassis_beetle!.armorLoadShare,
-    );
-    expect(
-      accessoryMounts(CHASSIS.chassis_needle!).filter((m) => m.categories.includes('ARMOR')),
-    ).toHaveLength(1);
-    expect(totals('chassis_turtle').integrity.chassis).toBeCloseTo(1.35, 9);
-    expect(totals('chassis_turtle').steering.yaw).toBeCloseTo(0.88, 9);
+    expect(totals('chassis_beetle').drag).toBe(1);
+    expect(totals('chassis_beetle').steering.stability).toBe(0);
     expect(CHASSIS.chassis_spider!.wheelCount).toBe(6);
     expect(totals('chassis_spider').steering.stability).toBe(18);
-    expect(totals('chassis_crab').aimArcs).toEqual([
-      { mounts: ['LEFT', 'RIGHT'], addDegrees: 45, rangeFactor: 1 },
-    ]);
-    for (const mount of accessoryMounts(CHASSIS.chassis_crab!).filter((m) => m.x !== 0))
-      expect([...mount.allowedQuarterTurns].sort()).toEqual([0, 1, 2, 3]);
-    expect(
-      accessoryMounts(CHASSIS.chassis_cobra!).filter((m) => m.categories[0] === 'FRONT'),
-    ).toHaveLength(2);
-    expect(totals('chassis_cobra').steering.yaw).toBeCloseTo(0.92, 9);
-    expect(
-      accessoryMounts(CHASSIS.chassis_scorpion!).filter((m) => m.categories[0] === 'REAR'),
-    ).toHaveLength(2);
-    expect(totals('chassis_scorpion').aimArcs).toEqual([
-      { mounts: ['REAR'], addDegrees: 0, rangeFactor: 1.08 },
-    ]);
-    expect(totals('chassis_buggy').grip.dirt).toBeCloseTo(1.12, 9);
-    expect(totals('chassis_buggy').grip.sand).toBeCloseTo(1.12, 9);
-    expect(totals('chassis_buggy').grip.asphalt).toBe(1);
-    expect(
-      CHASSIS.chassis_buggy!.armorLoadShare / CHASSIS.chassis_beetle!.armorLoadShare,
-    ).toBeCloseTo(0.85, 9);
-    expect(
-      accessoryMounts(CHASSIS.chassis_chameleon!).every((m) => m.categories[0] === 'UNIVERSAL'),
-    ).toBe(true);
-    expect(totals('chassis_chameleon').integrity.chassis).toBeCloseTo(0.82, 9);
-    expect(accessoryMounts(CHASSIS.chassis_brick!)).toHaveLength(9);
-    expect(totals('chassis_brick').drag).toBeCloseTo(1.2, 9);
+    expect(totals('chassis_spider').steering.yaw).toBeCloseTo(0.94, 9);
+    expect(totals('chassis_spider').drag).toBeCloseTo(1.1, 9);
     expect(CHASSIS.chassis_trike!.wheelCount).toBe(3);
     expect(totals('chassis_trike').steering.stability).toBe(-16);
+    expect(totals('chassis_trike').steering.yaw).toBeCloseTo(1.08, 9);
+    expect(totals('chassis_trike').drag).toBe(1);
     expect(totals('chassis_arrow').drag).toBeCloseTo(0.84, 9);
     expect(accessoryMounts(CHASSIS.chassis_arrow!)).toHaveLength(4);
-    expect(totals('chassis_wagon').steering.turnRadius).toBeCloseTo(1.12, 9);
-    expect(totals('chassis_wagon').hardpoints).toEqual([{ category: 'UTILITY', count: 2 }]);
-    // "Utility capacity +2": two utility racks that each hold one part more than a mount does.
-    const extra = (id: string) =>
-      accessoryMounts(CHASSIS[id]!)
-        .filter((m) => m.categories[0] === 'UTILITY')
-        .reduce((sum, m) => sum + m.capacity - 1, 0);
-    expect(extra('chassis_wagon')).toBe(2);
-    expect(totals('chassis_rammer').impulse.ram_dealt).toBeCloseTo(1.2, 9);
-    expect(CHASSIS.chassis_rammer!.massKg).toBeGreaterThan(450);
-    expect(totals('chassis_drifter').slip.factor).toBeCloseTo(1.15, 9);
-    expect(totals('chassis_drifter').steering.peakGrip).toBeCloseTo(0.94, 9);
-    expect(totals('chassis_kangaroo').impulse.obstacle).toBeCloseTo(0.78, 9);
-    const cavity = accessoryMounts(CHASSIS.chassis_horseshoe!).find((m) => m.acceptsAnyWeapon)!;
-    expect(cavity.categories[0]).toBe('FRONT');
+    expect(totals('chassis_pickup').drag).toBeCloseTo(1.08, 9);
+    expect(totals('chassis_pickup').hardpoints).toEqual([{ category: 'UNIVERSAL', count: 1 }]);
+    // The rack behind the cab holds one small part more than a mount does.
+    const racks = accessoryMounts(CHASSIS.chassis_pickup!).filter(
+      (m) => m.categories[0] === 'UNIVERSAL' && m.capacity === 2,
+    );
+    expect(racks.map((m) => m.id)).toEqual(['bed_front']);
+    expect(totals('chassis_pickup').damage.rear_mounted_part).toBeCloseTo(1.15, 9);
+    // No frame keeps a special any-weapon cavity; the Pickup bed is an ordinary UNIVERSAL mount.
     for (const chassis of CHASSIS_LIST)
       for (const mount of accessoryMounts(chassis))
-        if (mount !== cavity) {
-          expect(
-            mount.maxFootprint.w * mount.maxFootprint.h,
-            `${chassis.id} ${mount.id}`,
-          ).toBeLessThan(cavity.maxFootprint.w * cavity.maxFootprint.h);
-          expect(mount.acceptsAnyWeapon, `${chassis.id} ${mount.id}`).toBeUndefined();
-        }
-    expect(totals('chassis_horseshoe').damage.rear).toBeCloseTo(1.2, 9);
-    // "Two cargo utilities": two large bed mounts that hold two utilities each.
-    const beds = accessoryMounts(CHASSIS.chassis_pickup!).filter(
-      (m) => m.categories[0] === 'UTILITY' && m.capacity === 2,
+        expect(mount.acceptsAnyWeapon, `${chassis.id} ${mount.id}`).toBeUndefined();
+    for (const chassis of CHASSIS_LIST)
+      expect(chassis.armorLoadShare, chassis.id).toBe(CHASSIS.chassis_beetle!.armorLoadShare);
+  });
+});
+
+/**
+ * The product-owner decision of October 11, 2026: five chassis, each clearly best at one
+ * thing and paying for it in a number the garage shows. These are the claims the chassis
+ * cards make, checked against the data.
+ */
+describe('five chassis, each with a clear strength and a clear cost', () => {
+  const [beetle, arrow, pickup, spider, trike] = [
+    CHASSIS.chassis_beetle!,
+    CHASSIS.chassis_arrow!,
+    CHASSIS.chassis_pickup!,
+    CHASSIS.chassis_spider!,
+    CHASSIS.chassis_trike!,
+  ];
+  const others = (c: typeof beetle) => CHASSIS_LIST.filter((o) => o !== c);
+  const primaries = (c: typeof beetle) => new Set(accessoryMounts(c).map((m) => m.categories[0]));
+  const largest = (c: typeof beetle) =>
+    Math.max(...accessoryMounts(c).map((m) => m.maxFootprint.w * m.maxFootprint.h));
+
+  it('keeps mount counts the garage can lay out without scrolling', () => {
+    expect(accessoryMounts(beetle)).toHaveLength(5);
+    expect(accessoryMounts(arrow)).toHaveLength(4);
+    expect(accessoryMounts(pickup)).toHaveLength(6);
+    expect(accessoryMounts(spider)).toHaveLength(8);
+    expect(accessoryMounts(trike).length).toBeGreaterThanOrEqual(3);
+    expect(accessoryMounts(trike).length).toBeLessThanOrEqual(4);
+    for (const chassis of CHASSIS_LIST)
+      expect(accessoryMounts(chassis).length, chassis.id).toBeLessThanOrEqual(8);
+  });
+
+  it('Beetle: the cheapest four-wheel frame, the only one with a nose, roof, side and tail mount', () => {
+    for (const other of others(beetle).filter((c) => c.wheelCount >= 4))
+      expect(beetle.price, other.id).toBeLessThanOrEqual(other.price - 30);
+    const all = ['FRONT', 'ROOF', 'UTILITY', 'REAR'] as const;
+    expect(all.every((c) => primaries(beetle).has(c))).toBe(true);
+    for (const other of others(beetle))
+      expect(
+        all.every((c) => primaries(other).has(c)),
+        other.id,
+      ).toBe(false);
+    // The cost: it leads nothing else.
+    expect(beetle.dragFactor).toBeGreaterThan(arrow.dragFactor);
+    expect(beetle.maxLoadKg).toBeLessThan(pickup.maxLoadKg);
+    expect(beetle.stabilityOffset).toBeLessThan(spider.stabilityOffset);
+    expect(beetle.price).toBeGreaterThan(trike.price);
+  });
+
+  it('Arrow: the lowest drag by a wide margin, for the fewest mounts and a small load limit', () => {
+    for (const other of others(arrow))
+      expect(arrow.dragFactor, other.id).toBeLessThanOrEqual(other.dragFactor - 0.15);
+    expect(accessoryMounts(arrow).length).toBe(
+      Math.min(...CHASSIS_LIST.map((c) => accessoryMounts(c).length)),
     );
-    expect(beds).toHaveLength(2);
-    expect(extra('chassis_pickup')).toBe(2);
-    expect(totals('chassis_pickup').damage.rear_mounted_part).toBeCloseTo(1.15, 9);
-    expect(totals('chassis_twins').steering.stability).toBe(20);
-    expect(
-      accessoryMounts(CHASSIS.chassis_platform!).filter((m) => m.categories[0] === 'UNIVERSAL'),
-    ).toHaveLength(10);
-    expect(totals('chassis_platform').integrity.chassis).toBeCloseTo(0.78, 9);
+    for (const other of others(arrow).filter((c) => c.wheelCount >= 4))
+      expect(arrow.maxLoadKg, other.id).toBeLessThanOrEqual(other.maxLoadKg - 100);
+    expect(primaries(arrow).has('UTILITY')).toBe(false);
+  });
+
+  it('Pickup: the highest load and the largest mount, for weight, drag and no nose mount', () => {
+    for (const other of others(pickup)) {
+      expect(pickup.maxLoadKg, other.id).toBeGreaterThanOrEqual(other.maxLoadKg + 150);
+      expect(pickup.recommendedLoadKg, other.id).toBeGreaterThan(other.recommendedLoadKg);
+      expect(largest(pickup), other.id).toBeGreaterThan(largest(other));
+    }
+    for (const id of ['bed_front', 'bed_rear'])
+      expect(accessoryMounts(pickup).find((m) => m.id === id)!.categories).toEqual(['UNIVERSAL']);
+    // The bed is the only home of the largest weapon.
+    const mortar = ACCESSORIES.weapon_mortar!;
+    const fits = (c: typeof beetle) =>
+      accessoryMounts(c).some(
+        (m) =>
+          mountAccepts(m, mortar) &&
+          mortar.footprint.w <= m.maxFootprint.w &&
+          mortar.footprint.h <= m.maxFootprint.h,
+      );
+    expect(CHASSIS_LIST.filter(fits).map((c) => c.id)).toEqual(['chassis_pickup']);
+    expect(primaries(pickup).has('FRONT')).toBe(false);
+    expect(pickup.massKg).toBeGreaterThan(beetle.massKg + 100);
+    expect(pickup.dragFactor).toBeGreaterThan(beetle.dragFactor);
+  });
+
+  it('Spider: the most stable and the most mounts, for the highest price, drag and six wheels', () => {
+    for (const other of others(spider)) {
+      expect(spider.stabilityOffset, other.id).toBeGreaterThanOrEqual(other.stabilityOffset + 18);
+      expect(accessoryMounts(spider).length, other.id).toBeGreaterThan(
+        accessoryMounts(other).length,
+      );
+      expect(spider.price, other.id).toBeGreaterThan(other.price);
+      expect(spider.dragFactor, other.id).toBeGreaterThan(other.dragFactor);
+      expect(spider.yawFactor, other.id).toBeLessThan(other.yawFactor);
+      expect(primaries(other).has('LEFT'), other.id).toBe(false);
+    }
+    expect(primaries(spider).has('LEFT') && primaries(spider).has('RIGHT')).toBe(true);
+  });
+
+  it('Trike: the cheapest and lightest, for the least stability, strength and load', () => {
+    for (const other of others(trike)) {
+      expect(trike.price, other.id).toBeLessThanOrEqual(other.price - 30);
+      expect(trike.massKg, other.id).toBeLessThan(other.massKg - 80);
+      expect(trike.stabilityOffset, other.id).toBeLessThan(other.stabilityOffset - 10);
+      expect(trike.stabilityThreshold, other.id).toBeGreaterThan(other.stabilityThreshold);
+      expect(trike.baseIntegrity, other.id).toBeLessThan(other.baseIntegrity);
+      expect(trike.maxLoadKg, other.id).toBeLessThan(other.maxLoadKg);
+    }
+    // Three wheels: a wheel kit costs a quarter less than on a four-wheel frame.
+    expect(partCard(TIRES.tires_street!, trike.wheelCount).price).toBe(60);
+    expect(partCard(TIRES.tires_street!, spider.wheelCount).price).toBe(120);
+  });
+
+  it('gives every chassis a legal starter car, and uses only these five anywhere', () => {
+    const starters = TEMPLATES.filter((t) => t.group === 'starter');
+    expect(starters).toHaveLength(5);
+    expect(new Set(starters.map((t) => t.blueprint.chassisId))).toEqual(
+      new Set(CHASSIS_LIST.map((c) => c.id)),
+    );
+    const used = new Set(TEMPLATES.map((t) => t.blueprint.chassisId));
+    expect(used).toEqual(new Set(CHASSIS_LIST.map((c) => c.id)));
+    for (const template of TEMPLATES) {
+      const result = validateBlueprint(template.blueprint, CATALOG);
+      expect(result.ok, template.name).toBe(true);
+      expect(
+        result.issues.filter((i) => i.severity === 'error'),
+        template.name,
+      ).toEqual([]);
+    }
+    expect(TEMPLATES.find((t) => t.id === 'baseline')!.blueprint.chassisId).toBe('chassis_beetle');
+    expect(TEMPLATES.find((t) => t.id === 'starter_rookie')!.blueprint.chassisId).toBe(
+      'chassis_beetle',
+    );
   });
 });
 

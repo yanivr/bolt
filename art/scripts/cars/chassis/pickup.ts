@@ -16,7 +16,8 @@ import { floating, headlight, model, ring, solid, taillight } from './kit.js';
 /**
  * Pickup: a front-engined truck with a short tall cab, a steel sport bar behind it and a
  * long open bed with a ribbed floor and thick walls that carry the bed-rail mounts
- * (Section 12.6). Identity: the open bed, the sport bar and an ivory tailgate.
+ * (Section 12.6). The engine stands through the hood, so nothing mounts there; the cab roof
+ * carries one small mount. Identity: the open bed, the sport bar and an ivory tailgate.
  */
 
 const hoodBlock = roundRect(0, -27.4, 10.6, 9.2, 3.6);
@@ -89,9 +90,7 @@ export const PICKUP_ART: ChassisArt = {
     { x: 14.4, y: 32.4 },
   ],
   mountHeights: {
-    utility_hood: 12,
-    left_utility: 6.5,
-    right_utility: 6.5,
+    roof_cab: 16.2,
     bed_front: 6,
     left_bed: 10,
     right_bed: 10,

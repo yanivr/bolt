@@ -93,8 +93,8 @@ describe('the six example builds differ the way Section 11.9 says', () => {
     expect(dry.get(name)!.topMph).toBeGreaterThan(dry.get('Baseline Beetle')!.topMph + 12);
   });
 
-  it('Sticky Turtle: high survival, low acceleration', () => {
-    const name = 'Sticky Turtle';
+  it('Iron Mule: high survival, low acceleration', () => {
+    const name = 'Iron Mule';
     for (const other of others(name)) {
       expect(dry.get(name)!.zeroToSixty!, other).toBeGreaterThan(dry.get(other)!.zeroToSixty! + 2);
       expect(dry.get(name)!.massKg, other).toBeGreaterThan(dry.get(other)!.massKg);

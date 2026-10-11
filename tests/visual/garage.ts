@@ -5,11 +5,15 @@ import { chromium } from '@playwright/test';
 
 /**
  * Screenshots of the garage for design review, at the sizes it has to work at: the product
- * owner's phone inside its host page (870 x 370 landscape, 450 x 840 portrait), two bare
- * landscape phones, and a desktop.
+ * owner's phone inside its host page (870 x 370 landscape, 450 x 840 portrait), a small bare
+ * landscape phone (667 x 375) and a desktop.
  *
  *   pnpm build && PORT=2671 node apps/server/dist/main.js &
  *   npx tsx tests/visual/garage.ts http://localhost:2671 tests/visual/out/garage [sizes]
+ *
+ * At every size: the idle overview of each of the five chassis, focus on a roof weapon, focus
+ * on an outer mount of the Spider, focus with the part nudged and turned, the engine in
+ * focus, the compare pane, Browse All Parts, the idle Your Car panel and an illegal build.
  *
  * The build clock is stretched with the debug-only `buildSeconds` switch so nothing locks
  * while a shot is being set up.
@@ -24,7 +28,6 @@ const QUERY = '?debug=1&buildSeconds=900';
 type Size = { name: string; width: number; height: number; mobile: boolean };
 const SIZES: Size[] = [
   { name: '870x370', width: 870, height: 370, mobile: true },
-  { name: '844x390', width: 844, height: 390, mobile: true },
   { name: '667x375', width: 667, height: 375, mobile: true },
   { name: '450x840', width: 450, height: 840, mobile: true },
   { name: '1440x900', width: 1440, height: 900, mobile: false },
@@ -59,31 +62,37 @@ function blueprint(
   };
 }
 
-/** The eight-mount Crab filled as far as 1,000 credits go. */
-const CRAB: PartSpec[] = [
-  ['weapon_front_mg', 'left_front', { rotationQuarterTurns: 3, assignedActionSlot: 0 }],
-  ['weapon_rear_mg', 'left_mid', { rotationQuarterTurns: 3 }],
-  ['weapon_shotgun', 'left_rear', { rotationQuarterTurns: 3 }],
-  ['weapon_foam', 'right_front', { rotationQuarterTurns: 1, assignedActionSlot: 1 }],
-  ['weapon_air', 'right_mid', { rotationQuarterTurns: 1 }],
-  ['weapon_tesla', 'right_rear'],
-  ['utility_spare', 'roof_front'],
+/** One bare car for each chassis, on its default engine, in a paint of its own. */
+const FIVE: Array<[name: string, chassisId: string, engineId: string, paintId: string]> = [
+  ['beetle', 'chassis_beetle', 'engine_four_cylinder', 'paint_signal'],
+  ['arrow', 'chassis_arrow', 'engine_four_cylinder', 'paint_cobalt'],
+  ['pickup', 'chassis_pickup', 'engine_four_cylinder', 'paint_sunflare'],
+  ['spider', 'chassis_spider', 'engine_four_cylinder', 'paint_mint'],
+  ['trike', 'chassis_trike', 'engine_mini_electric', 'paint_signal'],
 ];
-/** The ten-mount Platform, eight of them filled. */
-const PLATFORM: PartSpec[] = [
-  ['weapon_mine', 'deck_fore', { assignedActionSlot: 1 }],
-  ['weapon_oil', 'deck_front', { assignedActionSlot: 0 }],
-  ['weapon_rear_mg', 'left_edge_front', { rotationQuarterTurns: 3 }],
-  ['utility_radar', 'left_edge_mid'],
-  ['utility_minesensor', 'left_edge_rear'],
-  ['weapon_tesla', 'right_edge_front'],
-  ['utility_fan', 'right_edge_mid'],
-  ['defense_heatguard', 'right_edge_rear'],
+/** The eight-mount Spider with seven of them filled. */
+const SPIDER: PartSpec[] = [
+  ['utility_minesensor', 'front_utility'],
+  ['weapon_front_mg', 'left_front', { assignedActionSlot: 0 }],
+  ['weapon_tesla', 'right_front'],
+  ['utility_radar', 'roof_front'],
+  ['utility_spare', 'roof_mid'],
+  ['weapon_rear_mg', 'left_rear'],
+  ['utility_repair', 'rear_utility'],
+];
+/** The Pickup with its bed in use: two utilities on the rack and the mortar on the floor. */
+const PICKUP: PartSpec[] = [
+  ['utility_radar', 'roof_cab'],
+  ['utility_repair', 'bed_front', { offsetX: -5 }],
+  ['utility_battery', 'bed_front', { offsetX: 5 }],
+  ['weapon_rear_mg', 'left_bed', { rotationQuarterTurns: 2 }],
+  ['weapon_mortar', 'bed_rear', { autoMode: true }],
+  ['defense_rear_bumper', 'rear_center'],
 ];
 /** A saved build from an older catalog that is also over its frame's weight limit. */
 const STALE: PartSpec[] = [
   ['weapon_turret', 'roof_mid', { assignedActionSlot: 0 }],
-  ['weapon_hammer', 'front_center', { assignedActionSlot: 1 }],
+  ['weapon_hammer', 'front_center', { assignedActionSlot: 1, rotationQuarterTurns: 1 }],
   ['utility_nitro', 'left_utility'],
   ['utility_generator', 'right_utility'],
 ];
@@ -147,40 +156,52 @@ async function capture(browser: Browser, size: Size, problems: string[]): Promis
 
   // First visit: the three steps marked on their tiles.
   await openGarage();
-  await shot(page, size, '01_first_visit');
-  await tile('tires').click();
-  await shot(page, size, '01b_first_visit_step_list');
+  await shot(page, size, '00_first_visit');
   await page.getByTestId('car-stats').click();
   await press('Skip tips');
-  await shot(page, size, '02_idle');
 
-  // A slot selected with its list, then the compare pane.
+  // The idle overview of each of the five chassis.
+  for (const [name, chassisId, engineId, paintId] of FIVE) {
+    await seed(blueprint(name, { chassisId, engineId, paintId }, [], version));
+    await openGarage();
+    await shot(page, size, `01_overview_${name}`);
+  }
+
+  // A Beetle: an empty roof slot in focus, the compare pane, then a roof weapon in focus.
+  await seed(blueprint('Beetle', { chassisId: 'chassis_beetle' }, [], version));
+  await openGarage();
   await tile('mount:roof_mid').click();
-  await shot(page, size, '03_slot_list');
+  await shot(page, size, '02_focus_empty_roof_slot');
   await row('weapon_turret').click();
-  await shot(page, size, '04_compare');
+  await shot(page, size, '03_compare_pane');
   await page.getByTestId('install').click();
-  await shot(page, size, '05_weapon_card');
-  await tile('mount:front_center').scrollIntoViewIfNeeded();
+  await page.waitForTimeout(3800);
+  await shot(page, size, '04_focus_roof_weapon');
+  // The same weapon nudged forward and turned to face right.
+  await press('Move forward');
+  await press('Move forward');
+  await press('Move left');
+  await page.getByTestId('rotate-part').click();
+  await page.waitForTimeout(3800);
+  await shot(page, size, '05_focus_nudged_rotated');
+  await press('Rotate view');
+  await shot(page, size, '05b_focus_nudged_view_turned');
+  await press('Rotate view');
+  await press('Rotate view');
+  await press('Rotate view');
+  // A front gun, then the engine in focus.
   await tile('mount:front_center').click();
   await row('weapon_front_mg').click();
   await page.getByTestId('install').click();
   await page.waitForTimeout(3800);
-  await shot(page, size, '05b_second_weapon_card');
-  await press('Rotate view');
-  await shot(page, size, '06_view_rotated');
-  await press('Rotate view');
-  await shot(page, size, '06b_view_rotated_twice');
-  await press('Rotate view');
-  await press('Rotate view');
-
-  // The essentials, the whole catalog, and the menu.
-  await tile('chassis').scrollIntoViewIfNeeded();
-  await tile('chassis').click();
-  await shot(page, size, '07_chassis_list');
-  await row('chassis_turtle').click();
-  await shot(page, size, '07b_chassis_compare');
-  await press('Parts');
+  await shot(page, size, '04b_focus_front_weapon');
+  await tile('engine').click();
+  await shot(page, size, '06_focus_engine');
+  await tile('tires').click();
+  await shot(page, size, '06b_wheels_whole_car');
+  // The idle panel with equipment, then the whole catalog.
+  await page.getByTestId('car-stats').click();
+  await shot(page, size, '07_idle_your_car');
   await more('Browse All Parts');
   await shot(page, size, '08_browse_all');
   await page.locator('.part-card.is-blocked').first().click();
@@ -189,32 +210,62 @@ async function capture(browser: Browser, size: Size, problems: string[]): Promis
   await page.locator('.indicator[data-indicator="heat"]').click();
   await shot(page, size, '09_indicator_detail');
   await press('Close');
-  await press('More');
-  await shot(page, size, '10_more_menu');
-  await press('Close');
+  await tile('chassis').click();
+  await shot(page, size, '10_chassis_list');
+  await row('chassis_pickup').click();
+  await shot(page, size, '10b_chassis_compare');
 
-  // Frames with many mounts.
-  await seed(blueprint('Full Crab', { chassisId: 'chassis_crab' }, CRAB, version));
-  await openGarage();
-  await shot(page, size, '11_crab_loaded');
-  await tile('mount:right_mid').scrollIntoViewIfNeeded();
-  await tile('mount:right_mid').click();
-  await shot(page, size, '11b_crab_part_selected');
-  await press('Rotate view');
-  await shot(page, size, '11c_crab_rotated');
+  // The Spider, loaded: the overview, then its outer mounts in focus.
   await seed(
     blueprint(
-      'Full Platform',
-      { chassisId: 'chassis_platform', engineId: 'engine_v6', paintId: 'paint_cobalt' },
-      PLATFORM,
+      'Full Spider',
+      { chassisId: 'chassis_spider', paintId: 'paint_mint' },
+      SPIDER,
       version,
     ),
   );
   await openGarage();
-  await shot(page, size, '12_platform');
-  await tile('mount:deck_aft').scrollIntoViewIfNeeded();
-  await tile('mount:deck_aft').click();
-  await shot(page, size, '12b_platform_slot_list');
+  await shot(page, size, '11_spider_loaded');
+  await tile('mount:left_front').click();
+  await shot(page, size, '11b_spider_focus_left_front');
+  await tile('mount:right_rear').click();
+  await shot(page, size, '11c_spider_focus_right_rear_empty');
+  await tile('mount:front_utility').click();
+  await shot(page, size, '11d_spider_focus_front_utility');
+  await tile('mount:rear_utility').click();
+  await shot(page, size, '11e_spider_focus_rear_utility');
+  await press('Rotate view');
+  await shot(page, size, '11f_spider_focus_view_turned');
+  await tile('engine').click();
+  await shot(page, size, '11g_spider_engine');
+
+  // The Pickup with its bed in use, and the two bay-engined frames with their engines.
+  await seed(
+    blueprint(
+      'Full Pickup',
+      { chassisId: 'chassis_pickup', paintId: 'paint_sunflare' },
+      PICKUP,
+      version,
+    ),
+  );
+  await openGarage();
+  await shot(page, size, '12_pickup_loaded');
+  await tile('mount:bed_rear').click();
+  await shot(page, size, '12b_pickup_focus_bed_mortar');
+  await tile('mount:bed_front').click();
+  await shot(page, size, '12c_pickup_focus_rack');
+  await tile('mount:roof_cab').click();
+  await shot(page, size, '12d_pickup_focus_cab_roof');
+  await tile('engine').click();
+  await shot(page, size, '12e_pickup_engine');
+  await seed(
+    blueprint('Trike', { chassisId: 'chassis_trike', engineId: 'engine_rotary' }, [], version),
+  );
+  await openGarage();
+  await tile('mount:left_rear').click();
+  await shot(page, size, '12f_trike_focus_left_rear');
+  await tile('engine').click();
+  await shot(page, size, '12g_trike_engine');
 
   // An illegal build: an old saved car opened for review.
   await page.evaluate(
@@ -238,7 +289,7 @@ async function capture(browser: Browser, size: Size, problems: string[]): Promis
           paintId: 'paint_cobalt',
         },
         STALE,
-        '0.2.0',
+        '0.3.0',
       ),
     ),
   );

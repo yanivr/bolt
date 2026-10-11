@@ -4,10 +4,10 @@ import { accessoryMounts, clamp, installedParts, own } from '@bolt/shared';
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
-  ReactNode,
 } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { CarCanvas } from '../../components/CarCanvas.js';
 import { Glyph } from '../../components/Glyph.js';
 import type { GlyphName } from '../../components/glyphs.js';
@@ -20,10 +20,11 @@ import {
   screenToLocal,
 } from '../../components/carSprites.js';
 import type { GameManifests } from '../../game/assets.js';
-import { layoutBench } from '../benchLayout.js';
+import type { BenchLayout } from '../benchLayout.js';
+import { layoutBench, layoutFocus } from '../benchLayout.js';
 import type { Slot } from '../buildSession.js';
 import { issueText, tryMove } from '../buildSession.js';
-import { VIEW_FRAMES, carBounds, projectMounts } from '../carGeometry.js';
+import { VIEW_FRAMES, carBounds, focusTarget, projectMounts } from '../carGeometry.js';
 import { fill, mountName, mountShort } from '../text.js';
 import type { StepMark } from './SlotTile.js';
 import { SlotTile } from './SlotTile.js';
@@ -31,6 +32,22 @@ import { SlotTile } from './SlotTile.js';
 const HEADINGS = 64;
 /** A press that travels less than this many CSS pixels is a tap, not a drag. */
 const DRAG_SLOP = 6;
+/** How long the view takes to move between the overview and a slot, in milliseconds. */
+const CAMERA_MS = 150;
+/** Chassis-local unit vectors for the four orientations: forward, right, back, left. */
+const FACING: ReadonlyArray<readonly [number, number]> = [
+  [0, -1],
+  [1, 0],
+  [0, 1],
+  [-1, 0],
+];
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
 
 const KIND_GLYPH: Record<string, GlyphName> = {
   ROOF: 'roof',
@@ -77,7 +94,7 @@ const ESSENTIALS: readonly Essential[] = ['chassis', 'engine', 'tires'];
 type Props = {
   manifests: GameManifests;
   blueprint: VehicleBlueprint;
-  /** Portrait: the mount tiles run in one row under the car, without leader lines. */
+  /** Portrait: the mount tiles run in a row under the car, without leader lines. */
   row: boolean;
   /** The slot the side panel is showing. */
   slot: Slot | null;
@@ -101,8 +118,6 @@ type Props = {
   onClearSelection: () => void;
   /** Reports the reason a drag position is refused, or null when the drag is fine or over. */
   onDragIssue: (issue: BlueprintIssue | null) => void;
-  /** The status line, laid over the clear floor between the tile columns. */
-  children?: ReactNode;
 };
 
 function corners(x: number, y: number, w: number, h: number, z: number, id: string): LocalPoint[] {
@@ -116,10 +131,14 @@ function corners(x: number, y: number, w: number, h: number, z: number, id: stri
 
 /**
  * The car editor (Section 5.6). The car is drawn clean, from the real sprites, in the race's
- * tilted view and at the largest whole-number scale that fits. Every accessory mount of the
- * chassis is a tile beside the car, joined to the mount's true position by a leader line; the
- * chassis, engine and wheels are three tiles under it. The selected part is picked out on the
- * car by an outline traced around its own sprite, never by a box over it.
+ * tilted view. With nothing selected it is shown whole, at the largest whole-number scale
+ * that fits, and every accessory mount of the chassis is a tile beside it, joined to the
+ * mount's true position by a leader line; the chassis, engine and wheels are three tiles
+ * under it. Selecting a mount or the engine moves the view in on it (focus): the car is drawn
+ * one or two whole steps larger and panned so that slot is in the middle of the floor, the
+ * other tiles stay at the edges for switching, and `Whole Car`, Escape or a tap on the bare
+ * floor goes back. The selected part is picked out by an outline traced around its own sprite,
+ * with a chevron for the way it faces and a thin box for the room it has to move in.
  */
 export function Workbench({
   manifests,
@@ -142,7 +161,6 @@ export function Workbench({
   onRemove,
   onClearSelection,
   onDragIssue,
-  children,
 }: Props) {
   const g = STRINGS.garage;
   const host = useRef<HTMLDivElement>(null);
@@ -184,20 +202,65 @@ export function Workbench({
   const parts = useMemo(() => installedParts(blueprint, CATALOG), [blueprint]);
   const ready = measured === chassisId;
 
-  const layout = useMemo(() => {
+  // What the view moves in on: the selected mount, or the engine. Anything else is the
+  // overview of the whole car.
+  const focusId = slot?.kind === 'mount' ? slot.mountId : slot?.kind === 'engine' ? 'engine' : null;
+  const layout = useMemo((): BenchLayout => {
     const bounds =
       chassis && sprite
         ? carBounds(chassis, sprite, frame, ready ? measuredBounds(chassisId, frame) : undefined)
         : { left: -36, top: -36, right: 36, bottom: 36 };
-    return layoutBench({
+    const input = {
       width: room.width,
       height: room.height,
       mounts: chassis && sprite ? projectMounts(chassis, sprite, frame) : [],
       bounds,
       columns: !row,
-    });
-  }, [chassis, sprite, chassisId, frame, ready, room, row]);
+    };
+    const target =
+      chassis && sprite && focusId ? focusTarget(chassis, sprite, frame, focusId) : null;
+    return target ? layoutFocus({ ...input, target }) : layoutBench(input);
+  }, [chassis, sprite, chassisId, frame, ready, room, row, focusId]);
   const { scale } = layout;
+  const focused = layout.focus !== null;
+
+  // The move between the overview and a slot: the scale switches at once, in whole steps, and
+  // the pan eases over a moment from where the slot was to where it now is. Nothing is ever
+  // drawn at a scale in between, and nothing moves under Reduced Motion.
+  const carNode = useRef<HTMLDivElement>(null);
+  const leaderNode = useRef<SVGSVGElement>(null);
+  const camera = useRef<{
+    key: string;
+    x: number;
+    y: number;
+    scale: number;
+    pivot: { dx: number; dy: number } | null;
+  } | null>(null);
+  useLayoutEffect(() => {
+    const key = `${chassisId}:${frame}:${room.width}x${room.height}:${row}:${ready}`;
+    const pivot = layout.focus
+      ? {
+          dx: (layout.focus.anchor.x - layout.car.x) / scale,
+          dy: (layout.focus.anchor.y - layout.car.y) / scale,
+        }
+      : null;
+    const before = camera.current;
+    camera.current = { key, x: layout.car.x, y: layout.car.y, scale, pivot };
+    if (!before || before.key !== key || !ready || prefersReducedMotion()) return;
+    // The point that holds still at the moment the scale switches: the slot being moved in
+    // on, or the one being left.
+    const hold = pivot ?? before.pivot;
+    if (!hold) return;
+    const fromX = before.x + hold.dx * before.scale - (layout.car.x + hold.dx * scale);
+    const fromY = before.y + hold.dy * before.scale - (layout.car.y + hold.dy * scale);
+    if (fromX === 0 && fromY === 0) return;
+    const timing = { duration: CAMERA_MS, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' };
+    carNode.current?.animate?.(
+      [{ transform: `translate(${fromX}px, ${fromY}px)` }, { transform: 'translate(0, 0)' }],
+      timing,
+    );
+    leaderNode.current?.animate?.([{ opacity: 0 }, { opacity: 0 }, { opacity: 1 }], timing);
+  }, [layout, scale, chassisId, frame, room, row, ready]);
   const px = frameSize * scale;
 
   // The dragged part is drawn where the finger has it, legal or not.
@@ -245,7 +308,11 @@ export function Workbench({
   // Sockets: a dashed outline at a mount, only where there is no sprite to trace instead.
   const sockets = useMemo(() => {
     if (!sprite) return [];
-    const wanted: Array<{ id: string; mount: MountPoint; tone: 'select' | 'target' | 'bad' }> = [];
+    const wanted: Array<{
+      id: string;
+      mount: MountPoint;
+      tone: 'select' | 'target' | 'bad' | 'room';
+    }> = [];
     const mountOf = (id: string | null) => mounts.find((m) => m.id === id) ?? null;
     const picked = mountOf(slotMount);
     if (picked) {
@@ -259,6 +326,9 @@ export function Workbench({
     for (const part of parts)
       if (flagged.includes(part.instance.instanceId) && !drawn(part.def.id))
         wanted.push({ id: `bad:${part.instance.instanceId}`, mount: part.mount, tone: 'bad' });
+    // The room a selected part has: its mount's box, drawn thin, so a nudge reads against it.
+    if (selectedPart && !wanted.some((w) => w.mount.id === selectedPart.mount.id))
+      wanted.push({ id: `room:${selectedPart.mount.id}`, mount: selectedPart.mount, tone: 'room' });
     const points = wanted.flatMap(({ id, mount }) =>
       corners(
         mount.x,
@@ -281,7 +351,7 @@ export function Workbench({
         .join(' '),
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sprite, mounts, parts, slotMount, target, flagged, frame, frameSize, scale]);
+  }, [sprite, mounts, parts, slotMount, target, flagged, frame, frameSize, scale, selectedPart]);
 
   // Where the selected part is drawn, for the drag handle laid over it.
   const grab = useMemo(() => {
@@ -299,6 +369,52 @@ export function Workbench({
       size,
     };
   }, [sprite, selectedPart, dragged, frame, frameSize, scale]);
+
+  // Which way the selected part faces, as a chevron just ahead of it on the car.
+  const facing = useMemo(() => {
+    if (!sprite || !selectedPart) return null;
+    const { def, instance, mount } = selectedPart;
+    if (def.category !== 'weapon' && !def.rotatable) return null;
+    const live = dragged?.instanceId === instance.instanceId ? dragged : null;
+    const cx = live ? mount.x + live.offsetX : selectedPart.x;
+    const cy = live ? mount.y + live.offsetY : selectedPart.y;
+    const [fx, fy] = FACING[instance.rotationQuarterTurns] ?? FACING[0]!;
+    const reach = (fx !== 0 ? selectedPart.w : selectedPart.h) / 2;
+    const z = mountHeight(sprite, mount.id) + 2;
+    const at = projectPoints(sprite, frame, [
+      { id: 'tip', x: cx + fx * (reach + 6), y: cy + fy * (reach + 6), z },
+      { id: 'l', x: cx + fx * (reach + 2) - fy * 3, y: cy + fy * (reach + 2) + fx * 3, z },
+      { id: 'r', x: cx + fx * (reach + 2) + fy * 3, y: cy + fy * (reach + 2) - fx * 3, z },
+    ]);
+    return ['l', 'tip', 'r']
+      .map((id) => {
+        const p = at.get(id);
+        return `${(frameSize / 2 + (p?.dx ?? 0)) * scale},${(frameSize / 2 + (p?.dy ?? 0)) * scale}`;
+      })
+      .join(' ');
+  }, [sprite, selectedPart, dragged, frame, frameSize, scale]);
+
+  // The engine has no outline of its own to trace: in focus it is boxed like an empty socket.
+  const engineBox =
+    layout.focus?.id === 'engine'
+      ? {
+          x: layout.focus.part.left - (layout.car.x - px / 2),
+          y: layout.focus.part.top - (layout.car.y - px / 2),
+          w: layout.focus.part.right - layout.focus.part.left,
+          h: layout.focus.part.bottom - layout.focus.part.top,
+        }
+      : null;
+
+  // A tap on the bare floor, beside the car, goes back to the whole car.
+  const onFloor = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget || !slot) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const box = layout.carBox;
+    if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) return;
+    onClearSelection();
+  };
 
   const beginDrag = (event: ReactPointerEvent<HTMLDivElement>, part: PlacedPart) => {
     if (locked || event.button > 0) return;
@@ -410,11 +526,7 @@ export function Workbench({
         target={target?.mountId === mount.id}
         step={step}
         disabled={locked}
-        style={
-          style
-            ? { ...style, width: layout.tileW, height: layout.tileH }
-            : { width: 54, height: 48 }
-        }
+        style={style ? { ...style, width: layout.tileW, height: layout.tileH } : undefined}
         onPress={() => onSlot({ kind: 'mount', mountId: mount.id })}
         onKeyDown={(event) => onPartKey(event, face?.instance.instanceId ?? null)}
       />
@@ -456,26 +568,39 @@ export function Workbench({
   };
 
   const tileById = new Map(layout.tiles.map((tile) => [tile.id, tile]));
-  const mountById = new Map(mounts.map((mount) => [mount.id, mount]));
   // Car order for the portrait row: nose to tail, left before right.
   const inCarOrder = [...mounts].sort((a, b) => a.y - b.y || a.x - b.x);
-  const column = (side: 'left' | 'right') =>
-    layout.tiles
-      .filter((tile) => tile.side === side)
-      .map((tile) => mountById.get(tile.id))
-      .filter((mount): mount is MountPoint => mount !== undefined);
+  // Portrait: every mount in one row while each tile keeps 44 pixels, otherwise two rows.
+  const rowColumns =
+    mounts.length > 0 && (room.width + 52 - (mounts.length - 1) * 4) / mounts.length < 44
+      ? Math.ceil(mounts.length / 2)
+      : Math.max(1, mounts.length);
 
   return (
     <section
-      className={`g-bench${row ? ' is-row' : ''}`}
+      className={`g-bench${row ? ' is-row' : ''}${focused ? ' is-focus' : ''}`}
       aria-label={g.slots}
       data-view={frame}
       data-scale={scale}
+      data-focus={layout.focus?.id}
     >
       <div
         className="g-floor"
         ref={host}
-        data-scroll={layout.scroll ? 'true' : undefined}
+        onClick={onFloor}
+        data-car-box={[
+          layout.carBox.left,
+          layout.carBox.top,
+          layout.carBox.right,
+          layout.carBox.bottom,
+        ]
+          .map((v) => Math.round(v))
+          .join(',')}
+        data-anchor={
+          layout.focus
+            ? `${Math.round(layout.focus.anchor.x)},${Math.round(layout.focus.anchor.y)}`
+            : undefined
+        }
         style={
           {
             '--col-left': `${layout.reserved.left}px`,
@@ -485,6 +610,7 @@ export function Workbench({
       >
         <div
           className="g-car"
+          ref={carNode}
           style={{
             left: layout.car.x - px / 2,
             top: layout.car.y - px / 2,
@@ -500,7 +626,7 @@ export function Workbench({
             frame={frame}
             highlight={highlight}
           />
-          {sockets.length > 0 && (
+          {(sockets.length > 0 || facing || engineBox) && (
             <svg className="g-car-lines" width={px} height={px} aria-hidden="true">
               {sockets.map((socket) => (
                 <polygon
@@ -509,6 +635,22 @@ export function Workbench({
                   points={socket.points}
                 />
               ))}
+              {engineBox && (
+                <rect
+                  className="socket is-select"
+                  data-testid="engine-socket"
+                  x={engineBox.x}
+                  y={engineBox.y}
+                  width={engineBox.w}
+                  height={engineBox.h}
+                />
+              )}
+              {facing && (
+                <g className="facing" data-testid="part-facing-mark">
+                  <polyline className="facing-edge" points={facing} />
+                  <polyline className="facing-line" points={facing} />
+                </g>
+              )}
             </svg>
           )}
           {grab && selectedPart && !locked && (
@@ -533,68 +675,67 @@ export function Workbench({
             </span>
           )}
         </div>
-        {!row && !layout.scroll && ready && (
+        {!row && ready && (
           <svg
             className="g-leaders"
+            ref={leaderNode}
             width={room.width}
             height={room.height}
             aria-hidden="true"
             shapeRendering="crispEdges"
           >
-            {layout.tiles.map((tile) => {
-              const end = tile.leader[tile.leader.length - 1];
-              const holding = occupants(tile.id);
-              const tone =
-                slotMount === tile.id
-                  ? ' is-selected'
-                  : holding.some((p) => flagged.includes(p.instance.instanceId))
-                    ? ' is-bad'
-                    : target?.mountId === tile.id
-                      ? ' is-target'
-                      : '';
-              return (
-                <g key={tile.id} className={`leader${tone}`} data-mount={tile.id}>
-                  <polyline points={tile.leader.map((p) => `${p.x},${p.y}`).join(' ')} />
-                  {end && <rect x={end.x - 2} y={end.y - 2} width={4} height={4} />}
-                </g>
-              );
-            })}
+            {layout.tiles
+              .filter((tile) => tile.leader.length > 0)
+              .map((tile) => {
+                const end = tile.leader[tile.leader.length - 1];
+                const holding = occupants(tile.id);
+                const tone =
+                  slotMount === tile.id
+                    ? ' is-selected'
+                    : holding.some((p) => flagged.includes(p.instance.instanceId))
+                      ? ' is-bad'
+                      : target?.mountId === tile.id
+                        ? ' is-target'
+                        : '';
+                return (
+                  <g key={tile.id} className={`leader${tone}`} data-mount={tile.id}>
+                    <polyline points={tile.leader.map((p) => `${p.x},${p.y}`).join(' ')} />
+                    {end && <rect x={end.x - 2} y={end.y - 2} width={4} height={4} />}
+                  </g>
+                );
+              })}
           </svg>
         )}
         {!row &&
-          !layout.scroll &&
           mounts.map((mount) => {
             const tile = tileById.get(mount.id);
             return tile ? mountTile(mount, { left: tile.x, top: tile.y }) : null;
           })}
-        {!row &&
-          layout.scroll &&
-          (['left', 'right'] as const).map((side) => (
-            <div key={side} className={`g-column is-${side}`} style={{ width: layout.tileW }}>
-              {column(side).map((mount) => mountTile(mount, { left: 0, top: 0 }))}
-            </div>
-          ))}
-        {children}
       </div>
-      <div className="g-slot-row">
-        {row && inCarOrder.map((mount) => mountTile(mount))}
-        {ESSENTIALS.map(essentialTile)}
-      </div>
+      {row && mounts.length > 0 && (
+        <div
+          className="g-mount-row"
+          style={{ gridTemplateColumns: `repeat(${rowColumns}, minmax(0, 1fr))` }}
+        >
+          {inCarOrder.map((mount) => mountTile(mount))}
+        </div>
+      )}
+      <div className="g-slot-row">{ESSENTIALS.map(essentialTile)}</div>
       <div className="g-bench-tools">
         <button
           type="button"
-          className={`slot-tile is-tool${idle ? ' is-selected' : ''}`}
+          className={`slot-tile is-tool${idle ? ' is-selected' : ' is-back'}`}
           aria-pressed={idle}
-          aria-label={g.carStats}
-          title={g.carStats}
+          aria-label={idle ? g.carStats : g.wholeCar}
+          title={idle ? g.carStats : g.wholeCar}
           data-testid="car-stats"
           onClick={onShowCar}
         >
           <span className="slot-art">
-            <Glyph name="stats" size={24} />
+            <Glyph name={idle ? 'stats' : 'chassis'} size={24} />
           </span>
           <span className="slot-text">
-            <span className="slot-label">{g.stats}</span>
+            <span className="slot-label">{idle ? g.stats : g.wholeCar}</span>
           </span>
         </button>
         <button

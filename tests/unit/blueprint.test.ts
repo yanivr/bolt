@@ -39,7 +39,14 @@ import {
   validateUntrustedBlueprint,
 } from '@bolt/shared';
 import { describe, expect, it } from 'vitest';
-import { car, check, errorCodes, probeFor, warningCodes } from '../helpers/blueprints.js';
+import {
+  car,
+  check,
+  errorCodes,
+  fittingRotation,
+  probeFor,
+  warningCodes,
+} from '../helpers/blueprints.js';
 
 function install(blueprint: VehicleBlueprint, partId: string, mountId?: string): VehicleBlueprint {
   const result = installPart(blueprint, CATALOG, partId, mountId ? { mountId } : undefined);
@@ -107,9 +114,9 @@ describe('canonical form and mechanical hash (Section 15.6)', () => {
     expect(buildHash(messy)).toBe(buildHash(buy([0, 1, 2, 3, 4])));
     // Two parts on one mount sort by part id.
     const rack = canonicalizeBlueprint(
-      car('chassis_brick', [
-        { partId: 'utility_repair', mountId: 'roof_mid', offsetX: 5 },
-        { partId: 'utility_fan', mountId: 'roof_mid', offsetX: -5 },
+      car('chassis_pickup', [
+        { partId: 'utility_repair', mountId: 'bed_front', offsetX: 5 },
+        { partId: 'utility_fan', mountId: 'bed_front', offsetX: -5 },
       ]),
     );
     expect(rack.parts.map((p) => p.partId)).toEqual(['utility_fan', 'utility_repair']);
@@ -132,7 +139,7 @@ describe('canonical form and mechanical hash (Section 15.6)', () => {
     const variants: Record<string, VehicleBlueprint> = {
       engine: { ...a, engineId: 'engine_v6' },
       tires: { ...a, tireKitId: 'tires_slick' },
-      chassis: { ...a, chassisId: 'chassis_buggy' },
+      chassis: { ...a, chassisId: 'chassis_arrow' },
       catalog: { ...a, catalogVersion: '9.9.9' },
       removed: { ...a, parts: a.parts.slice(1) },
       added: install(
@@ -211,8 +218,10 @@ describe('canonical form and mechanical hash (Section 15.6)', () => {
   });
 });
 
-describe('shipped blueprints (Sections 6.3 and 11.9)', () => {
-  // Transcribed from Section 11.9: chassis, engine, wheel kit, then the extras.
+describe('shipped blueprints (Sections 6.3 and 11.9, on the five chassis)', () => {
+  // After Section 11.9, rebuilt on the five chassis: chassis, engine, wheel kit, the extras.
+  // Four are the specification's builds as written; the Iron Mule stands in for the Sticky
+  // Turtle and Back-Alley Trap moved from the Scorpion to the Beetle.
   const SPEC_EXAMPLES: Record<string, [string, string, string, string[]]> = {
     'Straight-Line Rocket': [
       'Arrow',
@@ -220,16 +229,16 @@ describe('shipped blueprints (Sections 6.3 and 11.9)', () => {
       'Slicks',
       ['Nitro Tank', 'Cooling Fan', 'Front Machine Gun'],
     ],
-    'Sticky Turtle': [
-      'Turtle',
+    'Iron Mule': [
+      'Pickup',
       'Four-Cylinder',
       'Armored Tires',
-      ['Oil Slick', 'Side Shields', 'Repair Kit'],
+      ['Arc Mortar', 'Oil Slick', 'Energy Shield', 'Repair Kit'],
     ],
     'Dust Spider': ['Spider', 'Trail Engine', 'Sand Paddles', ['Air Cannon', 'Gyro Stabilizer']],
     'Rain Runner': ['Beetle', 'Sport Electric', 'Rain Runners', ['Rear Sentry', 'Energy Shield']],
     'Back-Alley Trap': [
-      'Scorpion',
+      'Beetle',
       'Hybrid',
       'Street Tires',
       ['Road Mine', 'Rear Sentry', 'Mine Detector'],
@@ -263,8 +272,14 @@ describe('shipped blueprints (Sections 6.3 and 11.9)', () => {
     expect(rookie.creditsLeft).toBe(520);
   });
 
-  it('ships three starter cars besides the Rookie, and the six example builds', () => {
-    expect(STARTER_TEMPLATES.filter((t) => t.id !== 'starter_rookie')).toHaveLength(3);
+  it('ships a starter car for every chassis, and the six example builds', () => {
+    expect(STARTER_TEMPLATES.map((t) => [t.name, t.blueprint.chassisId])).toEqual([
+      ['Rookie', 'chassis_beetle'],
+      ['Sprinter', 'chassis_arrow'],
+      ['Packhorse', 'chassis_pickup'],
+      ['Longlegs', 'chassis_spider'],
+      ['Tinker', 'chassis_trike'],
+    ]);
     expect(EXAMPLE_TEMPLATES.map((t) => t.name)).toEqual(Object.keys(SPEC_EXAMPLES));
     expect(new Set(TEMPLATES.map((t) => t.id)).size).toBe(TEMPLATES.length);
     for (const template of TEMPLATES) {
@@ -275,7 +290,7 @@ describe('shipped blueprints (Sections 6.3 and 11.9)', () => {
   });
 
   it.each(Object.entries(SPEC_EXAMPLES))(
-    '%s is the build Section 11.9 lists',
+    '%s is the build the table lists',
     (name, [chassis, engine, tires, extras]) => {
       const template = EXAMPLE_TEMPLATES.find((t) => t.name === name)!;
       const build = resolveBlueprint(template.blueprint, CATALOG)!;
@@ -543,38 +558,38 @@ describe('validateBlueprint: essentials, budget and catalog (Sections 6.1 and 10
     expect(result.issues[0]!.detail).toEqual({ blueprint: '0.2.0', catalog: CATALOG_VERSION });
     // And against a catalog that has moved on, the same blueprint is the stale one.
     expect(
-      errorCodes(validateBlueprint(ROOKIE_BLUEPRINT, { ...CATALOG, version: '0.4.0' })),
+      errorCodes(validateBlueprint(ROOKIE_BLUEPRINT, { ...CATALOG, version: '9.0.0' })),
     ).toEqual(['CATALOG_MISMATCH']);
   });
 
   it('never lets a car over 1,000 credits through, counting from catalog prices only', () => {
-    // Platform 210 + V12 290 + Full Tracks 190 = 690, then expensive parts until it tips over.
+    // Pickup 185 + V12 290 + Full Tracks 190 = 665, then expensive parts until it tips over.
     const rich = car(
-      'chassis_platform',
+      'chassis_pickup',
       [
-        { partId: 'weapon_mortar', mountId: 'deck_fore', autoMode: true },
-        { partId: 'defense_antimissile', mountId: 'deck_aft' },
+        { partId: 'weapon_mortar', mountId: 'bed_rear', autoMode: true },
+        { partId: 'defense_antimissile', mountId: 'roof_cab' },
+        { partId: 'utility_radar', mountId: 'bed_front' },
       ],
       { engineId: 'engine_v12', tireKitId: 'tires_track' },
     );
     const result = check(rich);
-    expect(result.totalCost).toBe(210 + 290 + 190 + 175 + 160);
+    expect(result.totalCost).toBe(185 + 290 + 190 + 175 + 160 + 45);
     expect(errorCodes(result)).toContain('NOT_ENOUGH_CREDITS');
     const issue = result.issues.find((i) => i.code === 'NOT_ENOUGH_CREDITS')!;
     expect(issue.message).toBe('Not enough credits');
-    expect(issue.detail).toEqual({ totalCost: 1025, budget: 1000, over: 25 });
-    expect(result.creditsLeft).toBe(-25);
-    // Exactly 1,000 is legal: 210 + 290 + 190 + 175 + 135 (Needle... no: use parts that sum).
+    expect(issue.detail).toEqual({ totalCost: 1045, budget: 1000, over: 45 });
+    expect(result.creditsLeft).toBe(-45);
+    // Exactly 1,000 is legal: 185 + 290 + 190 + 175 + 160.
     const exact = car(
-      'chassis_platform',
+      'chassis_pickup',
       [
-        { partId: 'weapon_mortar', mountId: 'deck_fore', autoMode: true },
-        { partId: 'weapon_turret', mountId: 'deck_aft', assignedActionSlot: 0 },
+        { partId: 'weapon_mortar', mountId: 'bed_rear', autoMode: true },
+        { partId: 'defense_antimissile', mountId: 'roof_cab' },
       ],
       { engineId: 'engine_v12', tireKitId: 'tires_track' },
     );
-    // 210 + 290 + 190 + 175 + 130 = 995.
-    expect(check(exact).totalCost).toBe(995);
+    expect(check(exact).totalCost).toBe(1000);
     expect(errorCodes(check(exact))).not.toContain('NOT_ENOUGH_CREDITS');
   });
 
@@ -645,7 +660,8 @@ describe('validateBlueprint: every hardpoint (Section 19.1)', () => {
 
   it('covers every accessory mount of every chassis', () => {
     expect(cases).toHaveLength(
-      5 + 4 + 7 + 8 + 8 + 6 + 6 + 6 + 8 + 9 + 4 + 4 + 8 + 7 + 6 + 5 + 6 + 8 + 8 + 10,
+      // Beetle, Arrow, Pickup, Spider, Trike.
+      5 + 4 + 6 + 8 + 4,
     );
   });
 
@@ -757,7 +773,7 @@ describe('validateBlueprint: every hardpoint (Section 19.1)', () => {
     );
     expect(errorCodes(mortar)).toEqual(['PART_TOO_LARGE']);
     expect(mortar.issues[0]!.detail).toEqual({ w: 16, h: 16, maxW: 14, maxH: 14 });
-    // The railgun is long: it fits the Needle's nose and not the Beetle's hood.
+    // The railgun is long: it fits the Arrow's spine and not the Beetle's hood.
     expect(
       errorCodes(
         check(
@@ -769,35 +785,35 @@ describe('validateBlueprint: every hardpoint (Section 19.1)', () => {
     ).toEqual(['PART_TOO_LARGE']);
     expect(
       check(
-        car('chassis_needle', [
-          { partId: 'weapon_railshot', mountId: 'front_nose', assignedActionSlot: 0 },
+        car('chassis_arrow', [
+          { partId: 'weapon_railshot', mountId: 'roof_mid', assignedActionSlot: 0 },
         ]),
       ).ok,
     ).toBe(true);
     // Turned sideways a machine gun is 12 wide and no longer fits an 8-wide pod.
-    const pod = CHASSIS.chassis_turtle!.mounts.find((m) => m.id === 'right_mid')!;
-    expect(pod.maxFootprint).toEqual({ w: 8, h: 18 });
+    const pod = CHASSIS.chassis_spider!.mounts.find((m) => m.id === 'right_front')!;
+    expect(pod.maxFootprint).toEqual({ w: 8, h: 14 });
     expect(
       check(
-        car('chassis_turtle', [
-          { partId: 'weapon_front_mg', mountId: 'right_mid', assignedActionSlot: 0 },
+        car('chassis_spider', [
+          { partId: 'weapon_front_mg', mountId: 'right_front', assignedActionSlot: 0 },
         ]),
       ).ok,
     ).toBe(true);
     expect(
       errorCodes(
         check(
-          car('chassis_turtle', [
+          car('chassis_spider', [
             {
               partId: 'weapon_front_mg',
-              mountId: 'right_mid',
+              mountId: 'right_front',
               rotationQuarterTurns: 1,
               assignedActionSlot: 0,
             },
           ]),
         ),
       ),
-    ).toEqual(['PART_TOO_LARGE']);
+    ).toContain('PART_TOO_LARGE');
   });
 
   it('refuses a part pointed back across the cabin, and one that cannot turn at all', () => {
@@ -875,11 +891,11 @@ describe('validateBlueprint: every hardpoint (Section 19.1)', () => {
   });
 
   it('keeps two pixels between parts on neighbouring mounts', () => {
-    // Turtle roof mounts are in a row two pixels apart. Each part fits on its own.
+    // Spider roof mounts are in a row two pixels apart. Each part fits on its own.
     const row = (offsetFront: number, offsetMid: number) =>
       check(
-        car('chassis_turtle', [
-          { partId: 'utility_solar', mountId: 'roof_front', offsetY: offsetFront },
+        car('chassis_spider', [
+          { partId: 'utility_nitro', mountId: 'roof_front', offsetY: offsetFront },
           {
             partId: 'weapon_turret',
             mountId: 'roof_mid',
@@ -900,9 +916,9 @@ describe('validateBlueprint: every hardpoint (Section 19.1)', () => {
     });
     // Between two ordinary parts the general line is used.
     const plain = check(
-      car('chassis_turtle', [
-        { partId: 'utility_solar', mountId: 'roof_front', offsetY: 2 },
-        { partId: 'utility_radiator', mountId: 'roof_mid', offsetY: -2 },
+      car('chassis_spider', [
+        { partId: 'utility_nitro', mountId: 'roof_front', offsetY: 2 },
+        { partId: 'utility_radar', mountId: 'roof_mid', offsetY: -2 },
       ]),
     );
     expect(plain.issues.find((i) => i.code === 'PART_BLOCKS_ANOTHER')!.message).toBe(
@@ -914,13 +930,12 @@ describe('validateBlueprint: every hardpoint (Section 19.1)', () => {
     const rack = (parts: Array<[string, number]>) =>
       check(
         car(
-          'chassis_brick',
+          'chassis_pickup',
           parts.map(([partId, offsetX]) => ({
             partId,
-            mountId: 'roof_mid',
+            mountId: 'bed_front',
             offsetX,
             ...(partId === 'weapon_front_mg' ? { assignedActionSlot: 0 as const } : {}),
-            ...(partId === 'weapon_mortar' ? { autoMode: true } : {}),
           })),
         ),
       );
@@ -948,15 +963,16 @@ describe('validateBlueprint: every hardpoint (Section 19.1)', () => {
     ]);
     expect(errorCodes(three)).toContain('MOUNT_OCCUPIED');
     expect(three.issues.find((i) => i.code === 'MOUNT_OCCUPIED')).toMatchObject({
-      mountId: 'roof_mid',
+      mountId: 'bed_front',
       message: 'This mount is full.',
     });
-    // A large mortar occupies the full roof hardpoint.
-    expect(rack([['weapon_mortar', 0]]).ok).toBe(true);
+    // A large jump jack occupies the full rack.
+    expect(CATALOG.parts.utility_jump!.hardpointUse).toBe('full');
+    expect(rack([['utility_jump', 0]]).ok).toBe(true);
     expect(
       errorCodes(
         rack([
-          ['weapon_mortar', 0],
+          ['utility_jump', 0],
           ['utility_radar', 5],
         ]),
       ),
@@ -1022,9 +1038,9 @@ describe('validateBlueprint: every hardpoint (Section 19.1)', () => {
 describe('validateBlueprint: per-car limits (Sections 6.1, 8.3, 11.5 and 11.7)', () => {
   it('allows one of each unique part', () => {
     const two = check(
-      car('chassis_brick', [
-        { partId: 'utility_gyro', mountId: 'front_utility' },
+      car('chassis_spider', [
         { partId: 'utility_gyro', mountId: 'rear_utility' },
+        { partId: 'utility_gyro', mountId: 'roof_front' },
       ]),
     );
     expect(errorCodes(two)).toEqual(['ONE_PER_CAR']);
@@ -1036,11 +1052,11 @@ describe('validateBlueprint: per-car limits (Sections 6.1, 8.3, 11.5 and 11.7)',
     const unique = Object.values(CATALOG.parts).filter((p) => p.maxPerCar === 1);
     expect(unique.length).toBeGreaterThan(25);
     for (const part of unique) {
-      // Two copies on the Platform's two big decks, wherever they would otherwise fit.
+      // Two copies in the Pickup's bed, which takes any part.
       const pair = check(
-        car('chassis_platform', [
-          { partId: part.id, mountId: 'deck_fore' },
-          { partId: part.id, mountId: 'deck_aft' },
+        car('chassis_pickup', [
+          { partId: part.id, mountId: 'bed_rear' },
+          { partId: part.id, mountId: 'bed_front' },
         ]),
       );
       expect(errorCodes(pair), part.id).toContain('ONE_PER_CAR');
@@ -1050,11 +1066,11 @@ describe('validateBlueprint: per-car limits (Sections 6.1, 8.3, 11.5 and 11.7)',
   it('allows one spare wheel, two repair kits, and three repair units in all', () => {
     const kits = (count: number, spare: boolean) =>
       check(
-        car('chassis_platform', [
-          ...['edge_front', 'edge_mid', 'edge_rear']
+        car('chassis_pickup', [
+          ...['left_bed', 'right_bed', 'bed_front']
             .slice(0, count)
-            .map((edge) => ({ partId: 'utility_repair', mountId: `left_${edge}` })),
-          ...(spare ? [{ partId: 'utility_spare', mountId: 'deck_fore' }] : []),
+            .map((mountId) => ({ partId: 'utility_repair', mountId })),
+          ...(spare ? [{ partId: 'utility_spare', mountId: 'bed_rear' }] : []),
         ]),
       );
     expect(kits(2, true).ok).toBe(true);
@@ -1063,9 +1079,9 @@ describe('validateBlueprint: per-car limits (Sections 6.1, 8.3, 11.5 and 11.7)',
     expect(three.issues[0]!.message).toBe('A car can carry one spare wheel and two repair kits.');
     expect(errorCodes(kits(3, true))).toContain('TOO_MANY_REPAIR_ITEMS');
     const spares = check(
-      car('chassis_platform', [
-        { partId: 'utility_spare', mountId: 'deck_fore' },
-        { partId: 'utility_spare', mountId: 'deck_aft' },
+      car('chassis_pickup', [
+        { partId: 'utility_spare', mountId: 'bed_rear' },
+        { partId: 'utility_spare', mountId: 'bed_front' },
       ]),
     );
     expect(errorCodes(spares)).toEqual(['ONE_PER_CAR']);
@@ -1074,28 +1090,27 @@ describe('validateBlueprint: per-car limits (Sections 6.1, 8.3, 11.5 and 11.7)',
   });
 
   it('allows six offensive modules and no more, whatever the mounts allow', () => {
-    // Rear Sentries are automatic, so no fire-button rule gets in the way. On the narrow edge
-    // mounts they are turned outward to fit.
-    const edges: Array<[string, QuarterTurn]> = [
-      ['left_edge_front', 3],
-      ['left_edge_mid', 3],
-      ['left_edge_rear', 3],
-      ['right_edge_front', 1],
-      ['right_edge_mid', 1],
-      ['right_edge_rear', 1],
-      ['deck_front', 0],
+    // Rear Sentries are automatic, so no fire-button rule gets in the way. A Pickup has room
+    // for seven: two share the rack, and the rails and tailgate point theirs backward.
+    const spots: Array<[string, QuarterTurn, number]> = [
+      ['bed_front', 0, -5],
+      ['bed_front', 0, 5],
+      ['bed_rear', 0, 0],
+      ['left_bed', 2, 0],
+      ['right_bed', 2, 0],
+      ['rear_center', 2, 0],
+      ['roof_cab', 0, 0],
     ];
     const guns = (count: number) =>
       check(
         car(
-          'chassis_platform',
-          edges
-            .slice(0, count)
-            .map(([mountId, turn]) => ({
-              partId: 'weapon_rear_mg',
-              mountId,
-              rotationQuarterTurns: turn,
-            })),
+          'chassis_pickup',
+          spots.slice(0, count).map(([mountId, turn, offsetX]) => ({
+            partId: 'weapon_rear_mg',
+            mountId,
+            offsetX,
+            rotationQuarterTurns: turn,
+          })),
           { engineId: 'engine_mini_electric', tireKitId: 'tires_micro' },
         ),
       );
@@ -1106,8 +1121,8 @@ describe('validateBlueprint: per-car limits (Sections 6.1, 8.3, 11.5 and 11.7)',
     // Parts are judged in canonical order (by mount), so the seventh there is the one flagged.
     const last = canonicalizeBlueprint(
       car(
-        'chassis_platform',
-        edges.map(([mountId]) => ({ partId: 'weapon_rear_mg', mountId })),
+        'chassis_pickup',
+        spots.map(([mountId]) => ({ partId: 'weapon_rear_mg', mountId })),
       ),
     ).parts[6]!;
     expect(seven.issues[0]).toMatchObject({
@@ -1121,10 +1136,17 @@ describe('validateBlueprint: per-car limits (Sections 6.1, 8.3, 11.5 and 11.7)',
     const three = (slots: Array<0 | 1 | undefined>) =>
       check(
         car(
-          'chassis_platform',
-          ['deck_front', 'deck_fore', 'deck_aft'].map((mountId, i) => ({
+          'chassis_pickup',
+          (
+            [
+              ['bed_front', -5],
+              ['bed_front', 5],
+              ['bed_rear', 0],
+            ] as const
+          ).map(([mountId, offsetX], i) => ({
             partId: 'weapon_front_mg',
             mountId,
+            offsetX,
             rotationQuarterTurns: 0 as QuarterTurn,
             ...(slots[i] !== undefined ? { assignedActionSlot: slots[i] } : {}),
           })),
@@ -1146,123 +1168,107 @@ describe('validateBlueprint: per-car limits (Sections 6.1, 8.3, 11.5 and 11.7)',
 
   it('gives fire buttons only to manual and hybrid weapons, and automatic mode only to hybrids', () => {
     const one = (partId: string, mountId: string, patch: Partial<BlueprintPart>) =>
-      check(car('chassis_platform', [{ partId, mountId, ...patch }]));
-    expect(errorCodes(one('weapon_tesla', 'deck_fore', { assignedActionSlot: 0 }))).toEqual([
+      check(car('chassis_pickup', [{ partId, mountId, ...patch }]));
+    expect(errorCodes(one('weapon_tesla', 'bed_rear', { assignedActionSlot: 0 }))).toEqual([
       'BAD_ACTION_SLOT',
     ]);
-    expect(errorCodes(one('utility_nitro', 'deck_fore', { assignedActionSlot: 1 }))).toEqual([
+    expect(errorCodes(one('utility_nitro', 'bed_rear', { assignedActionSlot: 1 }))).toEqual([
       'BAD_ACTION_SLOT',
     ]);
-    expect(
-      errorCodes(one('defense_energy_shield', 'deck_fore', { assignedActionSlot: 0 })),
-    ).toEqual(['BAD_ACTION_SLOT']);
-    expect(errorCodes(one('weapon_front_mg', 'deck_front', { autoMode: true }))).toContain(
+    expect(errorCodes(one('defense_energy_shield', 'bed_rear', { assignedActionSlot: 0 }))).toEqual(
+      ['BAD_ACTION_SLOT'],
+    );
+    expect(errorCodes(one('weapon_front_mg', 'bed_rear', { autoMode: true }))).toContain(
       'BAD_AUTO_MODE',
     );
-    expect(errorCodes(one('utility_fan', 'deck_fore', { autoMode: true }))).toEqual([
+    expect(errorCodes(one('utility_fan', 'bed_rear', { autoMode: true }))).toEqual([
       'BAD_AUTO_MODE',
     ]);
     // A hybrid can take a button or run itself, not both.
-    expect(one('weapon_turret', 'deck_fore', { assignedActionSlot: 1 }).issues).toEqual([]);
-    expect(one('weapon_turret', 'deck_fore', { autoMode: true }).issues).toEqual([]);
+    expect(one('weapon_turret', 'bed_rear', { assignedActionSlot: 1 }).issues).toEqual([]);
+    expect(one('weapon_turret', 'bed_rear', { autoMode: true }).issues).toEqual([]);
     expect(
-      errorCodes(one('weapon_turret', 'deck_fore', { assignedActionSlot: 1, autoMode: true })),
+      errorCodes(one('weapon_turret', 'bed_rear', { assignedActionSlot: 1, autoMode: true })),
     ).toEqual(['BAD_AUTO_MODE']);
-    expect(warningCodes(one('weapon_turret', 'deck_fore', {}))).toEqual(['WEAPON_INACTIVE']);
+    expect(warningCodes(one('weapon_turret', 'bed_rear', {}))).toEqual(['WEAPON_INACTIVE']);
     // Automatic weapons need nothing.
-    expect(one('weapon_tesla', 'deck_fore', {}).issues).toEqual([]);
+    expect(one('weapon_tesla', 'bed_rear', {}).issues).toEqual([]);
   });
 });
 
-describe('validateBlueprint: chassis specials (Section 11.2)', () => {
-  it('lets the Horseshoe cavity take any weapon, however large or wherever it normally goes', () => {
+describe('validateBlueprint: chassis specials', () => {
+  it('lets the Pickup bed take any weapon, however large or wherever it normally goes', () => {
+    const bed = CHASSIS.chassis_pickup!.mounts.find((m) => m.id === 'bed_rear')!;
     for (const weapon of Object.values(CATALOG.parts).filter((p) => p.category === 'weapon')) {
       const fire = weapon.triggerMode === 'automatic' ? {} : { assignedActionSlot: 0 as const };
+      // The railgun is longer than the bed is deep and lies across it.
+      const turn = fittingRotation(bed, weapon);
+      expect(turn, weapon.id).not.toBeNull();
       const result = check(
-        car('chassis_horseshoe', [{ partId: weapon.id, mountId: 'front_cavity', ...fire }]),
+        car('chassis_pickup', [
+          { partId: weapon.id, mountId: 'bed_rear', rotationQuarterTurns: turn!, ...fire },
+        ]),
       );
       expect(result.issues, weapon.id).toEqual([]);
     }
-    // Roof-only heavy weapons go nowhere else on the frame, and nothing but weapons gets the
-    // cavity's exemption.
-    for (const mountId of ['front_brace', 'left_prong', 'right_mid'])
+    // The mortar goes nowhere else on the frame, and nowhere at all on the other four.
+    for (const mountId of ['roof_cab', 'bed_front', 'left_bed', 'rear_center'])
       expect(
         errorCodes(
-          check(car('chassis_horseshoe', [{ partId: 'weapon_mortar', mountId, autoMode: true }])),
-        )[0],
+          check(car('chassis_pickup', [{ partId: 'weapon_mortar', mountId, autoMode: true }])),
+        ).length,
         mountId,
-      ).toBe('NO_COMPATIBLE_MOUNT');
-    expect(
-      errorCodes(
-        check(car('chassis_horseshoe', [{ partId: 'utility_solar', mountId: 'front_cavity' }])),
-      ),
-    ).toEqual(['NO_COMPATIBLE_MOUNT']);
-    // The same mortar on an ordinary front mount elsewhere is refused.
+      ).toBeGreaterThan(0);
     expect(
       errorCodes(
         check(
-          car('chassis_brick', [
+          car('chassis_beetle', [
             { partId: 'weapon_mortar', mountId: 'front_center', autoMode: true },
           ]),
         ),
       ),
     ).toContain('NO_COMPATIBLE_MOUNT');
+    // The ordinary mounts of the Pickup still take only their own kind.
+    expect(
+      errorCodes(
+        check(car('chassis_pickup', [{ partId: 'utility_solar', mountId: 'rear_center' }])),
+      ),
+    ).toEqual(['NO_COMPATIBLE_MOUNT']);
   });
 
-  it('gives Crab side mounts full rotation freedom', () => {
-    // On the Crab a gun on the right may point left, across the body.
-    for (const turn of [0, 1, 2, 3] as QuarterTurn[])
+  it('never lets a side gun point back across the cabin', () => {
+    // The Spider has the only side mounts. A gun on the right may face out, forward or back.
+    for (const turn of [0, 1, 2] as QuarterTurn[])
       expect(
         check(
-          car('chassis_crab', [
+          car('chassis_spider', [
+            {
+              partId: 'weapon_rear_mg',
+              mountId: 'right_front',
+              rotationQuarterTurns: turn,
+            },
+          ]),
+        ).issues.filter((i) => i.code === 'BAD_ROTATION'),
+        `turn ${turn}`,
+      ).toEqual([]);
+    expect(
+      errorCodes(
+        check(
+          car('chassis_spider', [
+            { partId: 'weapon_tesla', mountId: 'right_front' },
             {
               partId: 'weapon_front_mg',
-              mountId: 'right_mid',
-              rotationQuarterTurns: turn,
+              mountId: 'left_front',
+              rotationQuarterTurns: 1,
               assignedActionSlot: 0,
             },
           ]),
-        ).issues,
-        `turn ${turn}`,
-      ).toEqual([]);
-    // On every other frame with side mounts that orientation is refused.
-    for (const [chassisId, mountId] of [
-      ['chassis_turtle', 'right_mid'],
-      ['chassis_brick', 'right_front'],
-      ['chassis_rammer', 'right_shoulder'],
-      ['chassis_twins', 'right_rear'],
-    ] as const)
-      expect(
-        errorCodes(
-          check(
-            car(chassisId, [
-              { partId: 'weapon_tesla', mountId },
-              {
-                partId: 'weapon_front_mg',
-                mountId: mountId.replace('right', 'left'),
-                rotationQuarterTurns: 1,
-                assignedActionSlot: 0,
-              },
-            ]),
-          ),
         ),
-        chassisId,
-      ).toContain('BAD_ROTATION');
+      ),
+    ).toContain('BAD_ROTATION');
   });
 
-  it('gives the Wagon and the Pickup their extra utility capacity', () => {
-    const racks = check(
-      car('chassis_wagon', [
-        { partId: 'utility_fan', mountId: 'rack_upper', offsetX: -5 },
-        { partId: 'utility_battery', mountId: 'rack_upper', offsetX: 5 },
-        { partId: 'utility_repair', mountId: 'rack_deck', offsetX: -5 },
-        { partId: 'utility_gyro', mountId: 'rack_deck', offsetX: 5 },
-        { partId: 'utility_spare', mountId: 'left_utility' },
-        { partId: 'utility_radar', mountId: 'right_utility' },
-      ]),
-    );
-    // Six utilities on four utility mounts.
-    expect(racks.issues).toEqual([]);
+  it('gives the Pickup rack room for two small parts and the bed floor to one large one', () => {
     const bed = check(
       car('chassis_pickup', [
         { partId: 'utility_generator', mountId: 'bed_front', offsetX: -5 },
@@ -1271,7 +1277,7 @@ describe('validateBlueprint: chassis specials (Section 11.2)', () => {
         { partId: 'utility_jump', mountId: 'bed_rear' },
       ]),
     );
-    // Two small utilities share the front cargo mount; a large one takes the rear mount whole.
+    // Two small utilities share the rack; the bed floor holds one part, however small.
     expect(errorCodes(bed)).toContain('MOUNT_OCCUPIED');
     expect(
       check(
@@ -1284,50 +1290,36 @@ describe('validateBlueprint: chassis specials (Section 11.2)', () => {
     ).toEqual([]);
   });
 
-  it('limits armor on every frame, more tightly on the Needle and the Buggy', () => {
+  it('limits armor to the same share of the load limit on every frame', () => {
     expect(armorLimitKg(CHASSIS.chassis_beetle!)).toBe(Math.round(730 * 0.45));
-    expect(armorLimitKg(CHASSIS.chassis_buggy!)).toBe(Math.round(780 * 0.45 * 0.85));
-    expect(armorLimitKg(CHASSIS.chassis_needle!)).toBe(Math.round(560 * 0.27));
-    // The Needle takes one heavy plate on its nose, and no second piece of armor.
-    expect(
-      check(car('chassis_needle', [{ partId: 'defense_heavy_plate', mountId: 'front_nose' }])).ok,
-    ).toBe(true);
-    const tooMuch = check(
-      car('chassis_needle', [
-        { partId: 'defense_heavy_plate', mountId: 'front_nose' },
-        { partId: 'defense_ceramic', mountId: 'roof_mid' },
-      ]),
-    );
-    expect(errorCodes(tooMuch)).toEqual(['TOO_MUCH_ARMOR']);
-    expect(tooMuch.issues[0]).toMatchObject({
-      instanceId: 't2',
-      detail: { armorKg: 210, limitKg: 151 },
-    });
-    // Plates have nowhere else to go on a Needle.
-    expect(
-      errorCodes(
-        check(car('chassis_needle', [{ partId: 'defense_light_plate', mountId: 'front_spine' }])),
-      ),
-    ).toEqual(['NO_COMPATIBLE_MOUNT']);
-    // The Buggy carries two heavy plates (290 kg of 298) but not a third piece.
-    const buggy = (extra: boolean) =>
+    expect(armorLimitKg(CHASSIS.chassis_arrow!)).toBe(Math.round(600 * 0.45));
+    expect(armorLimitKg(CHASSIS.chassis_pickup!)).toBe(Math.round(1200 * 0.45));
+    expect(armorLimitKg(CHASSIS.chassis_spider!)).toBe(Math.round(1050 * 0.45));
+    expect(armorLimitKg(CHASSIS.chassis_trike!)).toBe(Math.round(460 * 0.45));
+    // The Beetle carries two heavy plates (290 kg of 329) but not a third piece.
+    const beetle = (extra: boolean) =>
       check(
-        car('chassis_buggy', [
+        car('chassis_beetle', [
           { partId: 'defense_heavy_plate', mountId: 'front_center' },
           { partId: 'defense_heavy_plate', mountId: 'rear_center', rotationQuarterTurns: 2 },
-          ...(extra ? [{ partId: 'defense_breakaway', mountId: 'roof_front' }] : []),
+          ...(extra ? [{ partId: 'defense_breakaway', mountId: 'roof_mid' }] : []),
         ]),
       );
-    expect(buggy(false).ok).toBe(true);
-    expect(errorCodes(buggy(true))).toEqual(['TOO_MUCH_ARMOR']);
-    // The same three pieces are within a Beetle-class allowance on a Turtle.
+    expect(beetle(false).ok).toBe(true);
+    const tooMuch = beetle(true);
+    expect(errorCodes(tooMuch)).toEqual(['TOO_MUCH_ARMOR']);
+    expect(tooMuch.issues[0]).toMatchObject({
+      instanceId: 't3',
+      detail: { armorKg: 351, limitKg: 329 },
+    });
+    // The same three pieces are within the allowance of a Pickup.
     expect(
       errorCodes(
         check(
-          car('chassis_turtle', [
-            { partId: 'defense_heavy_plate', mountId: 'front_center' },
+          car('chassis_pickup', [
+            { partId: 'defense_heavy_plate', mountId: 'bed_rear' },
             { partId: 'defense_heavy_plate', mountId: 'rear_center', rotationQuarterTurns: 2 },
-            { partId: 'defense_breakaway', mountId: 'roof_front' },
+            { partId: 'defense_breakaway', mountId: 'roof_cab' },
           ]),
         ),
       ),

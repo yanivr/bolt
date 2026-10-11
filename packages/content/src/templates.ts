@@ -4,10 +4,11 @@ import { CATALOG_VERSION } from './catalog.js';
 import { SHIPPED_AT, baselineBlueprint } from './loadout.js';
 
 /**
- * Shipped blueprints: the baseline car every garage session starts from, the Rookie starter
- * of Section 6.3, three more cars for the Starter Cars tab, and the six example builds of
- * Section 11.9. Every one is a real blueprint that the server accepts; the tests validate
- * them, hash them and drive them.
+ * Shipped blueprints: the baseline car every garage session starts from, five starter cars
+ * (the Rookie of Section 6.3 and one for each of the other four chassis) and six example
+ * builds after Section 11.9, rebuilt on the five chassis the game keeps (docs/DECISIONS.md,
+ * entry 87). Every one is a real blueprint that the server accepts; the tests validate them,
+ * hash them and drive them, and check that every chassis appears among the starters.
  */
 
 export type BlueprintTemplate = {
@@ -104,32 +105,44 @@ export const TEMPLATES: BlueprintTemplate[] = [
     ]),
   },
   {
-    id: 'starter_bulldog',
+    id: 'starter_packhorse',
     group: 'starter',
-    name: 'Bulldog',
-    description: 'A Turtle that leads with its bumper and lets a sentry watch its back.',
-    blueprint: build('Bulldog', 'chassis_turtle', 'engine_v6', 'tires_hard', 'paint_sunflare', [
-      { part: 'defense_front_bumper', mount: 'front_center' },
-      { part: 'weapon_rear_mg', mount: 'rear_center', turn: 2 },
-      { part: 'utility_repair', mount: 'roof_rear' },
+    name: 'Packhorse',
+    description: 'A Pickup with tools on the rack, a sentry on the rail and room in the bed.',
+    blueprint: build('Packhorse', 'chassis_pickup', 'engine_v6', 'tires_street', 'paint_sunflare', [
+      { part: 'utility_repair', mount: 'bed_front', offset: [-5, 0] },
+      { part: 'utility_battery', mount: 'bed_front', offset: [5, 0] },
+      { part: 'weapon_rear_mg', mount: 'left_bed', turn: 2 },
+      { part: 'defense_rear_bumper', mount: 'rear_center' },
+    ]),
+  },
+  {
+    id: 'starter_longlegs',
+    group: 'starter',
+    name: 'Longlegs',
+    description: 'A Spider that will not tip, with a gun on the roof and a plate on each flank.',
+    blueprint: build('Longlegs', 'chassis_spider', 'engine_v6', 'tires_street', 'paint_mint', [
+      { part: 'weapon_front_mg', mount: 'roof_front', fire: 0 },
+      { part: 'defense_light_plate', mount: 'left_front', turn: 3 },
+      { part: 'defense_light_plate', mount: 'right_front', turn: 1 },
+      { part: 'utility_radar', mount: 'rear_utility' },
     ]),
   },
   {
     id: 'starter_tinker',
     group: 'starter',
     name: 'Tinker',
-    description: 'A Buggy for rough roads with a shotgun, a radar and the means to fix itself.',
+    description: 'A Trike so cheap it can afford a shotgun, a sentry gun and a repair kit.',
     blueprint: build(
       'Tinker',
-      'chassis_buggy',
-      'engine_four_cylinder',
+      'chassis_trike',
+      'engine_small_turbo',
       'tires_street',
-      'paint_mint',
+      'paint_cobalt',
       [
         { part: 'weapon_shotgun', mount: 'front_center', fire: 0 },
-        { part: 'utility_radar', mount: 'roof_front' },
-        { part: 'utility_repair', mount: 'left_utility' },
-        { part: 'utility_battery', mount: 'right_utility' },
+        { part: 'weapon_rear_mg', mount: 'right_rear', turn: 2 },
+        { part: 'utility_repair', mount: 'left_rear' },
       ],
     ),
   },
@@ -152,20 +165,21 @@ export const TEMPLATES: BlueprintTemplate[] = [
     ),
   },
   {
-    id: 'example_sticky_turtle',
+    id: 'example_iron_mule',
     group: 'example',
-    name: 'Sticky Turtle',
-    description: 'Hard to hurt and hard to pass. Slow to get going.',
+    name: 'Iron Mule',
+    description: 'Hard to hurt and hard to pass, with a mortar in the bed. Slow to get going.',
     blueprint: build(
-      'Sticky Turtle',
-      'chassis_turtle',
+      'Iron Mule',
+      'chassis_pickup',
       'engine_four_cylinder',
       'tires_armored',
       'paint_mint',
       [
-        { part: 'weapon_oil', mount: 'rear_center', fire: 0 },
-        { part: 'defense_side_panels', mount: 'left_mid' },
-        { part: 'utility_repair', mount: 'roof_rear' },
+        { part: 'weapon_mortar', mount: 'bed_rear', fire: 0 },
+        { part: 'weapon_oil', mount: 'rear_center', fire: 1 },
+        { part: 'defense_energy_shield', mount: 'roof_cab' },
+        { part: 'utility_repair', mount: 'bed_front', offset: [-5, 0] },
       ],
     ),
   },
@@ -210,13 +224,13 @@ export const TEMPLATES: BlueprintTemplate[] = [
     description: 'Owns the road behind it, and sees other traps coming.',
     blueprint: build(
       'Back-Alley Trap',
-      'chassis_scorpion',
+      'chassis_beetle',
       'engine_hybrid',
       'tires_street',
-      'paint_cobalt',
+      'paint_sunflare',
       [
         { part: 'weapon_mine', mount: 'rear_center', fire: 0 },
-        { part: 'weapon_rear_mg', mount: 'rear_boom', turn: 2 },
+        { part: 'weapon_rear_mg', mount: 'roof_mid', turn: 2 },
         { part: 'utility_minesensor', mount: 'left_utility' },
       ],
     ),

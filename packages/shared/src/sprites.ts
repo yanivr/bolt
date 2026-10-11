@@ -10,7 +10,7 @@ import type { Catalog, VehicleBlueprint, VehicleLoadout } from './types.js';
 
 /**
  * Honest sprite fallback while the artists finish the catalog. The rules and the physics
- * already know all 120 parts; the car atlas does not have art for most of them yet. Until it
+ * already know all 105 parts; the car atlas does not have art for most of them yet. Until it
  * does, a car is drawn with the default engine and wheel sprites when its own are missing.
  * This changes pixels only: the blueprint that is validated, hashed and simulated is never
  * touched. A chassis has no stand-in, so a chassis without art cannot be picked.

@@ -19,7 +19,7 @@ import { WEAPONS, WEAPON_LIST } from './weapons.js';
  * describe the change in docs/BALANCE_CHANGELOG.md. A blueprint records the version it was
  * built against; the server refuses to race one built against another.
  */
-export const CATALOG_VERSION = '0.3.0';
+export const CATALOG_VERSION = '0.4.0';
 
 export const PAINTS: Record<string, PaintOption> = {
   paint_signal: { id: 'paint_signal', displayName: 'Signal Red' },
@@ -35,7 +35,7 @@ export const ACCESSORIES: Record<string, AccessoryDefinition> = {
   ...UTILITIES,
 };
 
-/** The whole shipped catalog: 120 parts and the paints. */
+/** The whole shipped catalog: 105 parts and the paints. */
 export const CATALOG: Catalog = {
   version: CATALOG_VERSION,
   chassis: CHASSIS,
@@ -72,7 +72,7 @@ export function accessoriesByCategory(category: AccessoryCategory): AccessoryDef
   return BY_CATEGORY[category] as AccessoryDefinition[];
 }
 
-/** All 120 parts, in table order. */
+/** All 105 parts, in table order. */
 export function allParts(): AnyPartDefinition[] {
   return PART_CATEGORIES.flatMap((category) => BY_CATEGORY[category]);
 }

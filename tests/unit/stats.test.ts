@@ -138,7 +138,7 @@ describe('computeBuildStats (Section 6.2)', () => {
     // A car that cannot reach 60 MPH says so instead of inventing a number.
     const crawler = statsOf(
       baselineBlueprint({
-        chassisId: 'chassis_brick',
+        chassisId: 'chassis_spider',
         engineId: 'engine_mini_electric',
         tireKitId: 'tires_track',
       }),
@@ -161,8 +161,8 @@ describe('computeBuildStats (Section 6.2)', () => {
     const worst = (table: Record<string, BuildStats>, pick: (s: BuildStats) => number) =>
       Object.entries(table).sort((a, b) => pick(a[1]) - pick(b[1]))[0]![0];
     expect(best(dry, (s) => s.scores.speed)).toBe('Straight-Line Rocket');
-    expect(best(dry, (s) => s.scores.defense)).toBe('Sticky Turtle');
-    expect(worst(dry, (s) => s.scores.speed)).toBe('Sticky Turtle');
+    expect(best(dry, (s) => s.scores.defense)).toBe('Iron Mule');
+    expect(worst(dry, (s) => s.scores.speed)).toBe('Iron Mule');
     expect(best(dry, (s) => s.indicators.stability.score)).toBe('Dust Spider');
     expect(worst(dry, (s) => s.indicators.stability.score)).toBe('Tiny Trouble');
     expect(best(dry, (s) => -(s.details.speed.zeroToSixtySeconds ?? 99))).toBe('Tiny Trouble');
@@ -236,18 +236,19 @@ describe('computeBuildStats (Section 6.2)', () => {
 
   it('gives stats for drafts that are not legal yet, and says they are not', () => {
     const over = car(
-      'chassis_platform',
+      'chassis_pickup',
       [
-        { partId: 'weapon_mortar', mountId: 'deck_fore', autoMode: true },
-        { partId: 'defense_antimissile', mountId: 'deck_aft' },
+        { partId: 'weapon_mortar', mountId: 'bed_rear', autoMode: true },
+        { partId: 'defense_antimissile', mountId: 'roof_cab' },
+        { partId: 'utility_radar', mountId: 'bed_front' },
       ],
       { engineId: 'engine_v12', tireKitId: 'tires_track' },
     );
     const stats = statsOf(over);
     expect(stats.legal).toBe(false);
     expect(stats.indicators.budget).toMatchObject({
-      spent: 1025,
-      left: -25,
+      spent: 1045,
+      left: -45,
       gauge: 1,
       status: 'over',
     });
@@ -311,7 +312,7 @@ describe('compareBuildStats: predictive deltas (Section 6.2)', () => {
     expect(better.newWarnings).toEqual([]);
     // Legality changes are called out.
     const illegal = statsOf(
-      { ...fixed, engineId: 'engine_v12', tireKitId: 'tires_track', chassisId: 'chassis_brick' },
+      { ...fixed, engineId: 'engine_v12', tireKitId: 'tires_track', chassisId: 'chassis_spider' },
       DRY,
     );
     expect(compareBuildStats(statsOf(fixed, DRY), illegal).becomesIllegal).toBe(

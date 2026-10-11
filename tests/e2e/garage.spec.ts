@@ -239,6 +239,7 @@ test('first run: a blank browser builds a car in the garage and races it', async
   await expect(page.getByTestId('refund')).toHaveText('150');
   await page.getByTestId('install').tap();
   await expect.poll(() => credits(page)).toBe(440);
+  // The Arrow's long spine mount is too narrow for a turret, so it moves to the rear roof.
   await expect(status(page)).toContainText('Arrow fitted. Every part moved across.');
   await page.getByTestId('car-stats').tap();
   await expect(page.getByTestId('car-panel')).toBeVisible();
@@ -252,7 +253,7 @@ test('first run: a blank browser builds a car in the garage and races it', async
   await expect(page.getByTestId('debug')).toContainText('online');
   const raced = await stored(page);
   expect(raced).toMatchObject({ chassisId: 'chassis_arrow', tireKitId: 'tires_rain' });
-  expect(raced.parts.map((p) => [p.partId, p.mountId])).toEqual([['weapon_turret', 'roof_mid']]);
+  expect(raced.parts.map((p) => [p.partId, p.mountId])).toEqual([['weapon_turret', 'roof_rear']]);
   expect(problems).toEqual([]);
 });
 
@@ -556,16 +557,28 @@ test('the car is clean, and the leader lines follow the rotate-view control', as
   expect(turned.front.x).toBeLessThan(turned.rear.x - 60);
   expect(await side('front_center')).toBe('left');
   // Tiles still work in the turned view, and an empty selected slot shows a socket on the car.
+  // The view has moved in on it: only that slot keeps its leader.
   await tile(page, 'mount:front_center').tap();
   await expect(page.getByRole('region', { name: 'Front center' })).toBeVisible();
   await expect(page.locator('.g-car .socket')).toHaveCount(1);
   await expect(page.locator('.leader.is-selected')).toHaveAttribute('data-mount', 'front_center');
+  await expect(bench).toHaveAttribute('data-focus', 'front_center');
+  await expect(page.locator('.leader')).toHaveCount(1);
+  // The rotate-view control keeps working in focus, and the view stays on the slot.
   for (let i = 0; i < 2; i++) {
     await page.getByRole('button', { name: 'Rotate view' }).tap();
     views.push(await bench.getAttribute('data-view'));
+    await expect(bench).toHaveAttribute('data-focus', 'front_center');
+    await expect(page.locator('.leader')).toHaveCount(1);
   }
   expect(new Set(views).size).toBe(4);
   await page.getByRole('button', { name: 'Rotate view' }).tap();
+  // Back to the whole car: every leader is back where it was.
+  await page.getByRole('button', { name: 'Whole Car' }).tap();
+  await expect(bench).not.toHaveAttribute('data-focus', /.+/);
+  await expect(page.locator('.leader')).toHaveCount(5);
+  // The move back takes a moment (150 ms); measure once it has settled.
+  await page.waitForTimeout(240);
   const again = await where('front_center');
   expect(Math.abs(again.x - front.x)).toBeLessThan(2);
   expect(Math.abs(again.y - front.y)).toBeLessThan(2);
@@ -576,8 +589,8 @@ test('chassis without art are listed as "Art in progress" and cannot be picked',
 }) => {
   await skipTips(page);
   // The artists are filling the atlas as this is written. To test the rule whatever they
-  // have finished, three frames are taken out of the manifest the page receives.
-  const withheld = ['chassis_brick', 'chassis_trike', 'chassis_platform'];
+  // have finished, two frames are taken out of the manifest the page receives.
+  const withheld = ['chassis_spider', 'chassis_trike'];
   await page.route('**/atlases/cars/manifest.json', async (route) => {
     const response = await route.fetch();
     const manifest = (await response.json()) as { chassis: Record<string, unknown> };
@@ -596,8 +609,8 @@ test('chassis without art are listed as "Art in progress" and cannot be picked',
       pending: c.classList.contains('is-pending'),
     })),
   );
-  // All twenty frames are listed; exactly the ones the atlas cannot draw are held back.
-  expect(all).toHaveLength(20);
+  // All five frames are listed; exactly the ones the atlas cannot draw are held back.
+  expect(all).toHaveLength(5);
   for (const entry of all) expect(entry.pending, entry.id).toBe(!drawable.includes(entry.id));
   for (const id of withheld) expect(all.find((entry) => entry.id === id)?.pending, id).toBe(true);
   const held = card(page, 'chassis_trike');
@@ -886,7 +899,8 @@ test('Quick Build on the home screen races a starter car straight away', async (
   await page.goto('/?debug=1');
   await page.getByRole('button', { name: 'Quick Build' }).tap();
   const sheet = page.getByRole('dialog', { name: 'Pick a starter and go' });
-  await expect(sheet.getByRole('article')).toHaveCount(4);
+  // One starter for each of the five chassis.
+  await expect(sheet.getByRole('article')).toHaveCount(5);
   await sheet.getByRole('button', { name: 'Race This Car: Sprinter' }).tap();
   await expect(page.locator('.hud')).toBeVisible({ timeout: 40_000 });
   expect(await stored(page)).toMatchObject({ name: 'Sprinter', chassisId: 'chassis_arrow' });
@@ -1039,7 +1053,7 @@ test('Browse All Parts shows the whole catalog, says why a part cannot go on, an
   await page.getByTestId('browse-all').scrollIntoViewIfNeeded();
   await page.getByTestId('browse-all').tap();
   await page.getByRole('tab', { name: 'Chassis' }).tap();
-  await expect(page.locator('.part-card')).toHaveCount(20);
+  await expect(page.locator('.part-card')).toHaveCount(5);
   // With the only mount it fits taken, a part offers to replace what is there.
   await page.getByRole('tab', { name: 'Weapons' }).tap();
   await expect(card(page, 'weapon_emp')).toContainText('Replaces Swivel Turret on Roof middle');
@@ -1064,14 +1078,14 @@ const TARGETS =
   '.g-coach-line button';
 
 type LayoutOptions = {
-  /** Portrait: the essentials row scrolls sideways, so its tiles may be off screen. */
+  /** Portrait: the mount tiles are a row under the car, not columns beside it. */
   portrait?: boolean;
 };
 
 async function assertLayout(page: Page, label: string, options: LayoutOptions = {}): Promise<void> {
-  // Let the car canvas finish drawing before its pixels are read.
+  // Let the car canvas finish drawing, and the view finish moving, before anything is read.
   await expect(page.locator('.g-car')).toBeVisible();
-  await page.waitForTimeout(150);
+  await page.waitForTimeout(240);
   const report = await page.evaluate(
     ({ fixed, targets, portrait }) => {
       const vw = window.innerWidth;
@@ -1175,7 +1189,52 @@ async function assertLayout(page: Page, label: string, options: LayoutOptions = 
           );
         if (!Number.isInteger(k) || k < 2) out.push(`car scale is ${k}`);
       } else out.push('no car canvas');
-      if (drawn) {
+      // Focus: the view has moved in on one slot. The car is then larger than the floor on
+      // purpose; what has to hold is that the selected mount is on the floor, clear of its
+      // edges and of every tile.
+      const focus = document.querySelector('.g-bench')!.getAttribute('data-focus');
+      const floorEl = document.querySelector<HTMLElement>('.g-floor')!;
+      if (focus) {
+        const [ax, ay] = (floorEl.dataset.anchor ?? '').split(',').map(Number) as [number, number];
+        if (!Number.isFinite(ax) || !Number.isFinite(ay)) out.push('focus without a target');
+        else {
+          if (ax < 16 || ay < 16 || ax > floorEl.clientWidth - 16 || ay > floorEl.clientHeight - 16)
+            out.push(`the focused mount is at the edge: ${ax},${ay}`);
+          const under = document
+            .elementsFromPoint(floor.left + 1 + ax, floor.top + 1 + ay)
+            .find((el) => el.closest('.slot-tile'));
+          if (under) out.push(`the focused mount is under ${name(under.closest('.slot-tile')!)}`);
+        }
+        const leaders = document.querySelectorAll('.leader').length;
+        if (!portrait && focus !== 'engine' && leaders !== 1)
+          out.push(`focus draws ${leaders} leaders`);
+      }
+      // The status line has its own place: it never lies over the car.
+      const statusEl = document.querySelector<HTMLElement>('[data-testid="garage-status"]');
+      if (!statusEl) out.push('no status line');
+      else if (drawn) {
+        const s = statusEl.getBoundingClientRect();
+        const left = Math.max(drawn.left, floor.left);
+        const right = Math.min(drawn.right, floor.right);
+        const top = Math.max(drawn.top, floor.top);
+        const bottom = Math.min(drawn.bottom, floor.bottom);
+        if (s.left < right && left < s.right && s.top < bottom && top < s.bottom)
+          out.push('the status line is over the car');
+        if (
+          s.left < floor.right &&
+          floor.left < s.right &&
+          s.top < floor.bottom &&
+          floor.top < s.bottom
+        )
+          out.push('the status line is on the workbench floor');
+      }
+      // Nothing on the workbench scrolls: every tile is where it is drawn.
+      if (document.querySelector('.g-column')) out.push('a scrolling tile column');
+      for (const el of Array.from(
+        document.querySelectorAll<HTMLElement>('.g-mount-row, .g-slot-row'),
+      ))
+        if (el.scrollWidth > el.clientWidth + 1) out.push(`a slot row scrolls: ${el.className}`);
+      if (drawn && !focus) {
         if (
           drawn.left < floor.left - 0.5 ||
           drawn.right > floor.right + 0.5 ||
@@ -1195,24 +1254,17 @@ async function assertLayout(page: Page, label: string, options: LayoutOptions = 
         b.left < a.right - 0.5 &&
         a.top < b.bottom - 0.5 &&
         b.top < a.bottom - 0.5;
-      // A tile in a scrolling column counts for the part of it that shows.
-      const shown = (el: HTMLElement): DOMRect | null => {
-        const box = el.getBoundingClientRect();
-        const column = el.closest('.g-column')?.getBoundingClientRect();
-        if (!column) return box;
-        const top = Math.max(box.top, column.top);
-        const bottom = Math.min(box.bottom, column.bottom);
-        return bottom > top ? new DOMRect(box.left, top, box.width, bottom - top) : null;
-      };
       tiles.forEach((el, i) => {
-        const box = shown(el);
-        if (!box) return;
-        if (drawn && hit(box, drawn)) out.push(`on the car: ${name(el)}`);
-        for (const other of tiles.slice(i + 1)) {
-          const second = shown(other);
-          if (second && hit(box, second)) out.push(`tiles overlap: ${name(el)} and ${name(other)}`);
-        }
+        const box = el.getBoundingClientRect();
+        // In focus the tiles stand at the edges over the enlarged car, by design.
+        if (drawn && !focus && hit(box, drawn)) out.push(`on the car: ${name(el)}`);
+        for (const other of tiles.slice(i + 1))
+          if (hit(box, other.getBoundingClientRect()))
+            out.push(`tiles overlap: ${name(el)} and ${name(other)}`);
       });
+      // Stats and View have their own place in the layout: never over the floor.
+      for (const el of Array.from(document.querySelectorAll<HTMLElement>('.g-bench-tools button')))
+        if (hit(el.getBoundingClientRect(), floor)) out.push(`on the floor: ${name(el)}`);
       return out;
     },
     { fixed: FIXED_CONTROLS, targets: TARGETS, portrait: options.portrait === true },
@@ -1265,16 +1317,40 @@ for (const size of [
     const floor = await page
       .locator('.g-floor')
       .evaluate((el) => ({ width: el.clientWidth, height: el.clientHeight }));
+    if (size.width === 870 && size.height === 370)
+      expect(floor).toEqual({ width: 461, height: 214 });
     if (size.width === 870 && size.height === 340)
       expect(floor).toEqual({ width: 462, height: 189 });
     if (size.width === 844) expect(floor).toEqual({ width: 447, height: 228 });
+    if (size.width === 667) expect(floor).toEqual({ width: 352, height: 219 });
+    // Every mount has its tile and its leader, and the essentials name what they hold on one
+    // line.
+    await expect(page.locator('.g-floor > .slot-tile')).toHaveCount(5);
+    await expect(page.locator('.leader')).toHaveCount(5);
+    for (const kind of ['chassis', 'engine', 'tires']) {
+      const lines = await tile(page, kind)
+        .locator('.slot-name')
+        .evaluate((el) => ({
+          text: el.textContent ?? '',
+          height: el.getBoundingClientRect().height,
+          wraps: getComputedStyle(el).whiteSpace,
+        }));
+      expect(lines.text.length, kind).toBeGreaterThan(1);
+      expect(lines.wraps, kind).toBe('nowrap');
+      expect(lines.height, kind).toBeLessThanOrEqual(26);
+      await expect(tile(page, kind).locator('.slot-label'), kind).toBeVisible();
+    }
 
     // A slot selected: its parts, and at least five whole rows of them.
     await tile(page, 'mount:roof_mid').tap();
     await assertLayout(page, 'slot list');
     expect(await visibleRows(page)).toBeGreaterThanOrEqual(size.rows);
+    // The engine list is the long one now: twenty engines, five chassis.
     await tile(page, 'chassis').tap();
     await assertLayout(page, 'chassis list');
+    await expect(page.locator('.part-card')).toHaveCount(5);
+    await tile(page, 'engine').tap();
+    await assertLayout(page, 'engine list');
     expect(await visibleRows(page)).toBeGreaterThanOrEqual(size.rows);
 
     // The list scrolls inside its panel; the page does not move.
@@ -1288,6 +1364,18 @@ for (const size of [
     await tile(page, 'mount:roof_mid').tap();
     await card(page, 'weapon_turret').tap();
     await assertLayout(page, 'compare pane');
+    // The compare pane is a two-column table that fits without scrolling on any phone 370
+    // pixels tall or more, the 667 x 375 one included.
+    if (size.height >= 370) {
+      const pane = await page
+        .locator('.g-detail .g-pane-body')
+        .evaluate((el) => ({ content: el.scrollHeight, room: el.clientHeight }));
+      expect(pane.content, 'the compare pane scrolls').toBeLessThanOrEqual(pane.room + 1);
+      await expect(page.locator('.g-detail .cmp-row')).toHaveCount(10);
+      for (const id of ['score-speed', 'score-firepower'])
+        await expect(page.locator('.g-detail').getByTestId(id)).toBeInViewport({ ratio: 1 });
+      await expect(page.getByTestId('install')).toBeInViewport({ ratio: 1 });
+    }
     const before = await page.locator('.g-floor').boundingBox();
     await page.getByTestId('install').tap();
     const tools = page.getByRole('region', { name: 'Selected part' });
@@ -1324,41 +1412,40 @@ for (const size of [
   });
 }
 
-/** Frames with many mounts: the Crab filled as far as 1,000 credits go, and the ten-mount Platform. */
-const CRAB: PartSpec[] = [
-  ['weapon_front_mg', 'left_front', { rotationQuarterTurns: 3, assignedActionSlot: 0 }],
-  ['weapon_rear_mg', 'left_mid', { rotationQuarterTurns: 3 }],
-  ['weapon_shotgun', 'left_rear', { rotationQuarterTurns: 3 }],
-  ['weapon_foam', 'right_front', { rotationQuarterTurns: 1, assignedActionSlot: 1 }],
-  ['weapon_air', 'right_mid', { rotationQuarterTurns: 1 }],
-  ['weapon_tesla', 'right_rear'],
-  ['utility_spare', 'roof_front'],
+/** The two frames with the most mounts: the eight-mount Spider and the Pickup with its rack. */
+const SPIDER: PartSpec[] = [
+  ['utility_minesensor', 'front_utility'],
+  ['weapon_front_mg', 'left_front', { assignedActionSlot: 0 }],
+  ['weapon_tesla', 'right_front'],
+  ['utility_radar', 'roof_front'],
+  ['utility_spare', 'roof_mid'],
+  ['weapon_rear_mg', 'left_rear'],
+  ['utility_repair', 'rear_utility'],
 ];
-const PLATFORM: PartSpec[] = [
-  ['weapon_mine', 'deck_fore', { assignedActionSlot: 1 }],
-  ['weapon_oil', 'deck_front', { assignedActionSlot: 0 }],
-  ['weapon_rear_mg', 'left_edge_front', { rotationQuarterTurns: 3 }],
-  ['utility_radar', 'left_edge_mid'],
-  ['utility_minesensor', 'left_edge_rear'],
-  ['weapon_tesla', 'right_edge_front'],
-  ['utility_fan', 'right_edge_mid'],
-  ['defense_heatguard', 'right_edge_rear'],
+const PICKUP: PartSpec[] = [
+  ['utility_radar', 'roof_cab'],
+  ['utility_repair', 'bed_front', { offsetX: -5 }],
+  ['utility_battery', 'bed_front', { offsetX: 5 }],
+  ['weapon_rear_mg', 'left_bed', { rotationQuarterTurns: 2 }],
+  ['utility_fan', 'right_bed'],
+  ['weapon_mortar', 'bed_rear', { autoMode: true }],
+  ['defense_rear_bumper', 'rear_center'],
 ];
 
 for (const frame of [
   {
-    name: 'Crab',
-    chassisId: 'chassis_crab',
+    name: 'Spider',
+    chassisId: 'chassis_spider',
     engineId: 'engine_four_cylinder',
-    parts: CRAB,
+    parts: SPIDER,
     mounts: 8,
   },
   {
-    name: 'Platform',
-    chassisId: 'chassis_platform',
-    engineId: 'engine_v6',
-    parts: PLATFORM,
-    mounts: 10,
+    name: 'Pickup',
+    chassisId: 'chassis_pickup',
+    engineId: 'engine_four_cylinder',
+    parts: PICKUP,
+    mounts: 6,
   },
 ]) {
   test(`every slot of a loaded ${frame.name} has its own tile, clear of the car, on every phone`, async ({
@@ -1388,33 +1475,368 @@ for (const frame of [
       const where = `${size.width} x ${size.height}`;
       await expect(ready(page), where).toHaveAttribute('aria-disabled', 'false');
       await expect(page.locator('.slot-tile[data-mount]'), where).toHaveCount(frame.mounts);
-      await expect(occupied(page), where).toHaveCount(frame.parts.length);
-      const scrolls = (await page.locator('.g-floor').getAttribute('data-scroll')) === 'true';
-      // Only the ten-mount frame on the narrowest phone needs its columns to scroll.
-      expect(scrolls, where).toBe(frame.mounts > 8 && size.width < 700);
-      if (!scrolls) await expect(page.locator('.leader'), where).toHaveCount(frame.mounts);
+      // One tile for each mount that holds something (two parts share the Pickup's rack).
+      const firstOn = new Map<string, string>();
+      for (const [partId, mountId] of frame.parts)
+        if (!firstOn.has(mountId)) firstOn.set(mountId, partId);
+      await expect(occupied(page), where).toHaveCount(firstOn.size);
+      // Nothing scrolls at any size: every mount has its tile and its leader.
+      await expect(page.locator('.g-column'), where).toHaveCount(0);
+      await expect(page.locator('.leader'), where).toHaveCount(frame.mounts);
       for (let turn = 0; turn < 4; turn++) {
         await assertLayout(page, `${where}, view ${turn}`);
         await page.getByRole('button', { name: 'Rotate view' }).tap();
       }
-      // Every tile can be reached and selects its own part.
-      for (const [partId, mountId] of frame.parts) {
+      // Every tile can be reached and selects its own part, and the view moves in on it.
+      const overview = Number(await page.locator('.g-bench').getAttribute('data-scale'));
+      for (const [mountId, partId] of firstOn) {
         const slot = tile(page, `mount:${mountId}`);
-        await slot.scrollIntoViewIfNeeded();
         await slot.tap();
+        await expect(page.locator('.g-bench'), `${where} ${mountId}`).toHaveAttribute(
+          'data-focus',
+          mountId,
+        );
+        expect(
+          Number(await page.locator('.g-bench').getAttribute('data-scale')),
+          `${where} ${mountId}`,
+        ).toBeGreaterThan(overview);
+        await assertLayout(page, `${where}, focus on ${mountId}`);
         await expect(slot, `${where} ${mountId}`).toHaveAttribute('aria-pressed', 'true');
         await expect(page.locator('.g-tools'), `${where} ${mountId}`).toHaveAttribute(
           'data-instance',
           /.+/,
         );
-        await expect(slot).toHaveAttribute('data-part', partId);
+        // A shared rack shows whichever of its parts is first in canonical order.
+        const onMount = frame.parts.filter(([, id]) => id === mountId).map(([id]) => id);
+        expect(onMount, `${where} ${mountId}`).toContain(await slot.getAttribute('data-part'));
+        expect(onMount, `${where} ${mountId}`).toContain(partId);
       }
       await assertLayout(page, `${where}, a part selected`);
     }
   });
 }
 
-test('portrait: the car is a strip, the slots are one row, and six parts show', async ({
+/** The scale the car is really drawn at: CSS pixels per sprite pixel of its canvas. */
+async function drawnScale(page: Page): Promise<number> {
+  // Rounded to a thousandth: while the view is still easing, a transformed box is reported
+  // with float noise in the seventh decimal.
+  return page.locator('.g-car canvas').evaluate((el) => {
+    const k = el.getBoundingClientRect().width / (el as HTMLCanvasElement).width;
+    return Math.round(k * 1000) / 1000;
+  });
+}
+
+test('focus mode at 870 x 370: every slot of all five chassis moves the view in, and Whole Car, Escape and the floor go back', async ({
+  page,
+}) => {
+  test.slow();
+  await skipTips(page);
+  await page.setViewportSize({ width: 870, height: 370 });
+  await page.goto('/?debug=1');
+  const bench = page.locator('.g-bench');
+  const chassis: Array<[id: string, engine: string, mounts: string[]]> = [
+    [
+      'chassis_beetle',
+      'engine_four_cylinder',
+      ['front_center', 'roof_mid', 'left_utility', 'right_utility', 'rear_center'],
+    ],
+    [
+      'chassis_arrow',
+      'engine_four_cylinder',
+      ['front_center', 'roof_mid', 'roof_rear', 'rear_center'],
+    ],
+    [
+      'chassis_pickup',
+      'engine_four_cylinder',
+      ['roof_cab', 'bed_front', 'left_bed', 'right_bed', 'bed_rear', 'rear_center'],
+    ],
+    [
+      'chassis_spider',
+      'engine_four_cylinder',
+      [
+        'front_utility',
+        'left_front',
+        'right_front',
+        'roof_front',
+        'roof_mid',
+        'left_rear',
+        'right_rear',
+        'rear_utility',
+      ],
+    ],
+    [
+      'chassis_trike',
+      'engine_mini_electric',
+      ['front_center', 'roof_mid', 'left_rear', 'right_rear'],
+    ],
+  ];
+  for (const [chassisId, engineId, mounts] of chassis) {
+    await seedLastBuild(page, await blueprint(page, 'Focus', { chassisId, engineId }, []));
+    await openGarage(page);
+    await expect(ready(page), chassisId).toHaveAttribute('aria-disabled', 'false');
+    // The overview: the whole car, a tile and a leader for every mount, nothing scrolling.
+    await assertLayout(page, `${chassisId} overview`);
+    await expect(page.locator('.g-floor > .slot-tile'), chassisId).toHaveCount(mounts.length);
+    await expect(page.locator('.leader'), chassisId).toHaveCount(mounts.length);
+    await expect(bench).not.toHaveAttribute('data-focus', /.+/);
+    const overview = await drawnScale(page);
+    expect(Number.isInteger(overview), chassisId).toBe(true);
+    expect(overview, chassisId).toBe(Number(await bench.getAttribute('data-scale')));
+    // Three times on this phone for every chassis, the wide Spider included.
+    expect(overview, chassisId).toBeGreaterThanOrEqual(3);
+
+    for (const mountId of mounts) {
+      const at = `${chassisId} ${mountId}`;
+      await tile(page, `mount:${mountId}`).tap();
+      await expect(bench, at).toHaveAttribute('data-focus', mountId);
+      // The car is drawn larger, by whole steps, and the mount is on the floor, inside its
+      // edges and under no tile (assertLayout checks the last three and the status line).
+      const focused = await drawnScale(page);
+      expect(focused % 1, `${at} scale ${focused}`).toBe(0);
+      expect(focused, at).toBeGreaterThanOrEqual(overview + 1);
+      expect(focused, at).toBeLessThanOrEqual(overview + 2);
+      await assertLayout(page, `${at} focus`);
+      // The empty slot is a dashed socket in the middle of the view, clear of every tile.
+      await expect(page.locator('.g-car .socket.is-select'), at).toHaveCount(1);
+      const clear = await page.evaluate(() => {
+        const socket = document.querySelector('.g-car .socket.is-select')!.getBoundingClientRect();
+        const floor = document.querySelector('.g-floor')!.getBoundingClientRect();
+        const tiles = Array.from(document.querySelectorAll('.g-floor > .slot-tile'));
+        return {
+          inside:
+            socket.left >= floor.left &&
+            socket.right <= floor.right &&
+            socket.top >= floor.top &&
+            socket.bottom <= floor.bottom,
+          covered: tiles.filter((t) => {
+            const b = t.getBoundingClientRect();
+            return (
+              b.left < socket.right &&
+              socket.left < b.right &&
+              b.top < socket.bottom &&
+              socket.top < b.bottom
+            );
+          }).length,
+          tiles: tiles.map((t) => {
+            const b = t.getBoundingClientRect();
+            return Math.min(b.width, b.height);
+          }),
+        };
+      });
+      expect(clear.inside, `${at} socket on the floor`).toBe(true);
+      expect(clear.covered, `${at} socket under a tile`).toBe(0);
+      // Every other slot is still one tap away, on a tile of 44 pixels or more.
+      expect(clear.tiles, at).toHaveLength(mounts.length);
+      expect(Math.min(...clear.tiles), at).toBeGreaterThanOrEqual(44);
+    }
+
+    // Whole Car restores the overview exactly.
+    await page.getByRole('button', { name: 'Whole Car' }).tap();
+    await expect(bench, chassisId).not.toHaveAttribute('data-focus', /.+/);
+    expect(await drawnScale(page), chassisId).toBe(overview);
+    await expect(page.locator('.leader'), chassisId).toHaveCount(mounts.length);
+    await assertLayout(page, `${chassisId} back to the overview`);
+    // So does Escape.
+    await tile(page, `mount:${mounts[0]}`).tap();
+    await expect(bench).toHaveAttribute('data-focus', mounts[0]!);
+    await page.keyboard.press('Escape');
+    await expect(bench, chassisId).not.toHaveAttribute('data-focus', /.+/);
+    expect(await drawnScale(page), chassisId).toBe(overview);
+    // The engine has a focus of its own; the chassis and the wheels show the whole car.
+    await tile(page, 'engine').tap();
+    await expect(bench).toHaveAttribute('data-focus', 'engine');
+    expect(await drawnScale(page), `${chassisId} engine`).toBeGreaterThan(overview);
+    await expect(page.getByTestId('engine-socket')).toHaveCount(1);
+    await assertLayout(page, `${chassisId} engine focus`);
+    for (const kind of ['chassis', 'tires']) {
+      await tile(page, kind).tap();
+      await expect(bench, kind).not.toHaveAttribute('data-focus', /.+/);
+      expect(await drawnScale(page), `${chassisId} ${kind}`).toBe(overview);
+    }
+    await page.getByRole('button', { name: 'Whole Car' }).tap();
+    await expect(page.getByTestId('car-panel')).toBeVisible();
+  }
+
+  // A tap on the bare floor beside the car goes back too (the Trike leaves floor to tap).
+  await tile(page, 'mount:roof_mid').tap();
+  await expect(bench).toHaveAttribute('data-focus', 'roof_mid');
+  const spot = await page.evaluate(() => {
+    const floorEl = document.querySelector<HTMLElement>('.g-floor')!;
+    const floor = floorEl.getBoundingClientRect();
+    const [left, top, right, bottom] = (floorEl.dataset.carBox ?? '').split(',').map(Number) as [
+      number,
+      number,
+      number,
+      number,
+    ];
+    // The first bare point of the floor: off the car's box and off every tile.
+    for (let y = 6; y < floor.height - 6; y += 6)
+      for (let x = 6; x < floor.width - 6; x += 6) {
+        if (x >= left - 2 && x <= right + 2 && y >= top - 2 && y <= bottom + 2) continue;
+        if (document.elementFromPoint(floor.left + x, floor.top + y) === floorEl)
+          return { x: floor.left + x, y: floor.top + y };
+      }
+    return null;
+  });
+  expect(spot, 'some bare floor in focus').not.toBeNull();
+  await page.touchscreen.tap(spot!.x, spot!.y);
+  await expect(bench).not.toHaveAttribute('data-focus', /.+/);
+});
+
+test('in focus a part is positioned in plain sight: nudges and turns show on the car', async ({
+  page,
+}) => {
+  await skipTips(page);
+  await page.setViewportSize({ width: 870, height: 370 });
+  await openGarage(page);
+  await slotBuy(page, 'mount:roof_mid', 'weapon_front_mg');
+  const bench = page.locator('.g-bench');
+  await expect(bench).toHaveAttribute('data-focus', 'roof_mid');
+  const scale = await drawnScale(page);
+  expect(scale).toBeGreaterThanOrEqual(4);
+  // The part keeps its gold outline, with the room it has drawn thin under it and a chevron
+  // for the way it faces.
+  const grab = page.getByTestId('part-grab');
+  const mark = page.getByTestId('part-facing-mark').locator('.facing-line');
+  await expect(grab).toHaveCount(1);
+  await expect(page.locator('.g-car .socket.is-room')).toHaveCount(1);
+  await expect(mark).toHaveCount(1);
+  const centre = async () => {
+    const box = (await grab.boundingBox())!;
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  };
+  const start = await centre();
+  const car = (await page.locator('.g-car').boundingBox())!;
+  // One step forward is one sprite pixel: a whole `scale` CSS pixels on screen. The view
+  // itself does not move, so the part is seen to move against the car.
+  await page.getByRole('button', { name: 'Move forward' }).tap();
+  await expect(page.getByTestId('part-offset')).toHaveText('0, -1');
+  const once = await centre();
+  expect(Math.hypot(once.x - start.x, once.y - start.y)).toBeGreaterThanOrEqual(scale * 0.8);
+  expect(Math.hypot(once.x - start.x, once.y - start.y)).toBeLessThanOrEqual(scale * 1.3);
+  await page.getByRole('button', { name: 'Move forward' }).tap();
+  await expect(page.getByTestId('part-offset')).toHaveText('0, -2');
+  const twice = await centre();
+  expect(Math.hypot(twice.x - start.x, twice.y - start.y)).toBeGreaterThanOrEqual(scale * 1.6);
+  expect((await page.locator('.g-car').boundingBox())!).toEqual(car);
+  // The arrow keys on the slot tile do the same.
+  await tile(page, 'mount:roof_mid').focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('part-offset')).toHaveText('0, -1');
+  // Turning the part turns the chevron.
+  const facing = await mark.getAttribute('points');
+  await page.getByTestId('rotate-part').tap();
+  await expect(page.getByTestId('part-facing')).toHaveText('Facing right');
+  await expect(mark).not.toHaveAttribute('points', facing!);
+  // The rotate-view control keeps the view on the part.
+  const view = await bench.getAttribute('data-view');
+  await page.getByRole('button', { name: 'Rotate view' }).tap();
+  await expect(bench).not.toHaveAttribute('data-view', view!);
+  await expect(bench).toHaveAttribute('data-focus', 'roof_mid');
+  await assertLayout(page, 'focus, part nudged and turned, view rotated');
+});
+
+test('the idle Your Car panel shows scores, indicators, a derived summary and tappable equipment', async ({
+  page,
+}) => {
+  await skipTips(page);
+  await page.setViewportSize({ width: 870, height: 370 });
+  await openGarage(page);
+  const panel = page.getByTestId('car-panel');
+  // The stock Beetle: Speed 66, Control 69, nothing else to speak of.
+  await expect(panel.getByTestId('score-speed')).toContainText('66');
+  await expect(panel.getByTestId('score-control')).toContainText('69');
+  await expect(panel.locator('.g-state')).toHaveCount(5);
+  for (const key of ['budget', 'load', 'energy', 'heat', 'stability'])
+    await expect(panel.locator(`.g-state[data-state="${key}"]`)).toHaveAttribute(
+      'data-status',
+      'ok',
+    );
+  const summary = panel.getByTestId('car-summary');
+  await expect(summary).toContainText('Strongest: Control 69 and Speed 66.');
+  await expect(summary).toContainText('Weakest: Utility 0.');
+  await expect(panel).toContainText('0 of 5 mounts used');
+  await expect(panel).toContainText('Nothing mounted yet. Tap a slot to see what fits.');
+  await assertLayout(page, 'idle panel, empty');
+  // An indicator opens its working.
+  await panel.locator('.g-state[data-state="heat"]').tap();
+  await expect(page.getByRole('dialog', { name: 'Heat' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close' }).tap();
+
+  // Mount two things: the summary follows the numbers, and each row opens its slot.
+  await slotBuy(page, 'mount:roof_mid', 'weapon_turret');
+  await slotBuy(page, 'mount:left_utility', 'utility_repair');
+  await page.getByRole('button', { name: 'Whole Car' }).tap();
+  await expect(panel).toContainText('2 of 5 mounts used');
+  const firepower = (await panel.getByTestId('score-firepower').locator('dd').textContent())!;
+  expect(Number(firepower)).toBeGreaterThan(20);
+  await expect(summary).toContainText('Strongest: Control');
+  const rows = panel.locator('.g-equipment-row');
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(1)).toContainText('Swivel Turret');
+  await expect(rows.nth(1)).toContainText('Roof middle');
+  await assertLayout(page, 'idle panel, equipped');
+  await panel.getByRole('button', { name: 'Swivel Turret on Roof middle. Open this slot.' }).tap();
+  await expect(page.locator('.g-bench')).toHaveAttribute('data-focus', 'roof_mid');
+  await expect(page.getByRole('region', { name: 'Selected part' })).toContainText('Swivel Turret');
+});
+
+test('a saved car on a retired chassis is flagged, not broken, and Repair Build rebuilds it on the Beetle', async ({
+  page,
+}) => {
+  const problems = collectProblems(page);
+  await skipTips(page);
+  await page.goto('/?debug=1');
+  // A Turtle saved under the old catalog, as a returning player's browser would hold it.
+  const old = await blueprint(
+    page,
+    'Old Bulldog',
+    { chassisId: 'chassis_turtle', engineId: 'engine_v6', tireKitId: 'tires_hard' },
+    [
+      ['defense_front_bumper', 'front_center'],
+      ['weapon_rear_mg', 'rear_center', { rotationQuarterTurns: 2 }],
+      ['defense_side_panels', 'left_mid'],
+    ],
+    '0.3.0',
+  );
+  await page.evaluate((json) => {
+    window.localStorage.setItem(
+      'bolt.blueprints.v1',
+      JSON.stringify({
+        version: 1,
+        items: [{ id: 'bold', savedAt: '2026-10-09T08:00:00.000Z', blueprint: JSON.parse(json) }],
+      }),
+    );
+    // The same car as the last build raced: it must not be restored as the current car.
+    window.localStorage.setItem('bolt.blueprint.v1', json);
+  }, JSON.stringify(old));
+  await page.goto('/?debug=1');
+  await page.getByRole('button', { name: 'My Blueprints' }).tap();
+  const saved = page.getByRole('article', { name: 'Old Bulldog' });
+  await expect(saved).toBeVisible();
+  await expect(saved).toContainText('This build uses older part values. Review it before racing.');
+  await expect(saved).toContainText('Retired frame');
+  await expect(saved).not.toContainText('Art in progress');
+  await expect(saved.getByRole('button', { name: 'Use', exact: true })).toHaveCount(0);
+  await saved.getByRole('button', { name: 'Repair Build' }).tap();
+  await expect(page.locator('.bp-message')).toContainText(
+    'That frame is retired. Rebuilt on the Beetle. Removed and refunded: Side Shields.',
+  );
+  await expect(saved).toContainText('Beetle');
+  await expect(saved).not.toContainText('older part values');
+  await saved.getByRole('button', { name: 'Use', exact: true }).tap();
+  const car = await stored(page);
+  expect(car).toMatchObject({
+    name: 'Old Bulldog',
+    chassisId: 'chassis_beetle',
+    engineId: 'engine_v6',
+    tireKitId: 'tires_hard',
+  });
+  expect(car.parts.map((p) => p.partId).sort()).toEqual(['defense_front_bumper', 'weapon_rear_mg']);
+  expect(problems).toEqual([]);
+});
+
+test('portrait: the car is a strip, the slots are rows under it, and five parts show', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 450, height: 840 });
@@ -1423,15 +1845,16 @@ test('portrait: the car is a strip, the slots are one row, and six parts show', 
   await expect(page.getByTestId('credits-left')).toBeInViewport({ ratio: 1 });
   await expect(page.locator('.g-car canvas')).toBeInViewport({ ratio: 0.6 });
   await assertLayout(page, 'first visit', { portrait: true });
-  // The car takes about thirty percent of the height; no leaders, no tiles around it.
+  // The car takes a little under thirty percent of the height; no leaders, no tiles around it.
   const floor = (await page.locator('.g-floor').boundingBox())!;
   expect(floor.height / 840).toBeGreaterThan(0.26);
   expect(floor.height / 840).toBeLessThan(0.34);
   await expect(page.locator('.leader')).toHaveCount(0);
   await expect(page.locator('.g-floor > .slot-tile')).toHaveCount(0);
-  // One row: the mounts in car order, then Chassis, Engine and Wheels.
+  // Two rows under the car, nothing to scroll: the mounts in car order, then Chassis, Engine
+  // and Wheels with the names of what they hold.
   const order = await page
-    .locator('.g-slot-row .slot-tile')
+    .locator('.g-mount-row .slot-tile, .g-slot-row .slot-tile')
     .evaluateAll((tiles) => tiles.map((t) => t.getAttribute('data-slot')));
   expect(order).toEqual([
     'mount:front_center',
@@ -1443,24 +1866,53 @@ test('portrait: the car is a strip, the slots are one row, and six parts show', 
     'engine',
     'tires',
   ]);
-  const tops = await page
-    .locator('.g-slot-row .slot-tile')
-    .evaluateAll((tiles) => tiles.map((t) => Math.round(t.getBoundingClientRect().top)));
-  expect(new Set(tops).size).toBe(1);
+  for (const row of ['.g-mount-row', '.g-slot-row']) {
+    const tops = await page
+      .locator(`${row} .slot-tile`)
+      .evaluateAll((tiles) => tiles.map((t) => Math.round(t.getBoundingClientRect().top)));
+    expect(new Set(tops).size, row).toBe(1);
+    await expect(page.locator(`${row} .slot-tile`).last()).toBeInViewport({ ratio: 1 });
+  }
+  await expect(tile(page, 'engine').locator('.slot-name')).toHaveText('Four-Cylinder');
+  // Stats and View are in a column of their own beside the car, never over it, and the
+  // status line has a row of its own under the slots.
+  const strip = (await page.locator('.g-floor').boundingBox())!;
+  for (const name of ['Car Stats', 'Rotate view']) {
+    const box = (await page.getByRole('button', { name }).boundingBox())!;
+    expect(box.x, name).toBeGreaterThanOrEqual(strip.x + strip.width);
+    expect(box.height, name).toBeGreaterThanOrEqual(48);
+  }
+  const line = (await status(page).boundingBox())!;
+  expect(line.y).toBeGreaterThanOrEqual(strip.y + strip.height);
+  // The strip is the size the unit-tested layout is checked at (`portraitFloor`).
+  expect(
+    await page
+      .locator('.g-floor')
+      .evaluate((el) => ({ width: el.clientWidth, height: el.clientHeight })),
+  ).toEqual({ width: 389, height: 237 });
   // The first-build tips are one line: the current step, the starter car and Skip.
   const coach = page.getByRole('complementary', { name: 'First build' });
   expect((await coach.boundingBox())!.height).toBeLessThanOrEqual(52);
   await expect(coach.getByRole('button', { name: /Pick a chassis/ })).toBeVisible();
   await expect(coach.getByRole('button', { name: 'Use Starter Car' })).toBeVisible();
 
-  // With the tips still up, a selected slot shows six whole rows.
+  // With the tips still up, a selected slot shows five whole rows, and the view has moved in.
+  const overview = Number(await page.locator('.g-bench').getAttribute('data-scale'));
   await tile(page, 'mount:roof_mid').tap();
   await expect(page.locator('.g-car .socket')).toHaveCount(1);
-  expect(await visibleRows(page)).toBeGreaterThanOrEqual(6);
+  await expect(page.locator('.g-bench')).toHaveAttribute('data-focus', 'roof_mid');
+  expect(Number(await page.locator('.g-bench').getAttribute('data-scale'))).toBeGreaterThan(
+    overview,
+  );
+  expect(await visibleRows(page)).toBeGreaterThanOrEqual(5);
   await coach.getByRole('button', { name: 'Skip tips' }).tap();
   await expect(coach).toHaveCount(0);
   await assertLayout(page, 'slot list', { portrait: true });
-  expect(await visibleRows(page)).toBeGreaterThanOrEqual(6);
+  expect(await visibleRows(page)).toBeGreaterThanOrEqual(5);
+  await page.getByRole('button', { name: 'Whole Car' }).tap();
+  await expect(page.locator('.g-bench')).not.toHaveAttribute('data-focus', /.+/);
+  expect(Number(await page.locator('.g-bench').getAttribute('data-scale'))).toBe(overview);
+  await tile(page, 'mount:roof_mid').tap();
   // The gauges are one thin row directly above Ready.
   const gauges = (await page.locator('.g-bottom').boundingBox())!;
   const readyBox = (await ready(page).boundingBox())!;
@@ -1468,12 +1920,10 @@ test('portrait: the car is a strip, the slots are one row, and six parts show', 
   expect(readyBox.y - (gauges.y + gauges.height)).toBeLessThan(10);
   expect(readyBox.width).toBeGreaterThan(400);
 
-  // The essentials are at the end of the row and scroll into reach.
-  await tile(page, 'tires').scrollIntoViewIfNeeded();
+  // The essentials are in reach without scrolling.
   await tile(page, 'tires').tap();
   await expect(page.getByRole('region', { name: 'Wheels' })).toBeVisible();
-  expect(await visibleRows(page)).toBeGreaterThanOrEqual(6);
-  await tile(page, 'mount:front_center').scrollIntoViewIfNeeded();
+  expect(await visibleRows(page)).toBeGreaterThanOrEqual(5);
   await slotBuy(page, 'mount:front_center', 'weapon_front_mg');
   await expect.poll(() => credits(page)).toBe(560);
   await assertLayout(page, 'part card', { portrait: true });

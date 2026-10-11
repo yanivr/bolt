@@ -11,7 +11,7 @@ import type {
 import { PROTOCOL_VERSION, STARTING_CREDITS } from '@bolt/shared';
 
 /**
- * The current content manifest and balance version (Section 15.7): all 120 parts with every
+ * The current content manifest and balance version (Section 15.7): all 105 parts with every
  * field the rules use, the paints and the shipped blueprints. The client bundles the same
  * data; this route is what lets a tool or a stale client see what the server will accept.
  */

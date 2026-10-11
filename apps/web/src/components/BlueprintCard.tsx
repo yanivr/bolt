@@ -32,7 +32,10 @@ export function isDrawable(manifests: GameManifests, blueprint: VehicleBlueprint
 export function BlueprintCard({ manifests, blueprint, note, warning, tag, children }: Props) {
   const drawable = isDrawable(manifests, blueprint);
   const cost = blueprintCost(blueprint, CATALOG).total;
-  const chassis = CATALOG.chassis[blueprint.chassisId]?.displayName ?? '';
+  // A chassis the catalog no longer has (a retired frame) is not "art in progress": the
+  // card says so and the flag line offers the repair.
+  const known = CATALOG.chassis[blueprint.chassisId];
+  const chassis = known?.displayName ?? STRINGS.blueprints.retiredFrame;
   return (
     <article className="panel bp-card" aria-label={blueprint.name}>
       <div className="bp-thumb">
@@ -57,7 +60,7 @@ export function BlueprintCard({ manifests, blueprint, note, warning, tag, childr
           <span>{chassis}</span>
         </p>
         {note && <p className="bp-note">{note}</p>}
-        {!drawable && (
+        {!drawable && known && (
           <p className="bp-flag">
             <Glyph name="warn" size={12} />
             {STRINGS.blueprints.artPending}

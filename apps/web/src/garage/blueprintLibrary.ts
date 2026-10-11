@@ -1,9 +1,11 @@
+import { DEFAULT_LOADOUT } from '@bolt/content';
 import type { BlueprintIssue, Catalog, RemovedPart, VehicleBlueprint } from '@bolt/shared';
 import {
   MAX_BLUEPRINT_NAME_LENGTH,
   blueprintSchema,
   buildHash,
   canonicalizeBlueprint,
+  own,
   repairBlueprint,
   sanitizeBlueprintName,
   validateBlueprint,
@@ -16,7 +18,8 @@ import {
  * Everything read back is untrusted: an older build wrote it, or the player edited it. Each
  * entry goes through the strict blueprint schema and then the validator. An entry that is
  * not a blueprint at all is dropped. An entry that is a blueprint but no longer legal (a
- * balance patch moved a price, say) is kept and flagged, so the player can repair it.
+ * balance patch moved a price, or its chassis was retired) is kept and flagged, so the
+ * player can repair it. A car on a retired chassis is rebuilt on the Beetle.
  */
 
 export const LIBRARY_KEY = 'bolt.blueprints.v1';
@@ -231,14 +234,26 @@ export function deleteSaved(entries: readonly LibraryEntry[], id: string): Libra
   return entries.filter((e) => e.id !== id);
 }
 
+/** The frame a saved car is rebuilt on when its own chassis has left the catalog. */
+export const REPAIR_CHASSIS_ID = DEFAULT_LOADOUT.chassisId;
+
 export type LibraryRepair =
-  | { ok: true; entries: LibraryEntry[]; entry: LibraryEntry; removed: RemovedPart[] }
+  | {
+      ok: true;
+      entries: LibraryEntry[];
+      entry: LibraryEntry;
+      removed: RemovedPart[];
+      /** Set when the saved chassis was retired and the car was moved to this one. */
+      rebuiltOn: string | null;
+    }
   | { ok: false; entries: LibraryEntry[] };
 
 /**
  * Runs the Section 15.6 auto-repair on a flagged card and stores the result in its place:
  * the build is re-stamped for the current catalog and optional parts come off, priciest
- * first, until it is legal. What was removed is reported, never hidden.
+ * first, until it is legal. A car whose chassis has been retired is moved onto the Beetle,
+ * keeping its engine, wheel kit and every part that still fits. What was removed is reported,
+ * never hidden.
  */
 export function repairSaved(
   entries: readonly LibraryEntry[],
@@ -249,9 +264,18 @@ export function repairSaved(
   const at = list.findIndex((e) => e.id === id);
   const source = list[at];
   if (!source) return { ok: false, entries: list };
-  const result = repairBlueprint(source.blueprint, catalog);
+  const retired = !own(catalog.chassis, source.blueprint.chassisId);
+  const result = repairBlueprint(source.blueprint, catalog, {
+    fallbackChassisId: REPAIR_CHASSIS_ID,
+  });
   if (!result.ok) return { ok: false, entries: list };
   const repaired = entry({ ...source, blueprint: result.blueprint }, catalog);
   list[at] = repaired;
-  return { ok: true, entries: list, entry: repaired, removed: result.removed };
+  return {
+    ok: true,
+    entries: list,
+    entry: repaired,
+    removed: result.removed,
+    rebuiltOn: retired ? result.blueprint.chassisId : null,
+  };
 }

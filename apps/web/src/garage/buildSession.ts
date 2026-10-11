@@ -617,7 +617,9 @@ export function reset(session: GarageSession, catalog: Catalog): GarageSession {
 /** The explicit auto-repair for a draft that is not legal, as one undo step. */
 export function repair(session: GarageSession, catalog: Catalog): GarageSession {
   if (!building(session)) return session;
-  const result = repairBlueprint(currentBlueprint(session), catalog);
+  const result = repairBlueprint(currentBlueprint(session), catalog, {
+    fallbackChassisId: BASELINE_BLUEPRINT.chassisId,
+  });
   if (!result.ok)
     return { ...session, notice: note(session, 'error', STRINGS.garage.cannotRepair) };
   const names = listNames(result.removed.map((r) => partName(catalog, r.instance.partId)));

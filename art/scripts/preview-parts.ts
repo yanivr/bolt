@@ -13,7 +13,8 @@ import {
   rotatedFootprint,
 } from '@bolt/shared';
 import { BEETLE_ART } from './cars/beetle.js';
-import { SPIDER_ART, TURTLE_ART } from './cars/benchmarks.js';
+import { SPIDER_ART } from './cars/benchmarks.js';
+import { PICKUP_ART } from './cars/chassis/pickup.js';
 import { FOUR_CYLINDER_ART } from './cars/engines.js';
 import { ALL_PART_ART } from './cars/registry-parts.js';
 import type { ChassisArt, PartArt } from './cars/types.js';
@@ -86,7 +87,7 @@ function icon(model: Model, size: number): PixelBuffer {
 // --- Cars --------------------------------------------------------------------------------------
 
 type Car = { art: ChassisArt; def: ChassisDefinition };
-const CARS: Car[] = [BEETLE_ART, TURTLE_ART, SPIDER_ART].map((art) => ({
+const CARS: Car[] = [BEETLE_ART, PICKUP_ART, SPIDER_ART].map((art) => ({
   art,
   def: CHASSIS[art.id]!,
 }));
@@ -237,10 +238,10 @@ function placeOn(
       }
     }
   }
-  // Nothing on the three benchmark cars is big enough (the mortar): show it on the Turtle roof.
+  // Nothing matched by category: show it on the Pickup's open bed, which takes any part.
   if (!prefer) {
     const car = CARS[1]!;
-    const mount = car.def.mounts.find((m) => m.id === 'roof_mid')!;
+    const mount = car.def.mounts.find((m) => m.id === 'bed_rear')!;
     return {
       car,
       mount,
@@ -511,14 +512,13 @@ function main(): void {
       { part: 'utility_spare', mount: 'left_utility' },
       { part: 'utility_nitro', mount: 'right_utility' },
     ]);
-    loadedCar('turtle', 'chassis_turtle', [
-      { part: 'defense_front_bumper', mount: 'front_center' },
-      { part: 'utility_radar', mount: 'roof_front' },
-      { part: 'weapon_turret', mount: 'roof_mid' },
-      { part: 'utility_spoiler', mount: 'roof_rear' },
-      { part: 'defense_side_panels', mount: 'left_mid' },
-      { part: 'weapon_saw', mount: 'right_mid' },
-      { part: 'weapon_oil', mount: 'rear_center' },
+    loadedCar('pickup', 'chassis_pickup', [
+      { part: 'utility_radar', mount: 'roof_cab' },
+      { part: 'utility_repair', mount: 'bed_front' },
+      { part: 'weapon_rear_mg', mount: 'left_bed' },
+      { part: 'utility_fan', mount: 'right_bed' },
+      { part: 'weapon_mortar', mount: 'bed_rear' },
+      { part: 'defense_rear_bumper', mount: 'rear_center' },
     ]);
     loadedCar('spider', 'chassis_spider', [
       { part: 'utility_minesensor', mount: 'front_utility' },

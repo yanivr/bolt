@@ -3,6 +3,7 @@ import type { Room } from 'colyseus.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   BASELINE_BLUEPRINT,
+  CATALOG,
   CATALOG_VERSION,
   EXAMPLE_TEMPLATES,
   ROOKIE_BLUEPRINT,
@@ -265,7 +266,7 @@ describe('joining the drive room', () => {
     ) => ({
       blueprint: {
         ...baselineBlueprint(
-          { chassisId: 'chassis_platform', engineId: 'engine_four_cylinder', ...essentials },
+          { chassisId: 'chassis_pickup', engineId: 'engine_four_cylinder', ...essentials },
           'Illegal',
         ),
         parts: parts.map((p, i) => ({
@@ -286,11 +287,12 @@ describe('joining the drive room', () => {
         return error as { code?: number; message?: string };
       }
     };
-    // Over budget: 1,025 credits of perfectly real parts.
+    // Over budget: 1,045 credits of perfectly real parts.
     const dear = withParts(
       [
-        { partId: 'weapon_mortar', mountId: 'deck_fore', autoMode: true },
-        { partId: 'defense_antimissile', mountId: 'deck_aft' },
+        { partId: 'weapon_mortar', mountId: 'bed_rear', autoMode: true },
+        { partId: 'defense_antimissile', mountId: 'roof_cab' },
+        { partId: 'utility_radar', mountId: 'bed_front' },
       ],
       { engineId: 'engine_v12', tireKitId: 'tires_track' },
     );
@@ -335,29 +337,29 @@ describe('joining the drive room', () => {
     for (const illegal of [
       withParts([{ partId: 'utility_fan', mountId: 'no_such_mount' }]),
       withParts([{ partId: 'utility_fan', mountId: 'engine_bay' }]),
-      withParts([{ partId: 'utility_fan', mountId: 'deck_fore', offsetX: 30 }]),
+      withParts([{ partId: 'utility_fan', mountId: 'bed_rear', offsetX: 30 }]),
       withParts([
         {
           partId: 'weapon_front_mg',
-          mountId: 'deck_front',
+          mountId: 'bed_rear',
           rotationQuarterTurns: 2,
           assignedActionSlot: 0,
         },
-        { partId: 'weapon_front_mg', mountId: 'deck_front', assignedActionSlot: 0 },
+        { partId: 'weapon_front_mg', mountId: 'bed_rear', assignedActionSlot: 0 },
       ]),
       withParts([
-        { partId: 'utility_fan', mountId: 'deck_fore' },
-        { partId: 'utility_radar', mountId: 'deck_fore' },
+        { partId: 'utility_fan', mountId: 'bed_rear' },
+        { partId: 'utility_radar', mountId: 'bed_rear' },
       ]),
       withParts([
-        { partId: 'utility_gyro', mountId: 'deck_fore' },
-        { partId: 'utility_gyro', mountId: 'deck_aft' },
+        { partId: 'utility_gyro', mountId: 'bed_rear' },
+        { partId: 'utility_gyro', mountId: 'bed_front' },
       ]),
       withParts([
-        { partId: 'utility_fan', mountId: 'deck_fore', instanceId: 'same' },
-        { partId: 'utility_repair', mountId: 'deck_aft', instanceId: 'same' },
+        { partId: 'utility_fan', mountId: 'bed_rear', instanceId: 'same' },
+        { partId: 'utility_repair', mountId: 'bed_front', instanceId: 'same' },
       ]),
-      withParts([{ partId: 'weapon_tesla', mountId: 'deck_fore', assignedActionSlot: 0 }]),
+      withParts([{ partId: 'weapon_tesla', mountId: 'bed_rear', assignedActionSlot: 0 }]),
     ])
       await expectJoinRefused(illegal, JOIN_ERROR_CODES.ILLEGAL_BUILD);
     // A blueprint from another catalog version is its own refusal.
@@ -370,6 +372,41 @@ describe('joining the drive room', () => {
       JOIN_ERROR_CODES.ILLEGAL_BUILD,
     );
     expect(CATALOG_VERSION).not.toBe('0.2.0');
+  });
+
+  it('refuses a car on a retired chassis cleanly, as an unknown part', async () => {
+    // The fifteen frames cut by the five-chassis decision. A client holding an old build, or
+    // one that forges the catalog version, gets a sentence and no room.
+    const retired = [
+      'chassis_needle',
+      'chassis_turtle',
+      'chassis_crab',
+      'chassis_cobra',
+      'chassis_scorpion',
+      'chassis_buggy',
+      'chassis_chameleon',
+      'chassis_brick',
+      'chassis_wagon',
+      'chassis_rammer',
+      'chassis_drifter',
+      'chassis_kangaroo',
+      'chassis_horseshoe',
+      'chassis_twins',
+      'chassis_platform',
+    ];
+    for (const chassisId of retired) {
+      expect(CATALOG.chassis[chassisId], chassisId).toBeUndefined();
+      // Stamped with today's catalog version: the unknown chassis itself is the refusal.
+      await expectJoinRefused(
+        { blueprint: { ...ROOKIE_BLUEPRINT, chassisId } },
+        JOIN_ERROR_CODES.UNKNOWN_PART,
+      );
+    }
+    // As a real old save would arrive, with the old version: refused as out of date.
+    await expectJoinRefused(
+      { blueprint: { ...ROOKIE_BLUEPRINT, chassisId: 'chassis_turtle', catalogVersion: '0.3.0' } },
+      JOIN_ERROR_CODES.CATALOG_MISMATCH,
+    );
   });
 
   it('creates no room for any refused join', async () => {

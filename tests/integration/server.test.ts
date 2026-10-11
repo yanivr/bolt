@@ -238,15 +238,9 @@ describe('GET /api/v1/catalog', () => {
       'utilities',
       'weapons',
     ]);
-    // The whole catalog: 120 parts, twenty of each kind.
-    for (const list of [
-      body.chassis,
-      body.engines,
-      body.tires,
-      body.weapons,
-      body.defenses,
-      body.utilities,
-    ])
+    // The whole catalog: 105 parts, five chassis and twenty of each other kind.
+    expect(body.chassis).toHaveLength(5);
+    for (const list of [body.engines, body.tires, body.weapons, body.defenses, body.utilities])
       expect(list).toHaveLength(20);
     expect(body.startingCredits).toBe(1000);
     expect(body.templates.map((t) => t.id)).toContain('example_tiny_trouble');

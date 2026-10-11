@@ -516,9 +516,9 @@ describe('stability (Section 6.5)', () => {
 
   it('is clamped to 10 to 100 for every car, however extreme', () => {
     expect([STABILITY_MIN, STABILITY_MAX]).toEqual([10, 100]);
-    // As planted as it gets: Twins on Full Tracks with a gyro.
+    // As planted as it gets: a Spider on Full Tracks with a gyro.
     const planted = statsOf(
-      car('chassis_twins', [{ partId: 'utility_gyro', mountId: 'roof_front' }], {
+      car('chassis_spider', [{ partId: 'utility_gyro', mountId: 'rear_utility' }], {
         tireKitId: 'tires_track',
       }),
     ).indicators.stability;
@@ -616,17 +616,17 @@ describe('stability (Section 6.5)', () => {
     expect(tail.longitudinalPenalty).toBeGreaterThan(nose.longitudinalPenalty + 5);
     // Tall attachments, and more so on the roof.
     const turretRoof = s(
-      car('chassis_turtle', [
+      car('chassis_beetle', [
         { partId: 'weapon_turret', mountId: 'roof_mid', assignedActionSlot: 0 },
       ]),
     );
     const turretNose = s(
-      car('chassis_turtle', [
+      car('chassis_beetle', [
         { partId: 'weapon_turret', mountId: 'front_center', assignedActionSlot: 0 },
       ]),
     );
     const flat = s(
-      car('chassis_turtle', [
+      car('chassis_beetle', [
         { partId: 'weapon_rocket', mountId: 'roof_mid', assignedActionSlot: 0 },
       ]),
     );
@@ -640,7 +640,7 @@ describe('stability (Section 6.5)', () => {
       return g.wheelbasePenalty - g.longitudinalPenalty;
     };
     expect(geometry('chassis_spider')).toBeLessThan(2);
-    expect(geometry('chassis_twins')).toBeLessThan(geometry('chassis_beetle'));
+    expect(geometry('chassis_spider')).toBeLessThan(geometry('chassis_beetle'));
     expect(geometry('chassis_trike')).toBe(Math.max(...CHASSIS_LIST.map((c) => geometry(c.id))));
     // Tire grip: stickier rubber is steadier.
     expect(s(baselineBlueprint({ tireKitId: 'tires_slick' })).stabilizationBonus).toBeGreaterThan(
@@ -726,7 +726,7 @@ describe('wheel count (Sections 6.3 and 19.1)', () => {
     const counts = CHASSIS_LIST.map((c) => c.wheelCount);
     expect(counts.filter((n) => n === 3)).toHaveLength(1);
     expect(counts.filter((n) => n === 6)).toHaveLength(1);
-    expect(counts.filter((n) => n === 4)).toHaveLength(18);
+    expect(counts.filter((n) => n === 4)).toHaveLength(3);
     // Six wheels: the collision width reaches the outer wheels, beyond the body.
     const spider = paramsOf(baselineBlueprint({ chassisId: 'chassis_spider' }));
     expect(spider.colliderRadius).toBe(24.5);
@@ -740,11 +740,11 @@ describe('wheel count (Sections 6.3 and 19.1)', () => {
         9,
       );
     }
-    // Twins is the widest thing on the road.
+    // The Spider is the widest thing on the road.
     const widths = CHASSIS_LIST.map(
       (c) => paramsOf(baselineBlueprint({ chassisId: c.id })).colliderRadius,
     );
-    expect(paramsOf(baselineBlueprint({ chassisId: 'chassis_twins' })).colliderRadius).toBe(
+    expect(paramsOf(baselineBlueprint({ chassisId: 'chassis_spider' })).colliderRadius).toBe(
       Math.max(...widths),
     );
     // Three wheels: the lowest stability of any bare frame.

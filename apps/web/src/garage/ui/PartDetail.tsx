@@ -52,7 +52,7 @@ function Change({
   const same = Math.abs(change.delta) < 1e-9 || format(change.before) === format(change.after);
   const tone = same || change.better === null ? '' : change.better ? ' is-better' : ' is-worse';
   return (
-    <div className={`cmp-row${tone}`} data-testid={id}>
+    <div className={`cmp-row${tone}${same ? ' is-same' : ''}`} data-testid={id}>
       <dt>{label}</dt>
       <dd>
         <span className="cmp-before">{format(change.before)}</span>
@@ -76,8 +76,9 @@ const percent = (value: number) => fill(STRINGS.garage.percent, { value: Math.ro
 
 /**
  * The compare pane for one catalog part: what it is, what installing it would do to the five
- * scores and five indicators of this build, what it costs in new spend and refund, and the
- * one deliberate button that buys it. All of it is the plan the store would execute.
+ * scores and five indicators of this build (a two-column table, so it fits a 667 x 375 phone
+ * without scrolling), what it costs in new spend and refund, and the one deliberate button
+ * that buys it. All of it is the plan the store would execute.
  */
 export function PartDetail({
   manifests,
@@ -175,7 +176,7 @@ export function PartDetail({
           </span>
         </p>
         {accessory && (
-          <p className="g-detail-extra dim">
+          <p className="g-detail-extra g-detail-trigger dim">
             {g.trigger[card.triggerMode as keyof typeof g.trigger] ?? ''}
             {card.charges > 0 ? `. ${fill(g.charges, { count: card.charges })}` : ''}
             {card.maxPerCar !== null ? `. ${fill(g.limit, { count: card.maxPerCar })}` : ''}
@@ -237,28 +238,48 @@ export function PartDetail({
         {!isCurrent && result.ok && delta && stats && (
           <div className="g-compare">
             <span className="g-block-title">{g.compare}</span>
-            <dl className="cmp">
-              {SCORES.map((key) => (
+            {/* Two columns side by side: what the part does to the five scores, and to the
+                five indicators. Ten short rows that fit a 300 pixel pane without scrolling. */}
+            <div className="cmp-table">
+              <dl className="cmp" aria-label={g.performance}>
+                {SCORES.map((key) => (
+                  <Change
+                    key={key}
+                    id={`score-${key}`}
+                    label={g.scores[key]}
+                    change={delta.scores[key]}
+                    format={whole}
+                  />
+                ))}
+              </dl>
+              <dl className="cmp" aria-label={g.engineering}>
                 <Change
-                  key={key}
-                  id={`score-${key}`}
-                  label={g.scores[key]}
-                  change={delta.scores[key]}
+                  label={g.cmpShort.credits}
+                  change={delta.indicators.creditsLeft}
                   format={whole}
                 />
-              ))}
-            </dl>
-            <dl className="cmp">
-              <Change label={g.creditsLabel} change={delta.indicators.creditsLeft} format={whole} />
-              <Change
-                label={g.loadLabel}
-                change={delta.indicators.loadKg}
-                format={(v) => fill(g.weight, { kg: compactNumber(v) })}
-              />
-              <Change label={g.energyUse} change={delta.indicators.energyRatio} format={percent} />
-              <Change label={g.heatLevel} change={delta.indicators.heatRatio} format={percent} />
-              <Change label={g.stabilityLabel} change={delta.indicators.stability} format={whole} />
-            </dl>
+                <Change
+                  label={g.cmpShort.load}
+                  change={delta.indicators.loadKg}
+                  format={compactNumber}
+                />
+                <Change
+                  label={g.cmpShort.energy}
+                  change={delta.indicators.energyRatio}
+                  format={percent}
+                />
+                <Change
+                  label={g.cmpShort.heat}
+                  change={delta.indicators.heatRatio}
+                  format={percent}
+                />
+                <Change
+                  label={g.cmpShort.stability}
+                  change={delta.indicators.stability}
+                  format={whole}
+                />
+              </dl>
+            </div>
             {delta.newWarnings.map((warning) => (
               <p key={warning.code} className="g-warning">
                 <Glyph name="warn" size={12} />
@@ -293,7 +314,7 @@ export function PartDetail({
           </p>
         )}
         {accessory && !pickMount && plan.mountId && !plan.replaced && !isCurrent && (
-          <p className="g-detail-extra dim">
+          <p className="g-detail-extra g-detail-goes dim">
             {fill(g.goesOnMount, { mount: mountName(plan.mountId) })}
           </p>
         )}

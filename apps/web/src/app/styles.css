@@ -1795,6 +1795,83 @@ button:focus-visible,
 .g-top .g-top-space {
   flex: 1 1 auto;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+/*
+ * The status line. It has a place of its own with its size reserved, so it never lies over
+ * the car and nothing shifts when it speaks: the free middle of the header in landscape, a
+ * row under the car in portrait.
+ */
+.g-status {
+  min-width: 0;
+  max-width: 100%;
+  max-height: 100%;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  background: rgba(14, 19, 32, 0.7);
+  border-left: 3px solid var(--mint);
+}
+
+.g-status > .glyph {
+  flex: none;
+}
+
+.g-status > span {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.g-status.tone-ok {
+  color: var(--mint);
+}
+
+.g-status.tone-warn {
+  color: var(--amber);
+  border-left-color: var(--amber);
+}
+
+.g-status.tone-error {
+  color: #ff8d86;
+  border-left-color: var(--red);
+}
+
+/* Nothing to report: the line stays, saying so quietly. */
+.g-status.is-quiet {
+  color: #7fbfa5;
+  background: transparent;
+  border-left-color: transparent;
+}
+
+.g-status-row {
+  grid-area: status;
+  min-width: 0;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.g-status-row .g-status {
+  width: 100%;
+  padding: 2px 8px;
+}
+
+.g-status-row .g-status > span {
+  display: block;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .g-track {
@@ -1940,8 +2017,11 @@ button:focus-visible,
     inset -2px -2px 0 #2b3852;
 }
 
+/* The car takes no presses of its own: a tap beside it reaches the floor, which goes back to
+   the whole car. Only the handle over the selected part is live. */
 .g-car {
   position: absolute;
+  pointer-events: none;
 }
 
 .g-car-lines {
@@ -1969,9 +2049,36 @@ button:focus-visible,
   stroke: var(--red);
 }
 
+/* The room a selected part has to move in: its mount, drawn thin under the gold outline. */
+.socket.is-room {
+  fill: none;
+  stroke: rgba(245, 238, 217, 0.55);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+/* Which way the selected part faces: a gold chevron just ahead of it, edged to read on any
+   paint. */
+.facing polyline {
+  fill: none;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+}
+
+.facing-edge {
+  stroke: #0b0f19;
+  stroke-width: 6;
+}
+
+.facing-line {
+  stroke: var(--gold);
+  stroke-width: 3;
+}
+
 .g-grab {
   position: absolute;
   z-index: 3;
+  pointer-events: auto;
   transform: translate(-50%, -50%);
   cursor: grab;
   touch-action: none;
@@ -2212,29 +2319,6 @@ button:focus-visible,
   background: var(--mint);
 }
 
-/* Too many mounts for the height: the two columns scroll. */
-.g-column {
-  position: absolute;
-  top: 2px;
-  bottom: 2px;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  touch-action: pan-y;
-  scrollbar-width: none;
-}
-
-.g-column.is-left {
-  left: 4px;
-}
-
-.g-column.is-right {
-  right: 4px;
-}
-
 /* The chassis, engine and wheels under the car, then the two workbench tools. */
 .g-slot-row {
   display: flex;
@@ -2247,26 +2331,62 @@ button:focus-visible,
   min-width: 0;
 }
 
+/* The category small on top; the icon and the item's name on one line under it. The name is
+   cut with an ellipsis and never wraps. */
 .g-slot-row .slot-tile.has-name {
-  flex-direction: row;
-  justify-content: flex-start;
-  gap: 6px;
-  padding: 0 6px 0 4px;
+  align-items: stretch;
+  justify-content: center;
+  gap: 0;
+  padding: 0 2px 1px 3px;
   text-align: left;
 }
 
-.g-slot-row .slot-tile.has-name .slot-text {
-  flex: 1 1 auto;
+.g-slot-row .slot-tile.has-name .slot-label {
+  font-size: 12px;
+  line-height: 14px;
+}
+
+.slot-line {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.g-slot-row .slot-tile.has-name .slot-art {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
 }
 
 .g-slot-row .slot-tile.has-name .slot-name {
-  display: -webkit-box;
+  flex: 1 1 auto;
+  display: block;
+  min-width: 0;
   overflow: hidden;
   font-size: 12.5px;
   font-weight: 700;
-  line-height: 13px;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  line-height: 24px;
+  letter-spacing: -0.03em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slot-tile.has-name.is-selected .slot-name {
+  color: var(--gold);
+}
+
+/* Portrait: every accessory mount in a row of its own under the car. */
+.g-mount-row {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--g-gap);
+  min-width: 0;
+}
+
+.g-mount-row .slot-tile {
+  min-width: 0;
+  height: 48px;
 }
 
 .g-bench-tools {
@@ -2275,72 +2395,43 @@ button:focus-visible,
 }
 
 .slot-tile.is-tool {
-  width: 48px;
+  width: 46px;
   color: var(--ivory);
+}
+
+.garage.is-wide .slot-tile.is-tool,
+.garage.is-portrait .slot-tile.is-tool {
+  width: 48px;
 }
 
 .slot-tile.is-tool .slot-art {
   flex-basis: 26px;
 }
 
-/* The status line: a short strip over the clear floor above the car, only when there is
-   something to say. */
-.g-status {
-  position: absolute;
-  z-index: 4;
-  top: 3px;
-  left: calc(var(--col-left, 0px) + 6px);
-  right: calc(var(--col-right, 0px) + 6px);
-  width: fit-content;
-  max-width: calc(100% - var(--col-left, 0px) - var(--col-right, 0px) - 12px);
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.25;
-  background: rgba(14, 19, 32, 0.94);
-  border: 1px solid #05070c;
-  border-left: 3px solid var(--mint);
-  pointer-events: none;
+/* With a slot open the same tile is the way back: Whole Car, marked in gold. */
+.slot-tile.is-tool.is-back {
+  border-color: var(--gold);
+  box-shadow:
+    inset 0 0 0 1px var(--gold),
+    inset 2px 2px 0 var(--steel-light);
 }
 
-.g-status > span {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+.slot-tile.is-tool.is-back .slot-art {
+  flex-basis: 18px;
 }
 
-.g-status.is-quiet {
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  border: 0;
-  white-space: nowrap;
+.slot-tile.is-tool.is-back .slot-art .glyph {
+  width: 18px;
+  height: 18px;
 }
 
-.g-status.tone-ok {
-  color: var(--mint);
-}
-
-.g-status.tone-warn {
-  color: var(--amber);
-  border-left-color: var(--amber);
-}
-
-.g-status.tone-error {
-  color: #ff8d86;
-  border-left-color: var(--red);
-}
-
-/* A standing reason (the build cannot race) keeps to one line so it stays off the car. */
-.g-status.is-standing > span {
-  -webkit-line-clamp: 1;
+.slot-tile.is-tool.is-back .slot-label {
+  width: 44px;
+  font-size: 12px;
+  line-height: 12px;
+  text-align: center;
+  white-space: normal;
+  color: var(--gold);
 }
 
 /* --- The side panel ---------------------------------------------------------------------- */
@@ -2797,29 +2888,42 @@ button:focus-visible,
   scrollbar-color: var(--steel-light) var(--steel-dark);
 }
 
-/* A short, wide pane: the facts and the comparison side by side. */
-@container detail (min-width: 370px) and (max-height: 440px) {
+/* A short pane (any landscape phone): everything tightens so the ten rows of the comparison
+   sit above the buy button with nothing to scroll. The full sentences are on the list row
+   this pane was opened from. */
+@container detail (max-height: 420px) {
+  .g-pane-head,
+  .g-pane-foot {
+    padding: 2px 6px;
+  }
   .g-pane-body {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-auto-rows: min-content;
-    align-content: start;
-    gap: 4px 12px;
-  }
-  .g-pane-body > * {
-    grid-column: 1;
-  }
-  .g-pane-body > .g-compare {
-    grid-column: 2;
-    grid-row: 1 / span 12;
-    gap: 2px;
-  }
-  .cmp-row {
-    line-height: 1.2;
+    gap: 3px;
+    padding: 4px 8px;
   }
   .g-detail-title .part-icon {
-    width: 48px !important;
-    height: 48px !important;
+    width: 40px !important;
+    height: 40px !important;
+  }
+  .g-detail-title h2 {
+    font-size: 16px;
+  }
+  .pc-line.is-full > span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .g-compare > .g-block-title,
+  .g-detail-goes {
+    display: none;
+  }
+  .g-detail-trigger {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cmp-row {
+    line-height: 1.22;
   }
 }
 
@@ -2875,28 +2979,42 @@ button:focus-visible,
   margin: 0;
 }
 
+/* The scores on the left, the indicators on the right. */
+.cmp-table {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0;
+}
+
 .cmp + .cmp {
-  padding-top: 3px;
-  border-top: 1px solid #1c2536;
+  padding-left: 9px;
+  margin-left: 9px;
+  border-left: 1px solid #1c2536;
 }
 
 .cmp-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 4px;
+  min-width: 0;
   font-size: 13px;
   line-height: 1.3;
 }
 
 .cmp-row dt {
+  min-width: 0;
+  overflow: hidden;
   color: var(--ivory-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cmp-row dd {
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   margin: 0;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -2914,6 +3032,25 @@ button:focus-visible,
 
 .cmp-mark {
   width: 12px;
+}
+
+/* A narrow pane: the arrow between the two numbers goes; the old value stays dim beside the
+   new one. */
+@container detail (max-width: 340px) {
+  .cmp-arrow,
+  .cmp-row.is-same .cmp-before {
+    display: none;
+  }
+  .cmp-row dd {
+    gap: 5px;
+  }
+  .cmp + .cmp {
+    padding-left: 6px;
+    margin-left: 6px;
+  }
+  .cmp-row {
+    font-size: 12.5px;
+  }
 }
 
 .cmp-row.is-better .cmp-after,
@@ -3336,36 +3473,213 @@ p.g-spend.is-blocked {
   }
 }
 
-.g-carpanel-credits {
+/* The five indicators as one row of states. Each opens the working behind it. */
+.g-states {
   flex: none;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.g-state {
+  appearance: none;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  padding: 2px 5px;
+  font: inherit;
+  text-align: left;
+  color: var(--ivory);
+  background: #1c2536;
+  border: 1px solid var(--steel-dark);
+  border-left: 3px solid var(--mint);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.g-state-name {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--ivory-dim);
+  white-space: nowrap;
+}
+
+.g-state-name .glyph {
+  flex: none;
+}
+
+.g-state-value {
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--mint);
+  white-space: nowrap;
+}
+
+.g-state.is-caution {
+  border-left-color: var(--amber);
+}
+
+.g-state.is-caution .g-state-value,
+.g-state.is-caution .g-state-name {
+  color: var(--amber);
+}
+
+.g-state.is-over {
+  background: #3a1820;
+  border-color: var(--red);
+}
+
+.g-state.is-over .g-state-value,
+.g-state.is-over .g-state-name {
+  color: #ff8d86;
+}
+
+@container carpanel (max-width: 349px) {
+  .g-state {
+    padding: 2px 3px;
+  }
+  .g-state-name {
+    letter-spacing: -0.02em;
+  }
+}
+
+/* What the car is best and worst at, from its scores. */
+.g-summary {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.g-summary-line {
   display: flex;
   align-items: center;
   gap: 6px;
   margin: 0;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 700;
-  color: var(--gold);
+  line-height: 1.25;
 }
 
-.g-carpanel-next {
+.g-summary-line .glyph {
   flex: none;
+}
+
+.g-summary-line.is-strong .glyph,
+.g-summary-line.is-even .glyph {
+  color: var(--mint);
+}
+
+.g-summary-line.is-weak .glyph {
+  color: var(--coral);
+}
+
+/* Everything mounted on the car. A row opens its slot. */
+.g-equipment {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.g-equipment-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-top: auto;
 }
 
-.g-carpanel-next p {
+.g-equipment-head .g-block-title {
+  min-width: 0;
   margin: 0;
-  font-size: 13px;
-  line-height: 1.25;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  color: var(--ivory);
 }
 
-.g-carpanel-next .btn {
+.g-equipment-head .g-block-title .dim {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.g-equipment-head .btn {
   flex: none;
+  min-height: 44px;
   padding: 4px 10px;
   white-space: nowrap;
+}
+
+.g-equipment-empty {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.g-equipment-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@container carpanel (min-width: 520px) {
+  .g-equipment-list {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.g-equipment-row {
+  appearance: none;
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 8px 2px 4px;
+  font: inherit;
+  text-align: left;
+  color: var(--ivory);
+  background: #1c2536;
+  border: 1px solid var(--steel-dark);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.g-equipment-row .part-icon {
+  flex: none;
+}
+
+.g-equipment-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.g-equipment-mount {
+  flex: none;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.g-equipment-row > .glyph {
+  flex: none;
+  color: var(--ivory-dim);
 }
 
 /* First-build steps: three chips that open their slot, and the two ways out. */
@@ -3414,7 +3728,7 @@ p.g-spend.is-blocked {
   align-items: center;
   gap: 4px;
   min-width: 0;
-  padding: 2px 2px 2px 4px;
+  padding: 0 2px 0 4px;
   background: #2a2412;
   border: 1px solid #6e5a1c;
   border-left: 4px solid var(--gold);
@@ -3662,9 +3976,13 @@ p.g-spend.is-blocked {
   font-size: 16px;
 }
 
+/* Every pixel of height goes to the car on a short phone: the essentials row is 44 pixels
+   and the padding 3, which is what lets the Spider be drawn at three times on 870 x 370. */
 @media (orientation: landscape) and (max-height: 389px) {
   .garage {
     --g-row: 52px;
+    --g-tile: 44px;
+    --g-pad: 3px;
   }
 }
 
@@ -3678,14 +3996,6 @@ p.g-spend.is-blocked {
   .g-tools-head .part-icon {
     width: 44px !important;
     height: 44px !important;
-  }
-}
-
-@media (min-width: 740px) and (orientation: landscape) {
-  /* Room for the item's name beside each essential's icon. */
-  .g-slot-row .slot-tile.has-name .slot-label {
-    font-size: 12px;
-    line-height: 13px;
   }
 }
 
@@ -3712,19 +4022,19 @@ p.g-spend.is-blocked {
   .g-ready {
     font-size: 21px;
   }
-  /* The essentials keep their icon and category; the item's name is in the tile's label. */
+  /* The essentials keep the item's name, which needs the width the icon would take. */
   .g-slot-row .slot-tile.has-name {
-    flex-direction: column;
-    justify-content: center;
-    gap: 0;
-    padding: 0;
-    text-align: center;
+    padding: 0 2px 1px 3px;
   }
-  .g-slot-row .slot-tile.has-name .slot-text {
-    flex: none;
+  .g-slot-row .slot-tile.has-name .slot-art {
+    display: none;
   }
   .g-slot-row .slot-tile.has-name .slot-name {
-    display: none;
+    font-size: 12px;
+    letter-spacing: -0.03em;
+  }
+  .slot-tile.is-tool {
+    width: 44px;
   }
   .indicator {
     padding: 3px 3px 4px;
@@ -3770,12 +4080,14 @@ p.g-spend.is-blocked {
 }
 
 @media (orientation: portrait) {
-  /* The car as a strip, every slot in one scrolling row under it, then the list. The gauges
-     are one thin row above Ready. */
+  /* The car as a strip, the mounts in a row under it, then the chassis, engine and wheels,
+     the status line, and the list. The gauges are one thin row above Ready. Nothing scrolls
+     but the list. */
   .garage {
+    --g-gap: 3px;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: var(--g-top) auto auto minmax(0, 1fr) 44px 52px;
-    grid-template-areas: 'top' 'bench' 'coach' 'panel' 'bottom' 'ready';
+    grid-template-rows: var(--g-top) auto 22px auto minmax(0, 1fr) 44px 50px;
+    grid-template-areas: 'top' 'bench' 'status' 'coach' 'panel' 'bottom' 'ready';
   }
   .g-top {
     padding-right: 0;
@@ -3787,57 +4099,33 @@ p.g-spend.is-blocked {
     grid-area: ready;
     justify-self: stretch;
     width: auto;
-    height: 52px;
+    height: 50px;
     font-size: 24px;
   }
+  /* The car strip with Stats and View in a column of their own beside it, so neither ever
+     sits over the car; then the mounts in a row, then the chassis, engine and wheels. */
   .g-bench {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: clamp(150px, 30vh, 360px) 48px;
+    grid-template-columns: minmax(0, 1fr) 48px;
+    grid-template-rows: clamp(150px, 28.5vh, 360px) auto 48px;
   }
-  .g-slot-row {
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    touch-action: pan-x;
-    scrollbar-width: none;
-  }
-  .g-slot-row .slot-tile,
-  .g-slot-row .slot-tile.has-name {
-    flex: 0 0 auto;
-    flex-direction: column;
-    justify-content: center;
-    gap: 0;
-    width: 56px !important;
-    height: 48px !important;
-    padding: 0;
-    text-align: center;
-  }
-  .g-slot-row .slot-tile.has-name .slot-text {
-    flex: none;
-  }
-  .g-slot-row .slot-tile.has-name .slot-name {
-    display: none;
+  .g-floor {
+    grid-column: 1;
   }
   .g-bench-tools {
-    position: absolute;
-    z-index: 3;
-    top: 4px;
-    left: 4px;
-    right: 4px;
-    justify-content: space-between;
-    pointer-events: none;
+    grid-column: 2;
+    grid-row: 1;
+    flex-direction: column;
+    justify-content: flex-start;
   }
   .g-bench-tools > * {
     height: 48px;
-    pointer-events: auto;
+  }
+  .g-slot-row {
+    grid-column: 1 / -1;
   }
   /* While the first-build line is up, rows tighten so six parts still show. */
   .garage.is-coaching {
     --g-row: 48px;
-  }
-  .g-bench.is-row .g-status {
-    left: 62px;
-    right: 62px;
-    max-width: calc(100% - 124px);
   }
   .preview {
     grid-template-columns: minmax(0, 1fr);

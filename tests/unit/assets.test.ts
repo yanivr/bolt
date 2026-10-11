@@ -75,7 +75,7 @@ describe('PNG codec', () => {
 
 /**
  * Catalog parts that have no sprite sheet in the car atlas yet. The rules, the server and the
- * simulation know all 120 parts; the artists are still drawing most of them. This list is
+ * simulation know all 105 parts; the list is for any the artists have yet to draw. This list is
  * the outstanding work, id by id, and the test below fails the moment it disagrees with the
  * atlas in either direction: a part gains art and must be removed from here, or a part is
  * listed that already has art, or a part is missing art without being listed. It must shrink
@@ -99,7 +99,7 @@ describe('car atlases match the catalog', () => {
     ]);
     for (const id of SPRITES_PENDING) expect(known.has(id), id).toBe(true);
     // The count of finished parts can only go up. Raise this number as art lands.
-    expect(120 - SPRITES_PENDING.length).toBeGreaterThanOrEqual(6);
+    expect(105 - SPRITES_PENDING.length).toBe(105);
     // Paints are complete.
     for (const id of Object.keys(PAINTS)) expect(cars.paints[id], id).toBeDefined();
     // The atlas holds nothing the catalog does not know.

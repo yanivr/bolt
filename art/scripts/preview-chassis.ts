@@ -13,8 +13,8 @@ import { PixelBuffer, hex, writePng } from './lib/pixels.js';
 /**
  * Chassis review sheets, independent of the main baker.
  *
- *   npx tsx art/scripts/preview-chassis.ts needle crab      per-chassis sheets
- *   npx tsx art/scripts/preview-chassis.ts --sheets         silhouettes and lineups of all 20
+ *   npx tsx art/scripts/preview-chassis.ts pickup trike     per-chassis sheets
+ *   npx tsx art/scripts/preview-chassis.ts --sheets         silhouettes and lineups of all five
  *   npx tsx art/scripts/preview-chassis.ts --fit [ids...]   64-heading cell margin and timing
  *
  * Per chassis it writes, under art/preview/chassis:

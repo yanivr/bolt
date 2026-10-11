@@ -24,11 +24,11 @@ import {
  */
 
 /**
- * All twenty chassis run this bench with the default engine and tires. Eighteen are held to
- * the limits the Milestone A cars were tuned to. Two are specified to slide: the Trike
- * ("agile but unstable", stability -16) and the Drifter ("controlled slip", peak grip -6%).
- * They get a little more slip, overshoot and path error, and the same hard requirements as
- * everyone else on never spinning, never hunting and finishing a lap without a wall.
+ * All five chassis run this bench with the default engine and tires. Four are held to the
+ * limits the Milestone A cars were tuned to. The Trike is specified to slide ("easy to tip",
+ * stability -16): it gets a little more slip, overshoot and path error, and the same hard
+ * requirements as everyone else on never spinning, never hunting and finishing a lap without
+ * a wall.
  */
 type Limits = {
   slipDeg: number;
@@ -63,11 +63,11 @@ const LOOSE: Limits = {
   flickDeg: 29,
   lapSlipDeg: 23,
   yawJerk: 18000,
-  // Less grip is the point of both frames, so they are asked for less of it.
+  // Less grip is the point of the frame, so it is asked for less of it.
   cornering: 300,
   halfStickHigh: 0.63,
 };
-const SLIDERS = new Set(['chassis_trike', 'chassis_drifter']);
+const SLIDERS = new Set(['chassis_trike']);
 
 const cars: Array<[string, VehicleParams, Limits]> = Object.values(CHASSIS).map((chassis) => {
   const resolved = resolveLoadout({ ...DEFAULT_LOADOUT, chassisId: chassis.id });
@@ -79,100 +79,106 @@ function speedsFor(params: VehicleParams): number[] {
   return [40, 80, 120, 160, 200, 240, Math.floor(topSpeed(params))];
 }
 
-describe.each(cars)('%s: steering the wheels directly (keys and the wheel option)', (_name, params, limits) => {
-  const speeds = speedsFor(params);
+describe.each(cars)(
+  '%s: steering the wheels directly (keys and the wheel option)',
+  (_name, params, limits) => {
+    const speeds = speedsFor(params);
 
-  it('answers full lock promptly, without a lurch, at every speed', () => {
-    for (const v of speeds) {
-      const r = stepSteer(params, v, 1);
-      // Slower than a third of a second reads as lag; faster than a tenth reads as a twitch.
-      expect(r.t90, `t90 at ${v}`).toBeGreaterThanOrEqual(0.12);
-      expect(r.t90, `t90 at ${v}`).toBeLessThanOrEqual(0.34);
-      // Yaw that shoots past its steady value is the nose tucking in on its own.
-      expect(r.overshootPct, `overshoot at ${v}`).toBeLessThanOrEqual(limits.overshootPct);
-      expect(r.peakYawJerk, `jerk at ${v}`).toBeLessThanOrEqual(limits.yawJerk);
-    }
-  });
-
-  it('holds full lock as a stable, shallow drift instead of spinning down', () => {
-    for (const v of speeds) {
-      const r = stepSteer(params, v, 1);
-      // The old model let the tail out to 40 degrees and shed more than half the speed.
-      expect(r.peakSlipDeg, `slip at ${v}`).toBeLessThanOrEqual(limits.slipDeg);
-      expect(r.endSpeed, `speed kept at ${v}`).toBeGreaterThanOrEqual(v * 0.9);
-      // And it still corners hard: at least 85 percent of the grip the surface offers.
-      if (v >= 200) expect(r.lateralAccel, `grip used at ${v}`).toBeGreaterThanOrEqual(limits.cornering);
-    }
-  });
-
-  it('turns a parking-speed circle a little over one car length across', () => {
-    const r = stepSteer(params, 40, 1);
-    expect(r.radius).toBeGreaterThanOrEqual(56);
-    expect(r.radius).toBeLessThanOrEqual(80);
-  });
-
-  it('maps stick to yaw in proportion at every speed', () => {
-    for (const v of speeds) {
-      const half = stepSteer(params, v, 0.5).yawDeg;
-      const full = stepSteer(params, v, 1).yawDeg;
-      const quarter = stepSteer(params, v, 0.25).yawDeg;
-      expect(half / full, `half stick at ${v}`).toBeGreaterThan(0.46);
-      expect(half / full, `half stick at ${v}`).toBeLessThan(limits.halfStickHigh);
-      expect(quarter / half, `quarter stick at ${v}`).toBeGreaterThan(0.47);
-      expect(quarter / half, `quarter stick at ${v}`).toBeLessThan(0.53);
-    }
-  });
-
-  it('tightens the path in proportion to ten percent more stick, and never loosens it', () => {
-    for (const v of speeds) {
-      for (const stick of [0.2, 0.4, 0.6]) {
-        const e = pathElasticity(params, v, stick);
-        expect(e, `elasticity at ${v}, stick ${stick}`).toBeGreaterThan(limits.elasticityLow);
-        expect(e, `elasticity at ${v}, stick ${stick}`).toBeLessThan(1.1);
+    it('answers full lock promptly, without a lurch, at every speed', () => {
+      for (const v of speeds) {
+        const r = stepSteer(params, v, 1);
+        // Slower than a third of a second reads as lag; faster than a tenth reads as a twitch.
+        expect(r.t90, `t90 at ${v}`).toBeGreaterThanOrEqual(0.12);
+        expect(r.t90, `t90 at ${v}`).toBeLessThanOrEqual(0.34);
+        // Yaw that shoots past its steady value is the nose tucking in on its own.
+        expect(r.overshootPct, `overshoot at ${v}`).toBeLessThanOrEqual(limits.overshootPct);
+        expect(r.peakYawJerk, `jerk at ${v}`).toBeLessThanOrEqual(limits.yawJerk);
       }
-      for (const stick of [0.8, 0.9]) {
-        // Near the grip limit more stick buys less and less, but always something, and never
-        // more than its share. Above 1.25 is the twitch the old model had (up to 1.86).
-        const e = pathElasticity(params, v, stick);
-        expect(e, `elasticity at ${v}, stick ${stick}`).toBeGreaterThan(limits.elasticityHighStickLow);
-        expect(e, `elasticity at ${v}, stick ${stick}`).toBeLessThan(1.25);
+    });
+
+    it('holds full lock as a stable, shallow drift instead of spinning down', () => {
+      for (const v of speeds) {
+        const r = stepSteer(params, v, 1);
+        // The old model let the tail out to 40 degrees and shed more than half the speed.
+        expect(r.peakSlipDeg, `slip at ${v}`).toBeLessThanOrEqual(limits.slipDeg);
+        expect(r.endSpeed, `speed kept at ${v}`).toBeGreaterThanOrEqual(v * 0.9);
+        // And it still corners hard: at least 85 percent of the grip the surface offers.
+        if (v >= 200)
+          expect(r.lateralAccel, `grip used at ${v}`).toBeGreaterThanOrEqual(limits.cornering);
       }
-    }
-  });
+    });
 
-  it('has no grip cliff anywhere in the stick travel', () => {
-    for (const v of speeds) {
-      const r = slowSweep(params, v);
-      expect(r.worstReversalPct, `reversal at ${v}`).toBeLessThanOrEqual(1);
-      // The old model stepped lateral acceleration by 82 px/s2 in one tick at top speed.
-      expect(r.worstAccelStep, `accel step at ${v}`).toBeLessThanOrEqual(10);
-    }
-  });
+    it('turns a parking-speed circle a little over one car length across', () => {
+      const r = stepSteer(params, 40, 1);
+      expect(r.radius).toBeGreaterThanOrEqual(56);
+      expect(r.radius).toBeLessThanOrEqual(80);
+    });
 
-  it('shrugs off a thumb twitch', () => {
-    for (const v of speeds) {
-      const r = flick(params, v);
-      expect(r.headingChangeDeg, `flick at ${v}`).toBeLessThanOrEqual(limits.flickDeg);
-      expect(r.settle, `settle at ${v}`).toBeLessThanOrEqual(0.6);
-      expect(r.reboundDeg, `rebound at ${v}`).toBeLessThanOrEqual(1);
-    }
-  });
+    it('maps stick to yaw in proportion at every speed', () => {
+      for (const v of speeds) {
+        const half = stepSteer(params, v, 0.5).yawDeg;
+        const full = stepSteer(params, v, 1).yawDeg;
+        const quarter = stepSteer(params, v, 0.25).yawDeg;
+        expect(half / full, `half stick at ${v}`).toBeGreaterThan(0.46);
+        expect(half / full, `half stick at ${v}`).toBeLessThan(limits.halfStickHigh);
+        expect(quarter / half, `quarter stick at ${v}`).toBeGreaterThan(0.47);
+        expect(quarter / half, `quarter stick at ${v}`).toBeLessThan(0.53);
+      }
+    });
 
-  it('follows a slalom with short, symmetric lag', () => {
-    for (const v of speeds) {
-      const r = slalom(params, v);
-      expect(r.lagMs, `lag at ${v}`).toBeLessThanOrEqual(134);
-      expect(r.asymmetryPct, `asymmetry at ${v}`).toBeLessThanOrEqual(1);
-    }
-  });
+    it('tightens the path in proportion to ten percent more stick, and never loosens it', () => {
+      for (const v of speeds) {
+        for (const stick of [0.2, 0.4, 0.6]) {
+          const e = pathElasticity(params, v, stick);
+          expect(e, `elasticity at ${v}, stick ${stick}`).toBeGreaterThan(limits.elasticityLow);
+          expect(e, `elasticity at ${v}, stick ${stick}`).toBeLessThan(1.1);
+        }
+        for (const stick of [0.8, 0.9]) {
+          // Near the grip limit more stick buys less and less, but always something, and never
+          // more than its share. Above 1.25 is the twitch the old model had (up to 1.86).
+          const e = pathElasticity(params, v, stick);
+          expect(e, `elasticity at ${v}, stick ${stick}`).toBeGreaterThan(
+            limits.elasticityHighStickLow,
+          );
+          expect(e, `elasticity at ${v}, stick ${stick}`).toBeLessThan(1.25);
+        }
+      }
+    });
 
-  it('can brake and turn together from top speed without spinning', () => {
-    const r = brakeAndTurn(params);
-    expect(r.spun).toBe(false);
-    expect(r.peakSlipDeg).toBeLessThanOrEqual(16);
-    expect(r.headingChangeDeg).toBeGreaterThan(45);
-  });
-});
+    it('has no grip cliff anywhere in the stick travel', () => {
+      for (const v of speeds) {
+        const r = slowSweep(params, v);
+        expect(r.worstReversalPct, `reversal at ${v}`).toBeLessThanOrEqual(1);
+        // The old model stepped lateral acceleration by 82 px/s2 in one tick at top speed.
+        expect(r.worstAccelStep, `accel step at ${v}`).toBeLessThanOrEqual(10);
+      }
+    });
+
+    it('shrugs off a thumb twitch', () => {
+      for (const v of speeds) {
+        const r = flick(params, v);
+        expect(r.headingChangeDeg, `flick at ${v}`).toBeLessThanOrEqual(limits.flickDeg);
+        expect(r.settle, `settle at ${v}`).toBeLessThanOrEqual(0.6);
+        expect(r.reboundDeg, `rebound at ${v}`).toBeLessThanOrEqual(1);
+      }
+    });
+
+    it('follows a slalom with short, symmetric lag', () => {
+      for (const v of speeds) {
+        const r = slalom(params, v);
+        expect(r.lagMs, `lag at ${v}`).toBeLessThanOrEqual(134);
+        expect(r.asymmetryPct, `asymmetry at ${v}`).toBeLessThanOrEqual(1);
+      }
+    });
+
+    it('can brake and turn together from top speed without spinning', () => {
+      const r = brakeAndTurn(params);
+      expect(r.spun).toBe(false);
+      expect(r.peakSlipDeg).toBeLessThanOrEqual(16);
+      expect(r.headingChangeDeg).toBeGreaterThan(45);
+    });
+  },
+);
 
 describe.each(cars)('%s: direction steering (the default on touch)', (_name, params, limits) => {
   const top = Math.floor(topSpeed(params));

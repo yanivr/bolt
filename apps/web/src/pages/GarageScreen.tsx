@@ -204,11 +204,24 @@ function Garage({ manifests }: { manifests: GameManifests }) {
   else if (blocking) line = { tone: 'error', text: issueText(blocking), key: 'blocked' };
   else if (!drawable) line = { tone: 'error', text: g.artInProgressNote, key: 'art' };
   else line = { tone: 'ok', text: g.readyToRace, key: 'ready' };
-  // With nothing to report the line is only for assistive technology: Ready says the rest.
-  // A build that cannot race is spelled out on the idle panel, so the line stays off the car
-  // while that panel is up.
   const idle = !browsing && slot === null && !focused && !selectedPart;
-  const quiet = line.key === 'ready' || ((line.key === 'blocked' || line.key === 'art') && idle);
+  // The status line has a place of its own with its height reserved: the middle of the header
+  // in landscape, a row under the car in portrait. It never lies over the car and nothing
+  // moves when it changes. With nothing to report it says the build is ready, quietly.
+  const statusLine = (
+    <p
+      className={`g-status tone-${line.tone}${line.key === 'ready' ? ' is-quiet' : ''}`}
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      data-testid="garage-status"
+      data-tone={line.tone}
+      title={line.text}
+    >
+      <Glyph name={line.tone === 'ok' ? 'check' : 'warn'} size={12} />
+      <span key={line.key}>{line.text}</span>
+    </p>
+  );
 
   // --- First-build teaching (Section 4) ------------------------------------------------------
   const hasWeapon = parts.some((p) => p.def.category === 'weapon');
@@ -430,13 +443,18 @@ function Garage({ manifests }: { manifests: GameManifests }) {
   const swatch = manifests.cars.paints[blueprint.paintId]?.ramp[3] ?? '#cf3440';
   const carPanel = (
     <CarPanel
+      manifests={manifests}
       name={blueprint.name}
       swatch={swatch}
       stats={stats}
+      parts={parts}
+      mountCount={chassisDef ? accessoryMounts(chassisDef).length : 0}
       blocked={blocking ? issueText(blocking) : !drawable ? g.artInProgressNote : null}
       locked={locked}
       onPaint={() => setOverlay('paint')}
       onBrowse={() => actions.browse()}
+      onIndicator={setIndicator}
+      onMount={(mountId) => actions.selectSlot({ kind: 'mount', mountId })}
       onRepair={canRepair ? actions.repair : null}
     >
       {coaching && !portrait && (
@@ -495,6 +513,7 @@ function Garage({ manifests }: { manifests: GameManifests }) {
         onUndo={actions.undo}
         onRedo={actions.redo}
         onCredits={() => setIndicator('budget')}
+        statusLine={portrait ? null : statusLine}
       />
       <Workbench
         manifests={manifests}
@@ -517,21 +536,8 @@ function Garage({ manifests }: { manifests: GameManifests }) {
         onRemove={actions.remove}
         onClearSelection={actions.clearSelection}
         onDragIssue={setDragIssue}
-      >
-        <p
-          className={`g-status tone-${line.tone}${quiet ? ' is-quiet' : ''}${
-            line.key === 'blocked' || line.key === 'art' ? ' is-standing' : ''
-          }`}
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-          data-testid="garage-status"
-          data-tone={line.tone}
-        >
-          <Glyph name={line.tone === 'ok' ? 'check' : 'warn'} size={12} />
-          <span key={line.key}>{line.text}</span>
-        </p>
-      </Workbench>
+      />
+      {portrait && <div className="g-status-row">{statusLine}</div>}
       {coaching && portrait && (
         <aside className="g-coach-line" aria-label={g.tips.title}>
           {nextStep && (

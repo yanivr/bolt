@@ -15,6 +15,8 @@ const MOUNT_WORDS: Record<string, string> = {
 
 /** A mount id such as `front_center` as words a player reads: "Front center". */
 export function mountName(mountId: string): string {
+  const named: Record<string, string> = STRINGS.garage.mountNames;
+  if (Object.prototype.hasOwnProperty.call(named, mountId)) return named[mountId]!;
   const words = mountId.split('_').map((word) => MOUNT_WORDS[word] ?? word);
   const text = words.join(' ');
   return text.charAt(0).toUpperCase() + text.slice(1);
