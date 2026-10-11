@@ -35,6 +35,7 @@ import Phaser from 'phaser';
 import { useApp, useHud } from '../../app/store.js';
 import type { DriveInput } from '../../input/driveInput.js';
 import type { DriveLink } from '../../network/link.js';
+import { raceFeed } from '../raceFeed.js';
 import { Predictor } from '../../network/prediction.js';
 import type { GameManifests } from '../assets.js';
 import type { EngineAudio } from '../audio/EngineAudio.js';
@@ -268,6 +269,7 @@ export class RaceScene extends Phaser.Scene {
     this.layout();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off('resize', this.layout, this);
+      raceFeed.reset();
       this.cfg.link.onSnapshot = null;
       this.cfg.link.onRace = null;
       this.cfg.link.onEvent = null;
@@ -332,6 +334,7 @@ export class RaceScene extends Phaser.Scene {
     this.race = race;
     this.predictor.setRival(race.rival, race.tick);
     this.combat?.onRace(race, performance.now());
+    raceFeed.publishRace(race, performance.now());
   }
 
   private onRaceEvent(event: RaceEvent): void {
@@ -340,6 +343,7 @@ export class RaceScene extends Phaser.Scene {
       useHud.setState({ finished: true });
     if (event.type === 'result') useHud.setState({ finished: true });
     this.combat?.onEvent(event);
+    raceFeed.publishEvent(event);
     this.eventCount++;
     if (event.type !== 'checkpoint' && event.type !== 'position') this.lastEvent = event.type;
   }
@@ -350,6 +354,7 @@ export class RaceScene extends Phaser.Scene {
     this.outbox.length = 0;
     this.effects.clear();
     this.combat?.clear();
+    raceFeed.reset();
     this.race = null;
     this.cfg.link.resetCar();
     this.pipeline.camera.cut();
