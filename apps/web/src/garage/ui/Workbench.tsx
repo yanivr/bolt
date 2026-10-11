@@ -1,6 +1,6 @@
 import { CATALOG, STRINGS } from '@bolt/content';
 import type { BlueprintIssue, MountPoint, PlacedPart, VehicleBlueprint } from '@bolt/shared';
-import { accessoryMounts, clamp, installedParts, own } from '@bolt/shared';
+import { accessoryMounts, clamp, installedParts, own, resolveBlueprint } from '@bolt/shared';
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
@@ -25,6 +25,8 @@ import { layoutBench, layoutFocus } from '../benchLayout.js';
 import type { Slot } from '../buildSession.js';
 import { issueText, tryMove } from '../buildSession.js';
 import { VIEW_FRAMES, carBounds, focusTarget, projectMounts } from '../carGeometry.js';
+import type { CoverageFit } from '../coverage.js';
+import { buildCoverage, coverageOrigin, coveragePaths, fitCoverage } from '../coverage.js';
 import { fill, mountName, mountShort } from '../text.js';
 import type { StepMark } from './SlotTile.js';
 import { SlotTile } from './SlotTile.js';
@@ -228,6 +230,8 @@ export function Workbench({
   // the pan eases over a moment from where the slot was to where it now is. Nothing is ever
   // drawn at a scale in between, and nothing moves under Reduced Motion.
   const carNode = useRef<HTMLDivElement>(null);
+  const coverNode = useRef<SVGGElement>(null);
+  const ghostNode = useRef<SVGGElement>(null);
   const leaderNode = useRef<SVGSVGElement>(null);
   const camera = useRef<{
     key: string;
@@ -255,10 +259,14 @@ export function Workbench({
     const fromY = before.y + hold.dy * before.scale - (layout.car.y + hold.dy * scale);
     if (fromX === 0 && fromY === 0) return;
     const timing = { duration: CAMERA_MS, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' };
-    carNode.current?.animate?.(
-      [{ transform: `translate(${fromX}px, ${fromY}px)` }, { transform: 'translate(0, 0)' }],
-      timing,
-    );
+    const pan = [
+      { transform: `translate(${fromX}px, ${fromY}px)` },
+      { transform: 'translate(0, 0)' },
+    ];
+    carNode.current?.animate?.(pan, timing);
+    // The floor's drawing of what the weapon covers moves with the car it is under.
+    coverNode.current?.animate?.(pan, timing);
+    ghostNode.current?.animate?.(pan, timing);
     leaderNode.current?.animate?.([{ opacity: 0 }, { opacity: 0 }, { opacity: 1 }], timing);
   }, [layout, scale, chassisId, frame, room, row, ready]);
   const px = frameSize * scale;
@@ -401,6 +409,87 @@ export function Workbench({
     return { shaft: `${xy('tail')} ${xy('tip')}`, head: `${xy('l')} ${xy('tip')} ${xy('r')}` };
   }, [sprite, selectedPart, dragged, frame, frameSize, scale, manifests]);
 
+  // What the selected weapon covers, drawn on the floor under the car: its arc and its range
+  // from the numbers the race itself uses, turned with the part and with the view. It follows
+  // a nudge, a drag and a change of facing as they happen.
+  const coverage = useMemo(() => {
+    if (!sprite || !selectedPart || selectedPart.def.category !== 'weapon') return null;
+    const build = resolveBlueprint(shown, CATALOG);
+    const index =
+      build?.parts.findIndex((p) => p.instance.instanceId === selectedPart.instance.instanceId) ??
+      -1;
+    if (!build || index < 0) return null;
+    let found;
+    try {
+      found = buildCoverage(build)[index] ?? null;
+    } catch {
+      return null;
+    }
+    if (!found) return null;
+    // The room the floor has for it, from the weapon along its line of fire and between the
+    // columns of tiles: a cone that would leave the floor is shortened until its end shows.
+    // It is drawn at the height of the weapon's own mount, not at the wheels: the camera is
+    // tilted, so a shape on the ground would start below the muzzle it comes from. On the
+    // ground or at the muzzle the shape is the same; only where it starts differs.
+    const z = mountHeight(sprite, selectedPart.mount.id);
+    const fit: CoverageFit = {};
+    const origin = coverageOrigin(found);
+    if (origin) {
+      const probe = projectPoints(sprite, frame, [
+        { id: 'o', x: origin.x, y: origin.y, z },
+        {
+          id: 'a',
+          x: origin.x + Math.sin(origin.heading) * 20,
+          y: origin.y - Math.cos(origin.heading) * 20,
+          z,
+        },
+      ]);
+      const o = probe.get('o');
+      const a = probe.get('a');
+      const ox = layout.car.x + (o?.dx ?? 0) * scale;
+      const oy = layout.car.y + (o?.dy ?? 0) * scale;
+      const left = layout.reserved.left + 6;
+      const right = room.width - layout.reserved.right - 6;
+      const top = 6;
+      const bottom = room.height - 6;
+      let reach = Infinity;
+      if (origin.round) reach = Math.min(ox - left, right - ox, oy - top, bottom - oy);
+      else {
+        const dx = (a?.dx ?? 0) - (o?.dx ?? 0);
+        const dy = (a?.dy ?? 0) - (o?.dy ?? 0);
+        const length = Math.hypot(dx, dy) || 1;
+        const ux = dx / length;
+        const uy = dy / length;
+        if (ux > 1e-6) reach = Math.min(reach, (right - ox) / ux);
+        else if (ux < -1e-6) reach = Math.min(reach, (left - ox) / ux);
+        if (uy > 1e-6) reach = Math.min(reach, (bottom - oy) / uy);
+        else if (uy < -1e-6) reach = Math.min(reach, (top - oy) / uy);
+      }
+      if (Number.isFinite(reach)) fit.limit = Math.max(0, reach) / scale;
+    }
+    const paths = coveragePaths(fitCoverage(found, fit), fit);
+    const points: LocalPoint[] = [];
+    paths.forEach((path, i) => {
+      path.points.forEach((p, j) => points.push({ id: `${i}:${j}`, x: p.x, y: p.y, z }));
+      path.hole?.forEach((p, j) => points.push({ id: `${i}h${j}`, x: p.x, y: p.y, z }));
+    });
+    const at = projectPoints(sprite, frame, points);
+    const xy = (id: string) => {
+      const p = at.get(id);
+      return `${layout.car.x + (p?.dx ?? 0) * scale} ${layout.car.y + (p?.dy ?? 0) * scale}`;
+    };
+    return {
+      kind: found.kind,
+      turn: found.turn,
+      range: found.range,
+      paths: paths.map((path, i) => {
+        let d = `M${path.points.map((_, j) => xy(`${i}:${j}`)).join('L')}${path.closed ? 'Z' : ''}`;
+        if (path.hole) d += `M${path.hole.map((_, j) => xy(`${i}h${j}`)).join('L')}Z`;
+        return { d, role: path.role };
+      }),
+    };
+  }, [sprite, selectedPart, shown, frame, scale, room, layout]);
+
   // The engine has no outline of its own to trace: in focus it is boxed like an empty socket.
   const engineBox =
     layout.focus?.id === 'engine'
@@ -411,6 +500,19 @@ export function Workbench({
           h: layout.focus.part.bottom - layout.focus.part.top,
         }
       : null;
+
+  // In focus the rest of the car steps back: everything but the selected thing is drawn a
+  // little darker. The engine keeps the engine bright; an empty mount dims the whole car
+  // under its dashed socket. A red or green outline is a question about another part, and
+  // nothing is dimmed while one is up.
+  const dim =
+    !focused || (highlight && highlight.tone !== 'select')
+      ? null
+      : layout.focus?.id === 'engine'
+        ? ({ engine: true } as const)
+        : highlight
+          ? { part: highlight.instanceId }
+          : ('all' as const);
 
   // A tap on the bare floor, beside the car, goes back to the whole car.
   const onFloor = (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -615,6 +717,38 @@ export function Workbench({
           } as CSSProperties
         }
       >
+        {coverage && ready && (
+          <svg
+            className={`g-coverage is-${coverage.kind}`}
+            width={room.width}
+            height={room.height}
+            aria-hidden="true"
+            data-testid="part-coverage"
+            data-kind={coverage.kind}
+            data-facing={coverage.turn}
+            data-range={coverage.range}
+          >
+            <defs>
+              <pattern
+                id="g-drop-hatch"
+                width="8"
+                height="8"
+                patternUnits="userSpaceOnUse"
+                patternTransform="rotate(45)"
+              >
+                <rect width="4" height="8" fill="rgba(255, 180, 84, 0.34)" />
+              </pattern>
+            </defs>
+            <g ref={coverNode}>
+              {coverage.paths.map((path, index) => (
+                <g key={index} className={`coverage-${path.role}`}>
+                  <path className="coverage-edge" d={path.d} />
+                  <path className="coverage-fill" d={path.d} />
+                </g>
+              ))}
+            </g>
+          </svg>
+        )}
         <div
           className="g-car"
           ref={carNode}
@@ -632,6 +766,7 @@ export function Workbench({
             scale={scale}
             frame={frame}
             highlight={highlight}
+            dim={dim}
           />
           {(sockets.length > 0 || facing || engineBox) && (
             <svg className="g-car-lines" width={px} height={px} aria-hidden="true">
@@ -654,7 +789,7 @@ export function Workbench({
               )}
               {facing && (
                 <g
-                  className="facing"
+                  className={`facing${coverage ? ' is-minor' : ''}`}
                   data-testid="part-facing-mark"
                   data-facing={selectedPart?.instance.rotationQuarterTurns}
                 >
@@ -688,6 +823,24 @@ export function Workbench({
             </span>
           )}
         </div>
+        {coverage && ready && focused && (
+          // In focus the car fills the floor and hides most of what is drawn under it, so the
+          // same outline is laid faintly over the dimmed bodywork as well.
+          <svg
+            className={`g-coverage is-ghost is-${coverage.kind}`}
+            width={room.width}
+            height={room.height}
+            aria-hidden="true"
+          >
+            <g ref={ghostNode}>
+              {coverage.paths.map((path, index) => (
+                <g key={index} className={`coverage-${path.role}`}>
+                  <path className="coverage-fill" d={path.d} />
+                </g>
+              ))}
+            </g>
+          </svg>
+        )}
         {!row && ready && (
           <svg
             className="g-leaders"

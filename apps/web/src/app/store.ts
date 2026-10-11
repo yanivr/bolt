@@ -3,6 +3,7 @@ import type { MatchPhase, VehicleBlueprint } from '@bolt/shared';
 import { serializeBlueprint, validateUntrustedBlueprint } from '@bolt/shared';
 import { BLUEPRINT_KEY, restoreBlueprint } from './savedBlueprint.js';
 import { create } from 'zustand';
+import { setVfxQuality } from '../game/vfx/quality.js';
 import type { SteeringMode } from '../input/driveInput.js';
 import type { LinkMode, LinkStatus } from '../network/link.js';
 
@@ -28,6 +29,15 @@ export type Settings = {
   effectsVolume: number;
   speedUnit: 'mph' | 'kmh';
   showTouchGuide: boolean;
+  /** Short callouts for the big moments of a race. Warnings are never switched off. */
+  callouts: boolean;
+  /** Size of the fire and equipment buttons (Section 5.13, Larger Buttons). */
+  hudScale: 'normal' | 'large';
+  /**
+   * Particle quality (Section 5.13). `auto` lets the effects watch the frame rate and thin
+   * out decoration by themselves; nothing that carries gameplay is ever reduced.
+   */
+  effectsQuality: 'auto' | 'high' | 'low';
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -41,6 +51,9 @@ export const DEFAULT_SETTINGS: Settings = {
   effectsVolume: 0.8,
   speedUnit: 'mph',
   showTouchGuide: true,
+  callouts: true,
+  hudScale: 'normal',
+  effectsQuality: 'auto',
 };
 
 const SETTINGS_KEY = 'bolt.settings.v1';
@@ -75,6 +88,14 @@ function loadSettings(): Settings {
       settings.drivingHand = DEFAULT_SETTINGS.drivingHand;
     if (settings.speedUnit !== 'mph' && settings.speedUnit !== 'kmh')
       settings.speedUnit = DEFAULT_SETTINGS.speedUnit;
+    if (settings.hudScale !== 'normal' && settings.hudScale !== 'large')
+      settings.hudScale = DEFAULT_SETTINGS.hudScale;
+    if (
+      settings.effectsQuality !== 'auto' &&
+      settings.effectsQuality !== 'high' &&
+      settings.effectsQuality !== 'low'
+    )
+      settings.effectsQuality = DEFAULT_SETTINGS.effectsQuality;
     return settings as Settings;
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -121,10 +142,15 @@ type AppState = {
   setPaused: (paused: boolean) => void;
 };
 
+const startSettings = loadSettings();
+// The effects read their quality from their own module; the stored choice is handed over once
+// here and again whenever it changes.
+setVfxQuality(startSettings.effectsQuality);
+
 export const useApp = create<AppState>((set, get) => ({
   screen: 'boot',
   boot: { stage: 'garage', progress: 0 },
-  settings: loadSettings(),
+  settings: startSettings,
   milestones: loadMilestones(),
   blueprint: loadBlueprint(),
   garageDraft: null,
@@ -139,6 +165,7 @@ export const useApp = create<AppState>((set, get) => ({
   setBoot: (boot) => set({ boot }),
   updateSettings: (patch) => {
     const settings = { ...get().settings, ...patch };
+    if (patch.effectsQuality !== undefined) setVfxQuality(settings.effectsQuality);
     try {
       window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     } catch {

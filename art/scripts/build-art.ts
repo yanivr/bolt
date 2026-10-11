@@ -33,6 +33,7 @@ import { addGlow, extractTagged, footprintShadow, renderModel, silhouette } from
 import type { RGBA } from './lib/pixels.js';
 import { PixelBuffer, hex, readPng, writePng } from './lib/pixels.js';
 import { bakeTerrain } from './terrain/index.js';
+import { bakeCombatVfx } from './bake-vfx.js';
 import { buildCoreVfx } from './vfx/core.js';
 
 /**
@@ -586,6 +587,7 @@ function main(): void {
     }
     if (mismatched > 0) process.exit(1);
     console.log(`car atlases match the pipeline (${baked.files.size} sheets)`);
+    bakeCombatVfx(true);
     return;
   }
 
@@ -675,6 +677,9 @@ function main(): void {
       `terrain: ${manifest.ground.length} chunks, ${manifest.overlays.length} overlays, ${manifest.animated.length} animated`,
     );
   }
+
+  // Combat effects and the damage overlays are drawn from the car sheets written above.
+  bakeCombatVfx(false);
 
   writePreviews(baked);
   console.log(`done in ${((performance.now() - started) / 1000).toFixed(1)} s`);

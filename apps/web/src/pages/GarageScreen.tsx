@@ -13,6 +13,7 @@ import { StarterList } from '../components/StarterList.js';
 import { useViewport } from '../components/useViewport.js';
 import type { Slot } from '../garage/buildSession.js';
 import { activeSlot, issueText, planFor, secondsLeft } from '../garage/buildSession.js';
+import { clockSound, garageSound } from '../garage/garageSounds.js';
 import { garageStore, useGarage } from '../garage/garageStore.js';
 import { catalogEntries, fitsMount, partsForSlot, slotKey } from '../garage/slots.js';
 import { fill, mountName } from '../garage/text.js';
@@ -28,6 +29,7 @@ import type { CoachMarks } from '../garage/ui/Workbench.js';
 import { Workbench } from '../garage/ui/Workbench.js';
 import { useBuildPreview, useBuildStats } from '../garage/ui/useBuildStats.js';
 import type { GameManifests } from '../game/assets.js';
+import { uiSound } from '../game/audio/index.js';
 
 type Overlay = 'leave' | 'reset' | 'paint' | 'quick' | 'blueprints' | 'more' | null;
 type Line = { tone: 'ok' | 'warn' | 'error'; text: string; key: string };
@@ -98,6 +100,23 @@ function Garage({ manifests }: { manifests: GameManifests }) {
     return () => window.clearInterval(timer);
   }, []);
   const left = secondsLeft(session, now);
+
+  // Interface sounds for what just happened on the bench and for the last seconds of the
+  // clock. Silent until the player has touched the page, like all sound.
+  const heard = useRef<{ session: typeof session | null; left: number | null }>({
+    session: null,
+    left: null,
+  });
+  useEffect(() => {
+    const sound = garageSound(heard.current.session, session);
+    heard.current.session = session;
+    if (sound) uiSound(sound.kind, sound.kind === 'install' ? sound.partId : undefined);
+  }, [session]);
+  useEffect(() => {
+    const sound = session.phase === 'building' ? clockSound(heard.current.left, left) : null;
+    heard.current.left = left;
+    if (sound) uiSound(sound);
+  }, [left, session.phase]);
 
   // The locked car, and only the locked car, goes to the race.
   const lockedCar = session.locked;

@@ -2,7 +2,6 @@ import type {
   BuildConditions,
   ControlInput,
   MountedPartSprite,
-  CarPose,
   CarSnapshot,
   DriveSession,
   InputSample,
@@ -13,6 +12,7 @@ import type {
   VehicleLoadout,
   VehicleParams,
 } from '@bolt/shared';
+import { CATALOG } from '@bolt/content';
 import {
   MAX_INPUTS_PER_PACKET,
   MPH_PER_WORLD_SPEED,
@@ -21,6 +21,7 @@ import {
   anchorToWorld,
   angleDelta,
   bendAhead,
+  blueprintSchema,
   clamp,
   createDriverScratch,
   driveCenterline,
@@ -29,9 +30,11 @@ import {
   lapPosition,
   lerp,
   mulberry32,
+  resolveBlueprint,
   wrapAngle,
 } from '@bolt/shared';
 import Phaser from 'phaser';
+import { debugEnabled } from '../../app/flags.js';
 import { useApp, useHud } from '../../app/store.js';
 import type { DriveInput } from '../../input/driveInput.js';
 import type { DriveLink } from '../../network/link.js';
@@ -44,8 +47,14 @@ import { createPaintedBody } from '../composition/paint.js';
 import { Effects } from '../particles/Effects.js';
 import type { SimPose } from '../rendering/frame.js';
 import { BodyMotion, RenderPipeline } from '../rendering/frame.js';
-import type { RivalSprites } from './CombatDebugView.js';
-import { CombatDebugView, rivalSheets } from './CombatDebugView.js';
+import { CombatView, FX_TEXTURE } from '../combat/CombatView.js';
+import '../debugHook.js';
+import { CombatStage } from '../combat/stage.js';
+import { runStress } from '../combat/stress.js';
+import { FxAtlas } from '../vfx/atlas.js';
+import { QualityGovernor, setVfxQuality, vfxQualitySetting } from '../vfx/quality.js';
+import type { RivalSprites } from './rivalSheets.js';
+import { carTextureKeys, rivalSheets } from './rivalSheets.js';
 
 export type RaceSceneConfig = {
   manifests: GameManifests;
@@ -84,16 +93,12 @@ const SURFACE_SMOKE: Record<string, number> = {
   metal: 0xc8d2e0,
 };
 
-/** Draw order within the single world camera. Ground art sits at 0, foreground art at 70. */
-const DEPTH_CAR = 50;
-
 export class RaceScene extends Phaser.Scene {
   private cfg!: RaceSceneConfig;
   private predictor!: Predictor;
   private pipeline = new RenderPipeline();
   private body = new BodyMotion();
   private car!: CarView;
-  private cone!: Phaser.GameObjects.Image;
   private effects!: Effects;
   private overlays: Array<{ def: TerrainOverlay; image: Phaser.GameObjects.Image }> = [];
   private outbox: InputSample[] = [];
@@ -110,9 +115,31 @@ export class RaceScene extends Phaser.Scene {
   /** Forward acceleration over the last simulated tick, for body squat and dive. */
   private forwardAccel = 0;
   private scratchPose: SimPose = { x: 0, y: 0, heading: 0, vx: 0, vy: 0 };
+  private readonly ownPose = {
+    x: 0,
+    y: 0,
+    heading: 0,
+    frameHeading: 0,
+    vx: 0,
+    vy: 0,
+    steer: 0,
+    braking: false,
+    roll: 0,
+    bodyShiftX: 0,
+    bodyShiftY: 0,
+  };
   private driverScratch = createDriverScratch();
-  // DEBUG VISUAL: replaced in Milestone C part 2
-  private combat: CombatDebugView | null = null;
+  private stage!: CombatStage;
+  private combat: CombatView | null = null;
+  private readonly governor = new QualityGovernor();
+  private rivalIndex = 1;
+  private rivalRigged = false;
+  /** Manual clock for frame-exact captures: the race advances only when asked to. */
+  private manual = false;
+  private manualPending = 0;
+  private virtualTime = 0;
+  private stress = false;
+  private frameMsPeak = 0;
   private race: RaceSnapshot | null = null;
   private readonly buttons = { fire: 0, use: 0 };
   private readonly control: ControlInput = { steer: 0, brake: 0, coast: true, fire: 0, use: 0 };
@@ -163,13 +190,22 @@ export class RaceScene extends Phaser.Scene {
       const ref = manifests.cars.parts?.[partId];
       if (ref) sheet(`part:${partId}`, manifests.carsBase, ref.sheet);
     }
-    // DEBUG VISUAL: replaced in Milestone C part 2. The rival is drawn with the ordinary car
-    // compositor; its sheets load beside the local car's (same keys are simply shared).
+    // The rival is drawn with the same compositor; its sheets load beside the local car's
+    // (shared keys are simply loaded once).
     if (this.cfg.rival)
       for (const [key, ref] of rivalSheets(manifests, this.cfg.rival))
         if (!this.textures.exists(key)) sheet(key, manifests.carsBase, ref);
     for (const strip of Object.values(manifests.vfx.strips))
       sheet(`vfx:${strip.id}`, manifests.vfxBase, strip);
+    // Every combat effect is in one atlas: one texture, one batch per layer.
+    this.load.image(FX_TEXTURE, `${manifests.fxBase}/${manifests.fx.file}`);
+    if (manifests.damage) {
+      const wanted = new Set([loadout.chassisId, this.cfg.rival?.loadout.chassisId]);
+      for (const id of wanted) {
+        const ref = id ? manifests.damage.chassis[id] : undefined;
+        if (id && ref) sheet(`car:${id}:overlay`, manifests.damageBase, ref);
+      }
+    }
     for (const chunk of manifests.terrain.ground)
       this.load.image(`ground:${chunk.col}_${chunk.row}`, `${manifests.terrainBase}/${chunk.file}`);
     for (const overlay of manifests.terrain.overlays)
@@ -209,11 +245,12 @@ export class RaceScene extends Phaser.Scene {
       sprite.play(key);
     }
 
-    this.cone = this.add
-      .image(0, 0, 'vfx:headlight_cone')
-      .setOrigin(0.5, 1)
-      .setDepth(20)
-      .setBlendMode(Phaser.BlendModes.ADD);
+    const cone = () =>
+      this.add
+        .image(0, 0, 'vfx:headlight_cone')
+        .setOrigin(0.5, 1)
+        .setDepth(20)
+        .setBlendMode(Phaser.BlendModes.ADD);
 
     this.effects = new Effects(this, manifests.vfx);
 
@@ -222,32 +259,80 @@ export class RaceScene extends Phaser.Scene {
       this.overlays.push({ def, image });
     }
 
-    const chassis = manifests.cars.chassis[loadout.chassisId]!;
-    const paint = manifests.cars.paints[loadout.paintId];
-    const bodyKey = paint
-      ? createPaintedBody(this, `car:${chassis.id}:body`, chassis, paint)
-      : `car:${chassis.id}:body`;
-    // One world camera draws everything. The car is placed in world space on the same device
+    // One world camera draws everything. Each car is placed in world space on the same device
     // pixel grid as the ground and is drawn from authored heading frames, never rotated.
-    this.car = new CarView(
-      this,
-      chassis,
-      manifests.cars.wheels[loadout.tireKitId]!,
-      manifests.cars.engines[loadout.engineId]!,
-      {
-        body: bodyKey,
-        shadow: `car:${chassis.id}:shadow`,
-        brake: `car:${chassis.id}:brake`,
-        head: `car:${chassis.id}:head`,
-        wheels: `wheel:${loadout.tireKitId}`,
-        engine: `engine:${loadout.engineId}:${chassis.engineInBay ? 'bay' : 'tail'}`,
-        parts: Object.fromEntries(this.cfg.parts.map((p) => [p.partId, `part:${p.partId}`])),
-      },
-      this.cfg.parts,
-    );
-    this.car.container.setDepth(DEPTH_CAR);
-    // DEBUG VISUAL: replaced in Milestone C part 2
-    this.combat = new CombatDebugView(this, manifests, this.cfg.rival, DEPTH_CAR);
+    const build = (sprites: RivalSprites): CarView | null => {
+      const chassis = manifests.cars.chassis[sprites.loadout.chassisId];
+      const wheels = manifests.cars.wheels[sprites.loadout.tireKitId];
+      const engine = manifests.cars.engines[sprites.loadout.engineId];
+      if (!chassis || !wheels || !engine) return null;
+      const paint = manifests.cars.paints[sprites.loadout.paintId];
+      const keys = carTextureKeys(manifests, sprites);
+      if (paint) keys.body = createPaintedBody(this, keys.body, chassis, paint);
+      if (!keys.overlay || !this.textures.exists(keys.overlay)) delete keys.overlay;
+      return new CarView(this, chassis, wheels, engine, keys, sprites.parts);
+    };
+    this.car = build({ loadout, parts: this.cfg.parts })!;
+    const rivalView = this.cfg.rival ? build(this.cfg.rival) : null;
+
+    // The combat presentation: a pure stage that turns snapshots and events into pooled
+    // sprites and pixel shapes, and a view that copies them onto Phaser objects.
+    const query = new URLSearchParams(window.location.search);
+    const debug = debugEnabled();
+    this.stage = new CombatStage(new FxAtlas(manifests.fx), manifests.cars, {
+      kick: (pixels, seconds) => this.pipeline.camera.kick(pixels, seconds),
+      skid: (x, y, rotation, heavy) => this.effects.skid(x, y, rotation, heavy),
+      exhaust: (x, y, vx, vy) => this.effects.exhaust(x, y, vx, vy),
+    });
+    this.stage.setCar(0, this.cfg.build);
+    const views: Array<CarView | null> = [this.car, rivalView];
+    this.combat = new CombatView(this, this.stage, views, [cone(), rivalView ? cone() : null]);
+    if (debug) {
+      this.manual = query.get('manual') === '1';
+      this.stress = query.get('vfxStress') === '1';
+      const quality = query.get('vfx');
+      if (quality === 'high' || quality === 'low' || quality === 'auto') setVfxQuality(quality);
+      window.__boltRace = {
+        manual: this.manual,
+        advance: (frames) => {
+          this.manualPending += Math.max(0, Math.floor(frames));
+        },
+        run: (frames) => {
+          if (!this.manual) return;
+          for (let i = 0; i < frames; i++) {
+            this.virtualTime += 1000 / 60;
+            this.frame(this.virtualTime);
+          }
+        },
+        pending: () => this.manualPending,
+        raceTick: () => this.predictor.session.raceTicks,
+        tick: () => this.stage.latestTick,
+        stats: () => ({
+          ...this.stage.stats(),
+          drawn: this.combat?.drawn ?? 0,
+          quality: this.stage.quality,
+          setting: vfxQualitySetting(),
+          frameMs: Math.round(this.governor.frameMs * 10) / 10,
+          frameMsPeak: Math.round(this.frameMsPeak * 10) / 10,
+          recycled: this.stage.pool.recycled,
+          refused: this.stage.pool.refused,
+          peak: this.stage.pool.peak.join(','),
+        }),
+        focus: () => {
+          const a = this.stage.cars[0]!;
+          const b = this.stage.cars[1]!;
+          const x = b.present ? (a.x + b.x) / 2 : a.x;
+          const y = b.present ? (a.y + b.y) / 2 : a.y;
+          const cam = this.cameras.main;
+          const css = this.scale.displayScale;
+          return {
+            x: ((x - cam.scrollX) * cam.zoom) / css.x,
+            y: ((y - cam.scrollY) * cam.zoom) / css.y,
+          };
+        },
+        setQuality: (value) => setVfxQuality(value),
+      };
+    }
 
     this.pipeline.place(this.readPose());
 
@@ -276,6 +361,7 @@ export class RaceScene extends Phaser.Scene {
       this.cfg.link.onStatus = null;
       this.combat?.destroy();
       this.combat = null;
+      if (window.__boltRace) delete window.__boltRace;
     });
     this.cfg.onReady();
   }
@@ -333,7 +419,8 @@ export class RaceScene extends Phaser.Scene {
   private onRace(race: RaceSnapshot): void {
     this.race = race;
     this.predictor.setRival(race.rival, race.tick);
-    this.combat?.onRace(race, performance.now());
+    this.rigCars(race);
+    this.stage.onRace(race);
     raceFeed.publishRace(race, performance.now());
   }
 
@@ -342,10 +429,30 @@ export class RaceScene extends Phaser.Scene {
     if (event.type === 'finish' && event.car === (this.race?.you ?? 0))
       useHud.setState({ finished: true });
     if (event.type === 'result') useHud.setState({ finished: true });
-    this.combat?.onEvent(event);
+    this.stage.onEvent(event);
     raceFeed.publishEvent(event);
     this.eventCount++;
     if (event.type !== 'checkpoint' && event.type !== 'position') this.lastEvent = event.type;
+  }
+
+  /**
+   * Gives the stage each car's rig the first time the race says who is who. The local car's
+   * build is known from the start; the rival's comes with the snapshot as canonical JSON.
+   */
+  private rigCars(race: RaceSnapshot): void {
+    if (this.rivalRigged) return;
+    this.rivalRigged = true;
+    this.rivalIndex = race.you === 0 ? 1 : 0;
+    this.stage.setCar(race.you, this.cfg.build);
+    let rival = null;
+    try {
+      const parsed = blueprintSchema.safeParse(JSON.parse(race.rivalBlueprint));
+      if (parsed.success) rival = resolveBlueprint(parsed.data, CATALOG);
+    } catch {
+      rival = null;
+    }
+    this.stage.setCar(this.rivalIndex, this.cfg.rival ? rival : null);
+    if (race.you !== 0) this.combat?.swapCars();
   }
 
   /** Puts the car back on the grid for another run. */
@@ -353,7 +460,7 @@ export class RaceScene extends Phaser.Scene {
     this.predictor.clearPending();
     this.outbox.length = 0;
     this.effects.clear();
-    this.combat?.clear();
+    this.stage.clear();
     raceFeed.reset();
     this.race = null;
     this.cfg.link.resetCar();
@@ -362,6 +469,25 @@ export class RaceScene extends Phaser.Scene {
   }
 
   override update(time: number): void {
+    if (!this.manual) {
+      this.frame(time);
+      return;
+    }
+    // Manual clock: every queued frame is a whole 60 Hz step, and nothing moves in between,
+    // so a capture tool can stop on any frame of any effect.
+    if (this.manualPending <= 0) {
+      this.frame(this.virtualTime);
+      return;
+    }
+    const batch = Math.min(this.manualPending, 240);
+    for (let i = 0; i < batch; i++) {
+      this.virtualTime += 1000 / 60;
+      this.frame(this.virtualTime);
+    }
+    this.manualPending -= batch;
+  }
+
+  private frame(time: number): void {
     const app = useApp.getState();
     const settings = app.settings;
     const session = this.predictor.session;
@@ -387,32 +513,47 @@ export class RaceScene extends Phaser.Scene {
     );
     this.cameras.main.setScroll(view.scrollX, view.scrollY);
     this.effects.update(dt);
-    // DEBUG VISUAL: replaced in Milestone C part 2
-    this.combat?.update(performance.now(), dt, Math.max(1, Math.round(this.cfg.view.scale)));
 
     // --- Car pose ------------------------------------------------------------------------------
     const speed = t.speed;
     this.roll += dt * clamp(Math.abs(t.forwardSpeed) / 6, 0, 18) * Math.sign(t.forwardSpeed || 1);
     this.idleClock += dt;
     this.body.update(dt, m.yawRate * t.forwardSpeed, this.forwardAccel, speed, this.idleClock);
-    const pose: CarPose = {
-      headingRad: view.frameHeading,
-      steer: m.steeringInput,
-      roll: this.roll,
-      braking: m.brakeInput > 0.3 || m.reversing,
-      headlights: true,
-      bodyShiftX: this.body.shiftX,
-      bodyShiftY: this.body.shiftY,
-    };
-    this.car.apply(pose);
-    this.car.setPosition(view.carX, view.carY);
-
-    // The light cone follows the drawn car, so it cannot wobble against the sprite.
     const heading = view.pose.heading;
     const x = view.pose.x;
     const y = view.pose.y;
-    this.cone.setPosition(view.carX + Math.sin(heading) * 22, view.carY - Math.cos(heading) * 22);
-    this.cone.setRotation(heading);
+
+    // --- Combat presentation: the rival, everything in flight and on the road, every effect ----
+    const scale = Math.max(1, Math.round(this.cfg.view.scale));
+    const stage = this.stage;
+    stage.scale = scale;
+    stage.reduceFlashes = settings.reduceFlashes;
+    stage.viewX0 = view.scrollX;
+    stage.viewY0 = view.scrollY;
+    stage.viewX1 = view.scrollX + this.scale.width / scale;
+    stage.viewY1 = view.scrollY + this.scale.height / scale;
+    if (dt > 0 && !this.manual) {
+      stage.setQuality(this.governor.update(dt));
+      this.frameMsPeak = Math.max(this.frameMsPeak * 0.995, dt * 1000);
+    } else stage.setQuality(vfxQualitySetting() === 'low' ? 'low' : 'high');
+    const own = this.ownPose;
+    own.x = view.carX;
+    own.y = view.carY;
+    own.heading = heading;
+    own.frameHeading = view.frameHeading;
+    own.vx = view.pose.vx;
+    own.vy = view.pose.vy;
+    own.steer = m.steeringInput;
+    own.braking = m.brakeInput > 0.3 || m.reversing;
+    own.roll = this.roll;
+    own.bodyShiftX = this.body.shiftX;
+    own.bodyShiftY = this.body.shiftY;
+    // A race run in the page is shown exactly one tick behind its newest snapshot, in step
+    // with the local car's own interpolation; a server race is paced from snapshot arrivals.
+    const alpha = this.cfg.link.mode === 'offline' ? (frozen ? 1 : this.pipeline.clock.alpha) : -1;
+    if (this.stress && !frozen) runStress(stage, dt, x, y);
+    stage.frame(frozen ? 0 : dt, own, alpha);
+    this.combat?.sync();
 
     for (const { def, image } of this.overlays) {
       if (!def.fadeNearPlayer) continue;

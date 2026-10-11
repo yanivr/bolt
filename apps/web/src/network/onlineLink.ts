@@ -431,7 +431,8 @@ export class OnlineLink implements DriveLink {
 
   resetCar(): void {
     try {
-      this.room.send(ClientMessage.RESET_CAR, {});
+      // No payload: the room counts anything else as a malformed message and ignores it.
+      this.room.send(ClientMessage.RESET_CAR);
     } catch {
       // Ignored while reconnecting.
     }

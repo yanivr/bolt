@@ -28,6 +28,8 @@ fails if committed car atlases differ from the pipeline's output.
 | Sprite modeller             | `art/scripts/lib/model.ts`  | any model at any heading                       |
 | Cars, wheels, engines       | `art/scripts/cars/*`        | `apps/web/public/assets/atlases/cars`          |
 | Core effects                | `art/scripts/vfx/core.ts`   | `apps/web/public/assets/atlases/vfx_core`      |
+| Combat effects              | `art/scripts/vfx/*`, `art/scripts/bake-vfx.ts` | `apps/web/public/assets/atlases/vfx_combat` |
+| Damage and frost overlays   | `art/scripts/vfx/damage.ts` | `apps/web/public/assets/atlases/vfx_damage`    |
 | Terrain                     | `art/scripts/terrain/*`     | `apps/web/public/assets/maps/<track>/<preset>` |
 | Review sheets               | written by the build        | `art/preview/` (not committed)                 |
 
@@ -103,6 +105,31 @@ turntable and the pipeline's review sheets all call it.
 Paint is an exact palette swap from the key ramp at load time. No other material may contain a
 key color; the build throws if one does.
 
+### Combat effects
+
+The 101 strips of the combat atlas are drawn by the kit in `art/scripts/vfx/kit.ts` and packed
+into one indexed sheet with two pixels of padding (`pack.ts`); `docs/VFX_GUIDE.md` is the full
+reference. What matters when drawing one:
+
+- **Clusters, not circles.** `cloud` draws the union of a few lobes with a coherent noisy edge,
+  quantized into the hard bands of a ramp and eroded in two-pixel cells as it dies. A fireball,
+  a smoke blossom, a puddle and a splat are the same routine with different lobes and ramps.
+- **Direction is baked.** `directional` draws a sprite once per heading from a shape written in
+  its own space (`u` forward, `v` right), sampled at pixel centres. Nothing is rotated as a
+  bitmap, in the baker or in the game. Solid colors get a one-pixel outline; colors passed
+  through `glow()` (flames, trails) do not.
+- **Alpha.** Opaque or clear, except light on the road, marks on the road and shadows, which
+  use fixed steps. A test enforces it per strip.
+- **Read on asphalt.** The road is a dark blue-gray. Dark things need a light edge (smoke has a
+  pale top and a dark rim, oil a lit rim and sheen); bright things need a dark or saturated
+  edge (fire ends in maroon, not in yellow).
+- **Overlays come from the body sheets.** `damage.ts` traces each opaque body pixel back to the
+  car's own space and asks a pattern defined there, so marks stay put on the car at every
+  heading. Rebake them after any change to a chassis body.
+
+Review a strip with `npx tsx art/scripts/vfx/montage.ts out.png 3 <id> ...`, the bake's sheets
+in `art/preview/vfx`, and then in motion with the tools in `docs/VFX_GUIDE.md`.
+
 ### Terrain
 
 The baker computes the corridor field once from the same `buildTrack` runtime the physics
@@ -143,7 +170,8 @@ cannot vouch for its own taste, so these are open until a person signs them off:
 | Neon Cut clear night                                         | Awaiting review               | See known weak spots below                                                    |
 | Core effects (smoke, sparks, skids, headlight pool)          | Awaiting review on hardware   | Only stills reviewed; motion needs a real device                              |
 | 60 mounted parts, hero pass (DECISIONS 102)                  | Awaiting product-owner review | Reviewed by the developer in `art/preview/parts`. Weakest: Heat Guard, Traction Computer, Turret Computer, Composite Shell, Decoy Drone |
-| Damage states, 20 weapon effects, rain variant, other biomes | Not started                   | Milestones C and D                                                            |
+| Combat effects atlas, 20 weapon identities, damage and frost overlays | Awaiting product-owner review, and review on hardware | Reviewed by the developer only, in scenario captures (`tests/visual/out/combat`) and the software review renderer. Weakest: the mortar's column, the boomerang, the saw's teeth, charge lights, the tesla bolt at short range |
+| Rain variant, other biomes                                   | Not started                   | Milestone D. The wet road scenario is drawn on the clear-night bake            |
 
 Known weak spots in Neon Cut, from the terrain bake's own review:
 

@@ -212,3 +212,88 @@ export type VfxStripManifest = {
 };
 
 export type VfxManifest = { version: 1; strips: Record<string, VfxStripManifest> };
+
+// --- Combat effects atlas ----------------------------------------------------------------------
+
+/**
+ * Draw layer of a combat effect, lowest first. The renderer keeps one batch per layer, so the
+ * order inside an explosion (smoke under debris under fire under flash) never depends on which
+ * sprite happened to be created first.
+ */
+export const VFX_LAYERS = [
+  'decal',
+  'glow',
+  'ground',
+  'smoke',
+  'body',
+  'fire',
+  'flash',
+  'mark',
+] as const;
+export type VfxLayer = (typeof VFX_LAYERS)[number];
+
+/**
+ * One animation in a packed effects atlas (Section 13.8: frame sequence, playback rate, anchor,
+ * layer priority, looping flag, fallback). Frames sit in a grid starting at `x`, `y`, `columns`
+ * to a row, each `frameWidth` by `frameHeight` with `padding` clear pixels between neighbours.
+ *
+ * A directional animation holds `directions` headings (heading 0 up the screen, clockwise) of
+ * `frames / directions` time frames each: frame index = direction * (frames / directions) + time.
+ * Nothing in the atlas is ever rotated or scaled at run time.
+ */
+export type VfxAnimManifest = {
+  id: string;
+  x: number;
+  y: number;
+  frameWidth: number;
+  frameHeight: number;
+  frames: number;
+  columns: number;
+  fps: number;
+  loop: boolean;
+  /** The point of each frame that is placed on the effect's position, in frame pixels. */
+  anchorX: number;
+  anchorY: number;
+  layer: VfxLayer;
+  blend: 'normal' | 'add';
+  /** Headings baked into the strip, or 1 when it has no direction. */
+  directions: number;
+  /** Animation to draw when this one cannot be (reduced flashes), or null. */
+  fallback: string | null;
+};
+
+export type VfxAtlasManifest = {
+  version: 1;
+  /** File name relative to the manifest. */
+  file: string;
+  width: number;
+  height: number;
+  padding: number;
+  anims: Record<string, VfxAnimManifest>;
+};
+
+/**
+ * Damage and frost overlays for one chassis: the same 64 headings as its body sheet, one block
+ * of rows per state, drawn over the body by the compositor. `states` names the blocks in order.
+ */
+export type DamageOverlayManifest = {
+  version: 1;
+  states: string[];
+  chassis: Record<string, SpriteSheetRef>;
+};
+
+/** Position of frame `index` of an atlas animation, in atlas pixels. */
+export function vfxFrameRect(
+  anim: VfxAnimManifest,
+  index: number,
+  padding: number,
+): { x: number; y: number; w: number; h: number } {
+  const col = index % anim.columns;
+  const row = Math.floor(index / anim.columns);
+  return {
+    x: anim.x + col * (anim.frameWidth + padding),
+    y: anim.y + row * (anim.frameHeight + padding),
+    w: anim.frameWidth,
+    h: anim.frameHeight,
+  };
+}

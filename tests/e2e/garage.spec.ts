@@ -2286,3 +2286,214 @@ test('home, preview and blueprints fit a small landscape phone', async ({ page }
   await page.getByRole('button', { name: 'My Blueprints' }).tap();
   await fits('.bp-head button');
 });
+
+// --- Milestone C part 2: what a weapon covers, and the car stepping back in focus ---------------
+
+/** The outline of the first area the floor shows for the selected weapon, as screen points. */
+async function coverageOutline(page: Page): Promise<Array<{ x: number; y: number }>> {
+  const d = await page
+    .getByTestId('part-coverage')
+    .locator('.coverage-area .coverage-fill')
+    .first()
+    .getAttribute('d');
+  return (d ?? '')
+    .split(/[MLZ]/)
+    .map((pair) => pair.trim())
+    .filter(Boolean)
+    .map((pair) => {
+      const [x, y] = pair.split(/\s+/).map(Number);
+      return { x: x!, y: y! };
+    });
+}
+
+/** Which way a cone points on screen: from its apex, the last point, to the middle of its rim. */
+function coneDirection(points: Array<{ x: number; y: number }>): { x: number; y: number } {
+  const apex = points[points.length - 1]!;
+  const rim = points.slice(0, -1);
+  const cx = rim.reduce((sum, p) => sum + p.x, 0) / rim.length - apex.x;
+  const cy = rim.reduce((sum, p) => sum + p.y, 0) / rim.length - apex.y;
+  const length = Math.hypot(cx, cy);
+  return { x: cx / length, y: cy / length };
+}
+
+test('a selected weapon shows what it covers on the floor, and the drawing turns and moves with it', async ({
+  page,
+}) => {
+  await skipTips(page);
+  await page.setViewportSize({ width: 870, height: 370 });
+  await page.goto('/?debug=1');
+  await seedLastBuild(
+    page,
+    await blueprint(page, 'Cones', {}, [
+      ['weapon_shotgun', 'roof_mid', { assignedActionSlot: 0 }],
+      ['weapon_mine', 'rear_center', { rotationQuarterTurns: 2, assignedActionSlot: 1 }],
+      ['utility_radar', 'left_utility'],
+    ]),
+  );
+  await openGarage(page);
+  const bench = page.locator('.g-bench');
+  const cover = page.getByTestId('part-coverage');
+  // Nothing selected: nothing on the floor.
+  await expect(cover).toHaveCount(0);
+
+  // The shotgun: a cone, drawn under the car and inside the floor.
+  await tile(page, 'mount:roof_mid').tap();
+  await expect(cover).toHaveAttribute('data-kind', 'cone');
+  await expect(cover).toHaveAttribute('data-facing', '0');
+  await expect(cover).toHaveAttribute('data-range', '110');
+  const floor = (await page.locator('.g-floor').boundingBox())!;
+  const layer = (await cover.boundingBox())!;
+  expect(Math.abs(layer.x - floor.x)).toBeLessThan(2);
+  expect(Math.abs(layer.width - floor.width)).toBeLessThan(3);
+  expect(Math.abs(layer.height - floor.height)).toBeLessThan(3);
+  // Under the car in the page, and the faint copy over it.
+  const order = await page.evaluate(() => {
+    const kids = Array.from(document.querySelector('.g-floor')!.children);
+    return {
+      cover: kids.findIndex((k) => k.matches('.g-coverage:not(.is-ghost)')),
+      car: kids.findIndex((k) => k.matches('.g-car')),
+      ghost: kids.findIndex((k) => k.matches('.g-coverage.is-ghost')),
+    };
+  });
+  expect(order.cover).toBeGreaterThanOrEqual(0);
+  expect(order.cover).toBeLessThan(order.car);
+  expect(order.ghost).toBeGreaterThan(order.car);
+  // The arrow at the muzzle is no longer painted: the cone is the direction cue.
+  await expect(page.getByTestId('part-facing-mark')).toBeHidden();
+
+  const heading = async (turn: number) => {
+    const frame = Number(await bench.getAttribute('data-view'));
+    const rad = ((frame + turn * 16) / 64) * Math.PI * 2;
+    return { x: Math.sin(rad), y: -Math.cos(rad) };
+  };
+  const along = async (turn: number, where: string) => {
+    await expect(cover, where).toHaveAttribute('data-facing', String(turn));
+    const points = await coverageOutline(page);
+    expect(points.length, where).toBeGreaterThan(4);
+    const cone = coneDirection(points);
+    const want = await heading(turn);
+    expect(cone.x * want.x + cone.y * want.y, where).toBeGreaterThan(0.985);
+    // Every point is on the floor's drawing, and the apex is inside the floor itself.
+    const apex = points[points.length - 1]!;
+    expect(apex.x, where).toBeGreaterThan(0);
+    expect(apex.x, where).toBeLessThan(floor.width);
+    expect(apex.y, where).toBeGreaterThan(0);
+    expect(apex.y, where).toBeLessThan(floor.height);
+    // A 40 degree cone: the two ends of its rim are 40 degrees apart as seen from the apex.
+    const a = points[0]!;
+    const b = points[points.length - 2]!;
+    const angle = Math.abs(
+      Math.atan2(a.y - apex.y, a.x - apex.x) - Math.atan2(b.y - apex.y, b.x - apex.x),
+    );
+    const spread = Math.min(angle, Math.PI * 2 - angle);
+    expect((spread * 180) / Math.PI, where).toBeGreaterThan(34);
+    expect((spread * 180) / Math.PI, where).toBeLessThan(46);
+  };
+  await along(0, 'facing forward');
+  // Turned with the picker, it turns; turned with the view, it turns with the car.
+  await page.getByTestId('face-1').tap();
+  await along(1, 'facing right');
+  await page.getByTestId('face-2').tap();
+  await along(2, 'facing back');
+  await page.getByRole('button', { name: 'Rotate view' }).tap();
+  await along(2, 'facing back, view turned');
+  await page.getByTestId('face-3').tap();
+  await along(3, 'facing left, view turned');
+  // A nudge moves the apex with the part, by a sprite pixel a step.
+  const scale = await drawnScale(page);
+  const before = (await coverageOutline(page)).pop()!;
+  await page.getByRole('button', { name: 'Move forward' }).tap();
+  await expect
+    .poll(async () => {
+      const now = (await coverageOutline(page)).pop()!;
+      return Math.hypot(now.x - before.x, now.y - before.y);
+    })
+    .toBeCloseTo(scale, 0);
+
+  // The mine: a drop zone behind the car, hatched, with the ring that sets it off.
+  await tile(page, 'mount:rear_center').tap();
+  await expect(cover).toHaveAttribute('data-kind', 'drop');
+  await expect(cover).toHaveAttribute('data-facing', '2');
+  await expect(cover.locator('.coverage-area')).toHaveCount(1);
+  await expect(cover.locator('.coverage-core')).toHaveCount(1);
+  // The radar is not a weapon: nothing on the floor.
+  await tile(page, 'mount:left_utility').tap();
+  await expect(cover).toHaveCount(0);
+});
+
+/** Mean brightness of the opaque pixels of the car canvas, 0 to 255. */
+async function carBrightness(page: Page): Promise<number> {
+  return page.locator('.g-car canvas').evaluate((el) => {
+    const canvas = el as HTMLCanvasElement;
+    const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+    let sum = 0;
+    let n = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3]! < 200) continue;
+      sum += 0.299 * data[i]! + 0.587 * data[i + 1]! + 0.114 * data[i + 2]!;
+      n++;
+    }
+    return n > 0 ? sum / n : 0;
+  });
+}
+
+test('in focus the car steps back: everything but the selected part is drawn darker, at once under Reduced Motion', async ({
+  page,
+}) => {
+  await skipTips(page);
+  await page.setViewportSize({ width: 870, height: 370 });
+  await page.goto('/?debug=1');
+  await seedLastBuild(
+    page,
+    await blueprint(page, 'Dim', {}, [
+      ['utility_radar', 'left_utility'],
+      ['utility_repair', 'right_utility'],
+    ]),
+  );
+  await openGarage(page);
+  const canvas = page.locator('.g-car canvas');
+  // The overview is drawn as it always was.
+  await expect(canvas).toHaveAttribute('data-dim', '0.00');
+  const whole = await carBrightness(page);
+  expect(whole).toBeGreaterThan(20);
+
+  // A part in focus: the rest fades to forty percent darker, the part is kept.
+  await tile(page, 'mount:left_utility').tap();
+  const tools = page.getByRole('region', { name: 'Selected part' });
+  const instanceId = (await tools.getAttribute('data-instance'))!;
+  await expect(canvas).toHaveAttribute('data-dim', '0.40');
+  await expect(canvas).toHaveAttribute('data-dim-keep', `part:${instanceId}`);
+  const dimmed = await carBrightness(page);
+  // Mostly bodywork, so the whole picture is clearly darker. It is not exactly forty percent:
+  // the kept part and its gold outline stay bright, and in focus they are a larger share of
+  // the picture than in the overview this is compared with.
+  expect(dimmed / whole).toBeGreaterThan(0.55);
+  expect(dimmed / whole).toBeLessThan(0.82);
+  // The engine in focus keeps the engine; an empty mount dims the whole car.
+  await tile(page, 'engine').tap();
+  await expect(canvas).toHaveAttribute('data-dim-keep', 'engine');
+  await expect(canvas).toHaveAttribute('data-dim', '0.40');
+  await tile(page, 'mount:roof_mid').tap();
+  await expect(canvas).toHaveAttribute('data-dim-keep', 'all');
+  // The wash is the interface's navy, not black, and the dashed socket is bright.
+  expect((await carBrightness(page)) / whole).toBeLessThan(0.75);
+  // The chassis and the wheels show the whole car, undimmed, and so does Whole Car.
+  await tile(page, 'tires').tap();
+  await expect(canvas).toHaveAttribute('data-dim', '0.00');
+  await tile(page, 'mount:left_utility').tap();
+  await expect(canvas).toHaveAttribute('data-dim', '0.40');
+  await page.getByTestId('car-stats').tap();
+  await expect(canvas).toHaveAttribute('data-dim', '0.00');
+  expect(Math.abs((await carBrightness(page)) - whole)).toBeLessThan(1);
+
+  // Reduced Motion: no fade. The first frame after the tap is already fully dimmed.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await tile(page, 'mount:right_utility').tap();
+  const first = await canvas.evaluate(
+    (el) =>
+      new Promise<string>((resolve) =>
+        requestAnimationFrame(() => resolve((el as HTMLCanvasElement).dataset.dim ?? '')),
+      ),
+  );
+  expect(first).toBe('0.40');
+});

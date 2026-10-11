@@ -4,16 +4,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { TRACK_ID, WEATHER_PRESET_ID, bootAssets } from '../app/App.js';
 import { debugEnabled } from '../app/flags.js';
 import { useApp, useHud } from '../app/store.js';
-import { PixelText } from '../components/PixelText.js';
 import type { RaceGameHandle } from '../game/RaceGame.js';
 import { createRaceGame } from '../game/RaceGame.js';
 import type { GameManifests } from '../game/assets.js';
 import { EngineAudio } from '../game/audio/EngineAudio.js';
-import type { DriveOptions, DriveSetupError } from '../game/startDrive.js';
+import type { DriveOptions, DriveSetup, DriveSetupError } from '../game/startDrive.js';
 import { startDrive } from '../game/startDrive.js';
-import type { HudActions } from '../hud/Hud.js';
-import { Hud, formatRaceTime } from '../hud/Hud.js';
+import { Hud } from '../hud/Hud.js';
+import { Results } from '../hud/Results.js';
 import { SettingsPanel } from '../hud/SettingsPanel.js';
+import { hudLive, setHudFrozen, startHudFeed, useCombat } from '../hud/hudStore.js';
+import type { HudLoadout } from '../hud/model.js';
+import { buildHudLoadout } from '../hud/model.js';
 import { DriveInput } from '../input/driveInput.js';
 
 type LoadState =
@@ -41,34 +43,47 @@ function driveOptions(): DriveOptions {
 }
 
 /**
- * The buttons a car's blueprint gives its driver: which weapon is on each fire button, and its
- * manual utilities in the order of their input bits.
+ * What the HUD needs to know about the two cars: the local car's buttons, components and
+ * limits, and the names of the rival's components for callouts and results.
  */
-function actionsFor(
-  blueprint: Parameters<typeof resolveBlueprint>[0],
-  input: DriveInput,
-): HudActions {
-  const build = resolveBlueprint(blueprint, CATALOG);
-  const fire: HudActions['fire'] = [];
-  const use: HudActions['use'] = [];
-  let repairMask = 0;
-  for (const placed of build?.parts ?? []) {
-    const { def, instance } = placed;
-    if (def.category === 'weapon' && instance.assignedActionSlot !== undefined)
-      fire.push({ slot: instance.assignedActionSlot, label: def.displayName });
-    if (def.category === 'utility' && def.triggerMode === 'manual') {
-      if (def.params.repairUnits !== undefined) repairMask |= 1 << use.length;
-      use.push({ bit: use.length, label: def.displayName });
-    }
-  }
-  input.repairMask = repairMask;
-  fire.sort((a, b) => a.slot - b.slot);
-  return {
-    fire,
-    use,
-    onFire: (slot) => input.tapFire(slot),
-    onUse: (bit) => input.tapUse(bit),
-  };
+function hudSetup(setup: DriveSetup): { loadout: HudLoadout; rivalNames: string[] } {
+  const world = { width: setup.track.def.worldWidth, height: setup.track.def.worldHeight };
+  const loadout = buildHudLoadout(setup.build, setup.session.params, world);
+  const rivalBuild = setup.rival ? resolveBlueprint(setup.rival.blueprint, CATALOG) : null;
+  const rivalNames =
+    setup.rival && rivalBuild
+      ? buildHudLoadout(rivalBuild, setup.rival.params, world).components.map((c) => c.name)
+      : [];
+  return { loadout, rivalNames };
+}
+
+/** Section 5.10: a paused single-player race resumes by itself after this long. */
+const PAUSE_LIMIT_SECONDS = 120;
+/** If the local car has finished and no result has come this long after, show what there is. */
+const RESULT_PATIENCE_MS = 12_000;
+
+function clock(seconds: number): string {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+/** The notice at the top of the pause menu: what the race is doing while the menu is open. */
+function PauseNotice({ online, onTimeout }: { online: boolean; onTimeout: () => void }) {
+  const [left, setLeft] = useState(PAUSE_LIMIT_SECONDS);
+  useEffect(() => {
+    if (online) return;
+    const started = Date.now();
+    const timer = window.setInterval(() => {
+      const remaining = PAUSE_LIMIT_SECONDS - Math.floor((Date.now() - started) / 1000);
+      setLeft(Math.max(0, remaining));
+      if (remaining <= 0) onTimeout();
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, [online, onTimeout]);
+  return (
+    <p className="notice" data-testid="pause-notice">
+      {online ? STRINGS.race.pauseNote : STRINGS.race.pausedNote.replace('{time}', clock(left))}
+    </p>
+  );
 }
 
 function usePortrait(): boolean {
@@ -91,7 +106,7 @@ export function RaceScreen() {
     progress: 0,
   });
   const [manifests, setManifests] = useState<GameManifests | null>(null);
-  const [actions, setActions] = useState<HudActions | null>(null);
+  const [hud, setHud] = useState<{ loadout: HudLoadout; input: DriveInput } | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [portraitOk, setPortraitOk] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -99,8 +114,10 @@ export function RaceScreen() {
   const setPaused = useApp((s) => s.setPaused);
   const setScreen = useApp((s) => s.setScreen);
   const finished = useHud((s) => s.finished);
-  const raceTimeMs = useHud((s) => s.raceTimeMs);
-  const bestLapMs = useHud((s) => s.bestLapMs);
+  const result = useCombat((s) => s.result);
+  const summary = useCombat((s) => s.summary);
+  const preview = useCombat((s) => s.preview);
+  const you = useCombat((s) => s.you);
   const linkStatus = useHud((s) => s.linkStatus);
   const linkMode = useHud((s) => s.linkMode);
   const portrait = usePortrait();
@@ -111,6 +128,7 @@ export function RaceScreen() {
     if (!host || !touch) return;
     let cancelled = false;
     let leave: (() => void) | null = null;
+    let stopFeed: (() => void) | null = null;
     const input = new DriveInput();
     const audio = new EngineAudio();
     const unlock = () => audio.unlock();
@@ -146,7 +164,11 @@ export function RaceScreen() {
           ? resolveCarSprites(m.cars, setup.rival.blueprint).loadout
           : null;
         setManifests(m);
-        setActions(actionsFor(setup.blueprint, input));
+        // The HUD listens to the race feed from before the first snapshot.
+        const { loadout, rivalNames } = hudSetup(setup);
+        input.repairMask = loadout.repairMask;
+        stopFeed = startHudFeed({ loadout, rivalNames, laps: setup.track.def.laps });
+        setHud({ loadout, input });
         setLoad({ kind: 'loading', stage: 'track', progress: 0 });
         input.attach(touch);
         game.current = createRaceGame(host, {
@@ -186,6 +208,8 @@ export function RaceScreen() {
       input.detach();
       game.current?.destroy();
       game.current = null;
+      stopFeed?.();
+      setHud(null);
       leave?.();
       audio.dispose();
     };
@@ -199,7 +223,29 @@ export function RaceScreen() {
     return () => window.removeEventListener('keydown', onKey);
   }, [setPaused]);
 
-  const raceAgain = useCallback(() => game.current?.restart(), []);
+  const raceAgain = useCallback(() => {
+    game.current?.restart();
+    setPaused(false);
+  }, [setPaused]);
+  const resume = useCallback(() => setPaused(false), [setPaused]);
+
+  // A single-player race stops while its menu is open, and the HUD's dials stop with it.
+  useEffect(() => {
+    setHudFrozen(paused && linkMode === 'offline');
+    return () => setHudFrozen(false);
+  }, [paused, linkMode]);
+
+  // The result normally follows the finish within the eight-second window. If it never comes,
+  // show the race as far as it is known rather than leave the driver at a finished race.
+  useEffect(() => {
+    if (!finished || result || summary) return;
+    const timer = window.setTimeout(
+      () => useCombat.setState({ summary: hudLive.log.summary(), preview: true }),
+      RESULT_PATIENCE_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [finished, result, summary]);
+  const showResults = summary !== null && (result !== null || preview);
   const goHome = useCallback(() => setScreen('home'), [setScreen]);
   // Back to the garage with the car that just raced, on a fresh build clock.
   const changeBuild = useCallback(() => setScreen('garage'), [setScreen]);
@@ -217,8 +263,13 @@ export function RaceScreen() {
     <main className="screen race">
       <div className="race-canvas" ref={canvasHost} />
       <div className="race-surface" ref={surface} />
-      {load.kind === 'ready' && manifests && (
-        <Hud manifests={manifests} onPause={() => setPaused(true)} actions={actions} />
+      {load.kind === 'ready' && manifests && hud && (
+        <Hud
+          manifests={manifests}
+          loadout={hud.loadout}
+          input={hud.input}
+          onPause={() => setPaused(true)}
+        />
       )}
 
       {load.kind === 'loading' && (
@@ -280,42 +331,24 @@ export function RaceScreen() {
         </div>
       )}
 
-      {load.kind === 'ready' && finished && !paused && (
-        <div className="overlay overlay-finish">
-          <div className="panel dialog finish">
-            <PixelText text={STRINGS.race.finish} scale={6} color="#F6C35B" shadow="#6e3212" />
-            <dl className="finish-times">
-              <div>
-                <dt>{STRINGS.race.time}</dt>
-                <dd>{formatRaceTime(raceTimeMs)}</dd>
-              </div>
-              <div>
-                <dt>{STRINGS.race.bestLap}</dt>
-                <dd>{bestLapMs > 0 ? formatRaceTime(bestLapMs) : '-:--.--'}</dd>
-              </div>
-            </dl>
-            <div className="dialog-actions">
-              <button className="btn btn-primary" onClick={raceAgain} autoFocus>
-                {STRINGS.race.raceAgain}
-              </button>
-              <button className="btn" onClick={changeBuild}>
-                {STRINGS.race.changeBuild}
-              </button>
-              <button className="btn" onClick={goHome}>
-                {STRINGS.race.backHome}
-              </button>
-            </div>
-          </div>
-        </div>
+      {load.kind === 'ready' && showResults && !paused && manifests && hud && summary && (
+        <Results
+          manifests={manifests}
+          loadout={hud.loadout}
+          result={result}
+          summary={summary}
+          you={you}
+          onRaceAgain={raceAgain}
+          onChangeBuild={changeBuild}
+          onHome={goHome}
+        />
       )}
 
       {paused && !confirmLeave && (
         <SettingsPanel
-          onClose={() => setPaused(false)}
+          onClose={resume}
           closeLabel={STRINGS.race.resume}
-          notice={
-            linkMode === 'online' ? <p className="notice">{STRINGS.race.pauseNote}</p> : undefined
-          }
+          notice={<PauseNotice online={linkMode === 'online'} onTimeout={resume} />}
           actions={
             <>
               <button className="btn" onClick={raceAgain}>

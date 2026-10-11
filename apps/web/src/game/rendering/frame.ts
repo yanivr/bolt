@@ -35,7 +35,11 @@ export type ViewScale = {
  * so the same whole-number scale shows the nearest allowed width and the browser resamples the
  * finished frame by a few percent. Either way every player sees about the same amount of road.
  */
-export function chooseViewScale(cssWidth: number, cssHeight: number, devicePixelRatio: number): ViewScale {
+export function chooseViewScale(
+  cssWidth: number,
+  cssHeight: number,
+  devicePixelRatio: number,
+): ViewScale {
   const ratio = clamp(devicePixelRatio || 1, 1, MAX_NATIVE_RATIO);
   const cssLong = Math.max(cssWidth, cssHeight, 1);
   const deviceLong = cssLong * ratio;
@@ -48,7 +52,8 @@ export function chooseViewScale(cssWidth: number, cssHeight: number, devicePixel
     if (a < b) scale = candidate;
   }
   const view = deviceLong / scale;
-  if (view >= VIEW_LONG_MIN && view <= VIEW_LONG_MAX) return { renderRatio: ratio, scale, native: true };
+  if (view >= VIEW_LONG_MIN && view <= VIEW_LONG_MAX)
+    return { renderRatio: ratio, scale, native: true };
   const wanted = clamp(view, VIEW_LONG_MIN, VIEW_LONG_MAX);
   return { renderRatio: (wanted * scale) / cssLong, scale, native: false };
 }
@@ -282,14 +287,21 @@ export type CameraView = {
 };
 
 /** Visible road ahead of the car, in world pixels, when travelling steadily along a unit direction. */
-export function steadyLookAhead(view: CameraView, dirX: number, dirY: number, speed: number): number {
+export function steadyLookAhead(
+  view: CameraView,
+  dirX: number,
+  dirY: number,
+  speed: number,
+): number {
   const w = view.widthPx / view.scale;
   const h = view.heightPx / view.scale;
   const lead = leadTarget(view, dirX * speed, dirY * speed);
   // The car sits at minus the lead from the centre of the view. Distance from there to the
   // view edge along the direction of travel:
-  const tx = dirX > 1e-9 ? (w / 2 + lead.x) / dirX : dirX < -1e-9 ? (-w / 2 + lead.x) / dirX : Infinity;
-  const ty = dirY > 1e-9 ? (h / 2 + lead.y) / dirY : dirY < -1e-9 ? (-h / 2 + lead.y) / dirY : Infinity;
+  const tx =
+    dirX > 1e-9 ? (w / 2 + lead.x) / dirX : dirX < -1e-9 ? (-w / 2 + lead.x) / dirX : Infinity;
+  const ty =
+    dirY > 1e-9 ? (h / 2 + lead.y) / dirY : dirY < -1e-9 ? (-h / 2 + lead.y) / dirY : Infinity;
   return Math.min(tx, ty);
 }
 
@@ -489,7 +501,13 @@ export class BodyMotion {
    * both in world pixels per second squared. `idlePhase` is any steadily increasing time in
    * seconds, used for the idle engine shake.
    */
-  update(dt: number, lateralAccel: number, longitudinalAccel: number, speed: number, idlePhase: number): void {
+  update(
+    dt: number,
+    lateralAccel: number,
+    longitudinalAccel: number,
+    speed: number,
+    idlePhase: number,
+  ): void {
     this.lateral += (lateralAccel - this.lateral) * expBlend(dt, LEAN_TIME);
     this.longitudinal += (longitudinalAccel - this.longitudinal) * expBlend(dt, PITCH_TIME);
 

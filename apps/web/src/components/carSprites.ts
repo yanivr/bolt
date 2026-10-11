@@ -179,7 +179,16 @@ export type DrawOptions = {
   bodyShiftY?: number;
   /** A mounted part to trace with a one-pixel outline in a color, without covering it. */
   outline?: { instanceId: string; color: string } | null;
+  /**
+   * Darkens the whole car except one thing, which is drawn again on top at full brightness:
+   * a mounted part by instance, or the engine. `amount` is the share of black laid over the
+   * rest, 0 to 1. Used by the garage's focus mode.
+   */
+  dim?: { amount: number; keep: { part: string } | { engine: true } | null } | null;
 };
+
+/** The color laid over a dimmed car: the interface's darkest navy, so it dims and does not grey. */
+const DIM_COLOR = '11, 15, 25';
 
 const silhouettes = new Map<string, HTMLCanvasElement>();
 
@@ -246,16 +255,18 @@ export function drawCar(
   ctx.imageSmoothingEnabled = false;
   // Which frame of its sheet each mounted part was drawn with, for tests of facing.
   const partFrames: string[] = [];
-  for (const op of layoutCar(sheets.chassis, sheets.wheels, sheets.engine, pose, sheets.parts)) {
-    let sheet: Sheet | undefined;
-    if (op.kind === 'shadow') sheet = sheets.shadow;
-    else if (op.kind === 'body') sheet = sheets.body;
-    else if (op.kind === 'headlight') sheet = sheets.headlights;
-    else if (op.kind === 'wheel') sheet = sheets.wheelSheet;
-    else if (op.kind === 'engine') sheet = sheets.engineSheet;
-    else if (op.kind === 'part') sheet = sheets.partSheets.get(op.sheetId);
-    if (!sheet) continue;
-    if (op.kind === 'part') partFrames.push(`${op.instanceId ?? ''}:${op.frame}`);
+  const dim = options.dim && options.dim.amount > 0 ? options.dim : null;
+  const ops = layoutCar(sheets.chassis, sheets.wheels, sheets.engine, pose, sheets.parts);
+  const sheetOf = (op: (typeof ops)[number]): Sheet | undefined => {
+    if (op.kind === 'shadow') return sheets.shadow;
+    if (op.kind === 'body') return sheets.body;
+    if (op.kind === 'headlight') return sheets.headlights;
+    if (op.kind === 'wheel') return sheets.wheelSheet;
+    if (op.kind === 'engine') return sheets.engineSheet;
+    if (op.kind === 'part') return sheets.partSheets.get(op.sheetId);
+    return undefined;
+  };
+  const drawOp = (op: (typeof ops)[number], sheet: Sheet) => {
     const { frameWidth: fw, frameHeight: fh } = sheet.ref;
     const columns = sheet.ref.columns || CAR_SHEET_COLUMNS;
     if (op.kind === 'part' && options.outline && op.instanceId === options.outline.instanceId) {
@@ -284,6 +295,30 @@ export function drawCar(
       fw,
       fh,
     );
+  };
+  // One path for every car on every screen: the same operations in the same order.
+  for (const op of ops) {
+    const sheet = sheetOf(op);
+    if (!sheet) continue;
+    if (op.kind === 'part') partFrames.push(`${op.instanceId ?? ''}:${op.frame}`);
+    drawOp(op, sheet);
+  }
+  if (dim) {
+    // The dimming is a flat wash over the pixels already drawn, and nothing else: no blur and
+    // no change to the art. What is kept bright is then drawn once more, as it was, on top.
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.fillStyle = `rgba(${DIM_COLOR}, ${Math.min(1, dim.amount)})`;
+    ctx.fillRect(0, 0, size, ctx.canvas.height);
+    ctx.restore();
+    const keep = dim.keep;
+    if (keep)
+      for (const op of ops) {
+        const kept =
+          'part' in keep ? op.kind === 'part' && op.instanceId === keep.part : op.kind === 'engine';
+        const sheet = kept ? sheetOf(op) : undefined;
+        if (sheet) drawOp(op, sheet);
+      }
   }
   if (ctx.canvas instanceof HTMLCanvasElement) ctx.canvas.dataset.partFrames = partFrames.join(' ');
 }

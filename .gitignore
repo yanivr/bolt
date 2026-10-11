@@ -13,3 +13,6 @@ art/preview/
 tests/visual/out*/
 art/preview/cars/_z*.png
 docs/evidence/**/*.webm
+# Rendered sound evidence is reproducible (tests/audio); keep the tables, not the audio.
+docs/evidence/audio/**/*.wav
+docs/evidence/audio/**/*.png

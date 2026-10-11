@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "states": [
+    "scuffed",
+    "battered",
+    "frosted"
+  ],
+  "chassis": {
+    "chassis_beetle": {
+      "file": "chassis_beetle_damage.png",
+      "frameWidth": 96,
+      "frameHeight": 96,
+      "columns": 8,
+      "rows": 24
+    },
+    "chassis_arrow": {
+      "file": "chassis_arrow_damage.png",
+      "frameWidth": 96,
+      "frameHeight": 96,
+      "columns": 8,
+      "rows": 24
+    },
+    "chassis_pickup": {
+      "file": "chassis_pickup_damage.png",
+      "frameWidth": 112,
+      "frameHeight": 112,
+      "columns": 8,
+      "rows": 24
+    },
+    "chassis_spider": {
+      "file": "chassis_spider_damage.png",
+      "frameWidth": 96,
+      "frameHeight": 96,
+      "columns": 8,
+      "rows": 24
+    },
+    "chassis_trike": {
+      "file": "chassis_trike_damage.png",
+      "frameWidth": 96,
+      "frameHeight": 96,
+      "columns": 8,
+      "rows": 24
+    }
+  }
+}

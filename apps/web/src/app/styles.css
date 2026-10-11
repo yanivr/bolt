@@ -459,20 +459,6 @@ input:focus-visible {
   background: #e89b2a;
 }
 
-.debug {
-  position: absolute;
-  left: calc(var(--safe-left) + 10px);
-  bottom: calc(var(--safe-bottom) + 8px);
-  padding: 3px 6px;
-  font:
-    11px/1.3 ui-monospace,
-    Menlo,
-    Consolas,
-    monospace;
-  color: var(--mint);
-  background: rgba(14, 19, 32, 0.8);
-}
-
 /* --- Race -------------------------------------------------------------------------------- */
 
 .race {
@@ -535,218 +521,7 @@ input:focus-visible {
   transform-origin: 0 50%;
 }
 
-.hud {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  padding: calc(var(--safe-top) + 8px) calc(var(--safe-right) + 10px)
-    calc(var(--safe-bottom) + 10px) calc(var(--safe-left) + 10px);
-}
-
-.hud .btn {
-  pointer-events: auto;
-}
-
-.hud .panel {
-  background: rgba(40, 52, 74, 0.88);
-}
-
-.hud-top {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: start;
-  gap: 8px;
-}
-
-.hud-lap {
-  justify-self: start;
-  padding: 8px 10px;
-}
-
-.hud-lap-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.hud-times {
-  display: flex;
-  gap: 14px;
-  margin: 6px 0 0;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-
-.hud-times div {
-  display: flex;
-  gap: 5px;
-}
-
-.hud-times dt {
-  color: var(--ivory-dim);
-  font-weight: 700;
-}
-
-.hud-times dd {
-  margin: 0;
-  font-weight: 700;
-}
-
-.hud-center {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.hud-clock {
-  padding: 8px 12px;
-}
-
-.hud-right {
-  justify-self: end;
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.hud-map {
-  padding: 6px;
-  line-height: 0;
-}
-
-.minimap {
-  width: 132px;
-  height: auto;
-  image-rendering: pixelated;
-}
-
-.hud-speed {
-  position: absolute;
-  bottom: calc(var(--safe-bottom) + 12px);
-  right: calc(var(--safe-right) + 12px);
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  padding: 8px 12px;
-}
-
-.hand-right .hud-speed {
-  right: auto;
-  left: calc(var(--safe-left) + 12px);
-}
-
-/* DEBUG CONTROL: replaced in Milestone C part 2. Plain fire and utility buttons on the action
-   side, above the speed readout, so combat can be operated by touch. */
-.hud-actions {
-  position: absolute;
-  right: calc(var(--safe-right) + 12px);
-  bottom: calc(var(--safe-bottom) + 84px);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-}
-
-.hand-right .hud-actions {
-  right: auto;
-  left: calc(var(--safe-left) + 12px);
-  align-items: flex-start;
-}
-
-.debug-combat {
-  bottom: calc(var(--safe-bottom) + 30px);
-}
-
-.hud-unit {
-  font-size: 13px;
-  font-weight: 800;
-  color: var(--ivory-dim);
-  padding-bottom: 2px;
-}
-
-.bend {
-  display: flex;
-  gap: 3px;
-}
-
-.bend-left {
-  flex-direction: row-reverse;
-}
-
-.bend-chevron {
-  width: 14px;
-  height: 22px;
-  background: var(--gold);
-  clip-path: polygon(0 0, 43% 0, 100% 50%, 43% 100%, 0 100%, 57% 50%);
-  filter: drop-shadow(2px 2px 0 var(--navy));
-}
-
-.bend-left .bend-chevron {
-  transform: scaleX(-1);
-}
-
-.bend-3 .bend-chevron {
-  background: var(--amber);
-  animation: bend-pulse 0.5s steps(2) infinite;
-}
-
-@keyframes bend-pulse {
-  50% {
-    opacity: 0.55;
-  }
-}
-
-.callout {
-  position: absolute;
-  left: 50%;
-  top: 26%;
-  transform: translateX(-50%);
-}
-
-.countdown {
-  animation: pop 0.9s steps(6) both;
-}
-
-@keyframes pop {
-  0% {
-    transform: translateX(-50%) scale(1.5);
-    opacity: 0;
-  }
-  18% {
-    transform: translateX(-50%) scale(1);
-    opacity: 1;
-  }
-  80% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-
-.wrong-way {
-  top: 20%;
-  animation: bend-pulse 0.6s steps(2) infinite;
-}
-
-.hint {
-  position: absolute;
-  left: 50%;
-  bottom: calc(var(--safe-bottom) + 18px);
-  transform: translateX(-50%);
-  padding: 8px 14px;
-  font-size: 16px;
-  font-weight: 700;
-  background: rgba(21, 28, 44, 0.82);
-  border: 1px solid var(--steel-dark);
-  white-space: nowrap;
-}
-
-.reduce-flashes .bend-3 .bend-chevron,
-.reduce-flashes .wrong-way {
-  animation: none;
-}
+/* The race HUD is styled at the end of this file, after the shared rules it builds on. */
 
 /* --- Overlays ---------------------------------------------------------------------------- */
 
@@ -1020,8 +795,7 @@ input:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .countdown,
   .rotate-phone,
-  .bend-3 .bend-chevron,
-  .wrong-way {
+  .bend-3 .bend-chevron {
     animation: none;
   }
 }
@@ -4273,4 +4047,1671 @@ p.g-spend.is-blocked {
 
 .reduce-flashes .g-timer.is-urgent {
   animation: none;
+}
+
+/* ============================================================================================
+ * Milestone C: the race HUD, results and the garage's firing cones.
+ *
+ * The HUD is two columns that hug the sides of the screen. The local car is drawn around the
+ * middle and the camera lets it wander up to 12 percent of the width and 27 percent of the
+ * height from the centre, so the columns are no wider than 38 percent of the width less 118
+ * pixels: a box of 220 by 150 pixels around the car cannot reach them from anywhere it can
+ * be. `Driving Hand` swaps the two columns; nothing else moves.
+ * ========================================================================================== */
+
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  --hud-pad: 6px;
+  --hud-gap: 5px;
+  --hud-edge: max(var(--safe-left), var(--safe-right));
+  --hud-col: clamp(131px, calc(38vw - 118px - var(--hud-edge)), 182px);
+  --btn-1: 72px;
+  --btn-2: 64px;
+  --btn-u: 48px;
+  --map-w: 96px;
+  font-size: 13px;
+}
+
+.hud-scale-large {
+  --btn-1: 84px;
+  --btn-2: 72px;
+  --btn-u: 52px;
+}
+
+.hud .btn,
+.hud .fire-btn {
+  pointer-events: auto;
+}
+
+.hud .panel {
+  background: rgba(40, 52, 74, 0.9);
+  padding: 6px 8px;
+}
+
+.hud-col {
+  position: absolute;
+  top: calc(var(--safe-top) + var(--hud-pad));
+  bottom: calc(var(--safe-bottom) + var(--hud-pad));
+  width: var(--hud-col);
+  display: flex;
+  flex-direction: column;
+  gap: var(--hud-gap);
+  min-height: 0;
+  container-type: inline-size;
+}
+
+.hud-col-info {
+  left: calc(var(--safe-left) + var(--hud-pad));
+}
+
+.hud-col-action {
+  right: calc(var(--safe-right) + var(--hud-pad));
+}
+
+.hand-right .hud-col-info {
+  left: auto;
+  right: calc(var(--safe-right) + var(--hud-pad));
+}
+
+.hand-right .hud-col-action {
+  right: auto;
+  left: calc(var(--safe-left) + var(--hud-pad));
+}
+
+/* --- Race panel: place, gap, lap, clock ------------------------------------------------------ */
+
+.hud-race {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hud-pos {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.hud-place {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--gold);
+}
+
+.hud-gap {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.hud-gap-unit {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ivory-dim);
+}
+
+.hud-lap-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px 8px;
+}
+
+.hud-lap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hud-times {
+  display: flex;
+  gap: 10px;
+  margin: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-times div {
+  display: flex;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.hud-times dt {
+  color: var(--ivory-dim);
+  font-weight: 700;
+}
+
+.hud-times dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.hud-race .badge {
+  margin-top: 0;
+  align-self: flex-start;
+  font-size: 12px;
+}
+
+.hud-times .hud-times-last {
+  display: none;
+}
+
+@container (min-width: 200px) {
+  .hud-times .hud-times-last {
+    display: flex;
+  }
+}
+
+/* --- Car condition --------------------------------------------------------------------------- */
+
+.hud-car {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.car-diagram {
+  display: block;
+  width: 46px;
+  height: 78px;
+  overflow: visible;
+}
+
+@container (min-width: 170px) {
+  .car-diagram {
+    width: 50px;
+    height: 76px;
+  }
+}
+
+.car-body {
+  fill: var(--steel-dark);
+  stroke: var(--ivory-dim);
+  stroke-width: 1.2;
+}
+
+.hull-1 .car-body {
+  stroke: var(--amber);
+  stroke-dasharray: 5 2;
+}
+
+.hull-2 .car-body {
+  stroke: var(--red);
+  stroke-dasharray: 2 2;
+}
+
+.hull-3 .car-body {
+  stroke: var(--red);
+  stroke-dasharray: 1 3;
+  fill: #2a0d14;
+}
+
+.car-body-flash {
+  fill: var(--ivory);
+  stroke: var(--ivory);
+  stroke-width: 2;
+  animation: seg-flash 0.32s steps(3) both;
+  pointer-events: none;
+}
+
+.car-seg-base {
+  fill: var(--mint);
+  stroke: var(--steel-dark);
+  stroke-width: 0.8;
+}
+
+.seg-engine .car-seg-base {
+  fill: #8fe6c0;
+}
+
+.seg-steering .car-seg-base {
+  stroke-width: 0.5;
+}
+
+.seg-wheel .car-seg-base {
+  fill: #c9d3e3;
+  stroke: #0b0f19;
+}
+
+.car-seg-mark {
+  pointer-events: none;
+}
+
+.car-seg.is-damaged .car-seg-base {
+  fill: var(--amber);
+}
+
+.car-seg.is-critical .car-seg-base {
+  fill: #ff5a66;
+  animation: seg-blink 0.6s steps(2) infinite;
+}
+
+.car-seg.is-dead .car-seg-base {
+  fill: var(--steel-dark);
+  stroke: #ff5a66;
+  stroke-width: 1;
+  stroke-dasharray: 2 1.5;
+}
+
+.car-seg-x {
+  fill: none;
+  stroke: #ff5a66;
+  stroke-width: 1.4;
+}
+
+.car-seg-flash {
+  fill: var(--ivory);
+  animation: seg-flash 0.32s steps(3) both;
+  pointer-events: none;
+}
+
+.car-seg-repair {
+  fill: none;
+  stroke: var(--mint);
+  stroke-width: 2;
+  animation: seg-repair 0.9s steps(6) both;
+  pointer-events: none;
+}
+
+.car-armor path {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 2;
+}
+
+@keyframes seg-flash {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes seg-blink {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes seg-repair {
+  0% {
+    opacity: 1;
+    stroke-width: 5;
+  }
+  60% {
+    opacity: 1;
+    stroke-width: 1.5;
+  }
+  100% {
+    opacity: 0;
+    stroke-width: 1.5;
+  }
+}
+
+.hud-car-gauges {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.gauge {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px;
+  color: var(--ivory-dim);
+}
+
+.gauge-track {
+  position: relative;
+  display: block;
+  height: 10px;
+  background: var(--steel-dark);
+  border: 1px solid #0b0f19;
+  overflow: hidden;
+}
+
+.gauge-fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  background: var(--mint);
+}
+
+/* Cells, so a bar reads as a count at a glance and not as a smear. */
+.gauge-track::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(90deg, transparent 0 7px, #0b0f19 7px 8px);
+  pointer-events: none;
+}
+
+.gauge-value {
+  display: none;
+  min-width: 22px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ivory);
+  font-variant-numeric: tabular-nums;
+}
+
+@container (min-width: 170px) {
+  .gauge-value {
+    display: block;
+  }
+}
+
+.gauge-hull.tier-1 .gauge-fill {
+  background: var(--amber);
+}
+
+.gauge-hull.tier-2 .gauge-fill,
+.gauge-hull.tier-3 .gauge-fill {
+  background: #ff5a66;
+}
+
+.gauge-hull.tier-2,
+.gauge-hull.tier-3 {
+  color: #ff5a66;
+}
+
+.gauge-hull.tier-2 .gauge-track,
+.gauge-hull.tier-3 .gauge-track {
+  border-color: #ff5a66;
+}
+
+.gauge-heat .gauge-fill {
+  background: var(--ivory-dim);
+}
+
+.gauge-heat.level-1 .gauge-fill {
+  background: var(--amber);
+}
+
+.gauge-heat.level-1,
+.gauge-power.is-low {
+  color: var(--amber);
+}
+
+.gauge-heat.level-2 .gauge-fill,
+.gauge-heat.level-3 .gauge-fill {
+  background: #ff5a66;
+}
+
+.gauge-heat.level-2,
+.gauge-heat.level-3 {
+  color: #ff5a66;
+}
+
+/* Thermal protection: the bar is framed and striped, and its glyph blinks. */
+.gauge-heat.level-3 .gauge-track {
+  border-color: #ff5a66;
+  box-shadow: 0 0 0 1px #ff5a66;
+}
+
+.gauge-heat.level-3 .gauge-track::after {
+  background: repeating-linear-gradient(135deg, transparent 0 3px, #0b0f19 3px 6px);
+}
+
+.gauge-heat.level-3 .glyph,
+.gauge-power.is-low .glyph {
+  animation: seg-blink 0.5s steps(2) infinite;
+}
+
+.gauge-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ivory);
+  z-index: 1;
+}
+
+.gauge-power .gauge-fill {
+  background: var(--cyan);
+}
+
+.gauge-power.is-low .gauge-fill {
+  background: var(--amber);
+}
+
+.gauge-power.is-low .gauge-track {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 1px var(--amber);
+}
+
+.gauge-heat,
+.gauge-power {
+  grid-template-columns: 12px minmax(0, 1fr);
+}
+
+.status-row {
+  display: flex;
+  gap: 3px;
+  height: 24px;
+  overflow: hidden;
+}
+
+.status-icon {
+  position: relative;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  color: var(--mint);
+  background: var(--steel-dark);
+}
+
+/* The time left, as a frame that empties clockwise from the top. */
+.status-ring {
+  position: absolute;
+  inset: 0;
+  background: conic-gradient(currentColor calc(var(--left, 1) * 360deg), #3a4a66 0);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+  padding: 3px;
+}
+
+.status-icon .glyph {
+  position: relative;
+}
+
+/* What hurts is cut at the corners and drawn in the warning color; what helps is square. */
+.status-icon.is-harmful {
+  color: var(--amber);
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+}
+
+.status-icon.status-emp,
+.status-icon.status-jam,
+.status-icon.status-burn {
+  color: #ff5a66;
+}
+
+/* --- The lane: one warning, two callouts, the first-drive hint -------------------------------- */
+
+.hud-lane {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+}
+
+.hud-warning {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px 5px;
+  color: var(--ivory);
+  background: #4c101c;
+  border: 2px solid #ff5a66;
+  /* Hazard stripes along the top: a warning by its pattern, whatever its color. */
+  border-image: repeating-linear-gradient(135deg, #ff5a66 0 6px, #0b0f19 6px 12px) 2;
+  animation: warn-pulse 0.5s steps(2) infinite;
+}
+
+.hud-warning.warn-lock,
+.hud-warning.warn-trap,
+.hud-warning.warn-wrong_way {
+  background: #4a3206;
+  border-image: repeating-linear-gradient(135deg, var(--amber) 0 6px, #0b0f19 6px 12px) 2;
+}
+
+.hud-warning.warn-rival_finished,
+.hud-warning.warn-waiting {
+  background: rgba(21, 28, 44, 0.92);
+  border-image: none;
+  border-color: var(--gold);
+  animation: none;
+}
+
+@keyframes warn-pulse {
+  50% {
+    filter: brightness(1.35);
+  }
+}
+
+.hud-warning-icon {
+  display: grid;
+  place-items: center;
+}
+
+.hud-warning-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hud-warning-head {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+}
+
+.hud-warning-detail {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ivory-dim);
+}
+
+.hud-warning-bar {
+  display: block;
+  height: 4px;
+  background: #0b0f19;
+}
+
+.hud-warning-bar span {
+  display: block;
+  height: 100%;
+  background: var(--ivory);
+  transform-origin: 0 50%;
+}
+
+.hud-warning-arrow {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+}
+
+.hud-callouts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hud-callout {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  align-items: start;
+  gap: 6px;
+  padding: 4px 7px 5px;
+  background: rgba(14, 19, 32, 0.9);
+  border-left: 4px solid var(--cyan);
+  animation: callout-in 0.14s steps(3) both;
+}
+
+.hud-callout .glyph {
+  margin-top: 2px;
+}
+
+.hud-callout.tone-good {
+  border-left-color: var(--mint);
+  color: var(--mint);
+}
+
+.hud-callout.tone-bad {
+  border-left-color: #ff5a66;
+  border-left-style: double;
+  border-left-width: 6px;
+  color: #ff8a92;
+}
+
+.hud-callout.tone-info {
+  border-left-color: var(--gold);
+  color: var(--gold);
+}
+
+.hud-callout-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hud-callout-head {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  line-height: 1.15;
+  color: var(--ivory);
+}
+
+.hud-callout-detail {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--ivory-dim);
+}
+
+@keyframes callout-in {
+  0% {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.hud .hint {
+  position: static;
+  transform: none;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: normal;
+  background: rgba(14, 19, 32, 0.88);
+  border: 1px solid var(--steel-dark);
+  border-left: 4px solid var(--cyan);
+}
+
+/* --- Action side: route ribbon, menu, speed, rival ------------------------------------------- */
+
+.hud-topbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: stretch;
+  gap: var(--hud-gap);
+}
+
+.hand-right .hud-topbar {
+  flex-direction: row-reverse;
+}
+
+.hud .hud-map {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 4px;
+  line-height: 0;
+}
+
+.hud .minimap {
+  display: block;
+  width: min(var(--map-w), calc(var(--hud-col) - 44px - var(--hud-gap) - 10px));
+  height: auto;
+  image-rendering: pixelated;
+}
+
+.hud-topbar-side {
+  flex: none;
+  width: 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.hud .hud-menu {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  background: rgba(40, 52, 74, 0.94);
+}
+
+.hud-speed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 0 2px;
+  background: rgba(14, 19, 32, 0.82);
+  border: 1px solid var(--steel-dark);
+}
+
+.hud-unit {
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--ivory-dim);
+}
+
+.hud .hud-rival {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  /* As wide as the route ribbon and the menu above it, against the same edge. */
+  width: min(100%, calc(var(--map-w) + 10px + var(--hud-gap) + 44px));
+  align-self: flex-end;
+}
+
+.hand-right .hud .hud-rival {
+  align-self: flex-start;
+}
+
+.hud-rival-name,
+.hud-rival-note {
+  font-size: 12px;
+  font-weight: 800;
+  color: #ff9a8c;
+}
+
+.hud-rival .gauge-fill {
+  background: var(--coral);
+}
+
+.hud-rival.tier-1 .gauge-track::after {
+  background: repeating-linear-gradient(90deg, transparent 0 4px, #0b0f19 4px 5px);
+}
+
+.hud-rival.tier-2 .gauge-track::after,
+.hud-rival.tier-3 .gauge-track::after {
+  background: repeating-linear-gradient(135deg, transparent 0 2px, #0b0f19 2px 4px);
+}
+
+.hud-col-action .bend {
+  align-self: flex-start;
+  min-height: 0;
+}
+
+.hand-right .hud-col-action .bend {
+  align-self: flex-end;
+}
+
+/* --- Fire and equipment buttons -------------------------------------------------------------- */
+
+.hud-actions {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.hand-right .hud-actions {
+  align-items: flex-start;
+}
+
+.hud-autos {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.hud-buttons {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.hand-right .hud-buttons {
+  flex-direction: row-reverse;
+}
+
+.hud-utils {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 6px;
+}
+
+.hud-fire {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.hand-right .hud-fire {
+  align-items: flex-start;
+}
+
+.fire-btn {
+  position: relative;
+  flex: none;
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: var(--btn-2);
+  height: var(--btn-2);
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--ivory);
+  background: var(--steel);
+  border: 1px solid var(--steel-dark);
+  /* The frame is the state: lit when the button will act, dark while it will not. */
+  box-shadow:
+    inset var(--px) var(--px) 0 var(--steel-light),
+    inset calc(var(--px) * -1) calc(var(--px) * -1) 0 #1c2536,
+    0 0 0 3px var(--frame, var(--cyan)),
+    0 4px 0 3px var(--steel-dark);
+  cursor: pointer;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.fire-btn.is-primary {
+  width: var(--btn-1);
+  height: var(--btn-1);
+  --frame: var(--gold);
+}
+
+.fire-btn.is-utility {
+  width: var(--btn-u);
+  height: var(--btn-u);
+  --frame: var(--mint);
+  box-shadow:
+    inset var(--px) var(--px) 0 var(--steel-light),
+    inset calc(var(--px) * -1) calc(var(--px) * -1) 0 #1c2536,
+    0 0 0 2px var(--frame),
+    0 3px 0 2px var(--steel-dark);
+}
+
+.fire-btn.is-cooling,
+.fire-btn.is-blocked {
+  --frame: #0b0f19;
+  background: #1f2a3e;
+}
+
+.fire-btn.is-charging,
+.fire-btn.is-active {
+  --frame: var(--amber);
+}
+
+.fire-btn[data-held='1'] {
+  transform: translateY(3px);
+  background: #34435f;
+  box-shadow:
+    inset var(--px) var(--px) 0 #1c2536,
+    inset calc(var(--px) * -1) calc(var(--px) * -1) 0 var(--steel-light),
+    0 0 0 3px var(--ivory),
+    0 1px 0 3px var(--steel-dark);
+}
+
+.fire-btn:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 5px;
+}
+
+.fire-art {
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.fire-art .part-icon {
+  background: none;
+  border: 0;
+  box-shadow: none;
+}
+
+.fire-btn.is-blocked .fire-art {
+  opacity: 0.28;
+}
+
+/* The wait: a dark clock wipe over the whole face that unwinds to nothing, with a bright hand
+   on its leading edge. Large and high in contrast, so it reads from the corner of the eye. */
+.fire-wipe {
+  position: absolute;
+  inset: 1px;
+  pointer-events: none;
+  background: conic-gradient(
+    rgba(11, 15, 25, 0.8) 0 calc(var(--wait, 0) * 360deg - 4deg),
+    var(--ivory) calc(var(--wait, 0) * 360deg - 4deg) calc(var(--wait, 0) * 360deg),
+    transparent 0
+  );
+}
+
+.fire-btn[data-waiting='0'] .fire-wipe,
+.fire-btn:not([data-waiting]) .fire-wipe {
+  display: none;
+}
+
+/* Charging: a striped fill that rises from the bottom to the top of the button. */
+.fire-charge {
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  bottom: 1px;
+  height: calc(var(--charge, 0) * (100% - 2px));
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(255, 180, 84, 0.62) 0 3px,
+    rgba(255, 180, 84, 0.3) 3px 6px
+  );
+  border-top: 2px solid var(--amber);
+}
+
+.fire-btn:not(.is-charging):not(.is-active) .fire-charge {
+  display: none;
+}
+
+/* What is left, in the corner the thumb does not cover. */
+.fire-ammo {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 4px;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--ivory);
+  background: var(--navy);
+  border: 1px solid var(--frame, var(--cyan));
+  pointer-events: none;
+}
+
+.hand-right .fire-ammo {
+  left: auto;
+  right: 2px;
+}
+
+.fire-btn.is-utility .fire-ammo {
+  min-width: 17px;
+  height: 16px;
+  padding: 0 2px;
+  font-size: 13px;
+}
+
+.fire-btn.block-empty .fire-ammo {
+  color: #ff8a92;
+  border-color: #ff5a66;
+}
+
+.fire-lock {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  color: var(--navy);
+  background: var(--mint);
+  animation: seg-blink 0.4s steps(2) infinite;
+  pointer-events: none;
+}
+
+.hand-right .fire-lock {
+  right: auto;
+  left: 2px;
+}
+
+/* Why it will not act: a word, a glyph of its own and a hatch of its own for each reason. */
+.fire-block {
+  position: absolute;
+  inset: 1px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--amber);
+  pointer-events: none;
+}
+
+.fire-block-word {
+  padding: 0 3px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.15;
+  white-space: nowrap;
+  color: var(--ivory);
+  background: rgba(11, 15, 25, 0.85);
+}
+
+.fire-btn.is-utility .fire-block-word {
+  font-size: 12px;
+  padding: 0 1px;
+}
+
+.fire-btn.block-overheat .fire-block {
+  color: #ff5a66;
+  background: repeating-linear-gradient(135deg, rgba(216, 63, 73, 0.34) 0 4px, transparent 4px 8px);
+}
+
+.fire-btn.block-nopower .fire-block {
+  color: var(--amber);
+  background: repeating-linear-gradient(0deg, rgba(255, 180, 84, 0.3) 0 2px, transparent 2px 6px);
+}
+
+.fire-btn.block-destroyed .fire-block {
+  color: #ff5a66;
+  background:
+    repeating-linear-gradient(45deg, rgba(216, 63, 73, 0.3) 0 2px, transparent 2px 7px),
+    repeating-linear-gradient(135deg, rgba(216, 63, 73, 0.3) 0 2px, transparent 2px 7px);
+}
+
+.fire-btn.block-emp .fire-block,
+.fire-btn.block-jammed .fire-block {
+  color: var(--cyan);
+  background: radial-gradient(rgba(70, 213, 230, 0.45) 1px, transparent 1.5px) 0 0 / 6px 6px;
+}
+
+.fire-btn.block-empty .fire-block,
+.fire-btn.block-notarget .fire-block,
+.fire-btn.block-airborne .fire-block {
+  color: var(--ivory-dim);
+}
+
+.fire-key {
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  transform: translateX(-50%);
+  display: none;
+  padding: 0 5px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 15px;
+  white-space: nowrap;
+  color: var(--ivory-dim);
+  background: var(--navy);
+  border: 1px solid var(--steel-light);
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .fire-key {
+    display: block;
+  }
+}
+
+/* A press that did nothing: the frame flashes red and the reason stands above the button. */
+.fire-refusal {
+  position: absolute;
+  inset: -4px;
+  border: 3px solid #ff5a66;
+  pointer-events: none;
+  animation: refusal 0.9s steps(6) both;
+}
+
+.fire-refusal-word {
+  position: absolute;
+  right: -3px;
+  bottom: calc(100% + 4px);
+  padding: 1px 6px 2px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  color: var(--ivory);
+  background: #7a2230;
+  border: 1px solid #0b0f19;
+}
+
+.hand-right .fire-refusal-word {
+  right: auto;
+  left: -3px;
+}
+
+@keyframes refusal {
+  0%,
+  33% {
+    opacity: 1;
+  }
+  17% {
+    opacity: 0.3;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+.auto-pip {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  background: rgba(14, 19, 32, 0.86);
+  border: 1px solid var(--steel-light);
+}
+
+.auto-pip .part-icon {
+  background: none;
+  border: 0;
+  box-shadow: none;
+}
+
+.auto-pip.is-active,
+.auto-pip.is-locked {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold);
+}
+
+.auto-pip.is-blocked {
+  border: 1px dashed #ff5a66;
+}
+
+.auto-pip.is-blocked .part-icon {
+  opacity: 0.3;
+}
+
+.auto-pip .fire-wipe {
+  inset: 0;
+}
+
+.auto-pip-mark {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #ff5a66;
+}
+
+/* --- Edge markers ---------------------------------------------------------------------------- */
+
+.edge-mark {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  will-change: transform;
+}
+
+.edge-mark::before {
+  content: '';
+  position: absolute;
+  left: -17px;
+  top: -17px;
+  width: 34px;
+  height: 34px;
+  background: var(--navy);
+  border: 2px solid var(--coral);
+}
+
+.edge-arrow {
+  position: absolute;
+  left: -12px;
+  top: -12px;
+  width: 24px;
+  height: 24px;
+  color: var(--coral);
+  transform: rotate(var(--turn, 0rad));
+}
+
+.edge-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 1px 6px 2px;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  color: var(--ivory);
+  background: rgba(14, 19, 32, 0.92);
+  border: 1px solid var(--steel-dark);
+  transform: translate(
+    calc(-50% + var(--label-x, 0) * 34px),
+    calc(-50% + var(--label-y, 1) * 30px)
+  );
+}
+
+.edge-threat::before {
+  border: 3px solid #ff5a66;
+  border-image: repeating-linear-gradient(135deg, #ff5a66 0 5px, #0b0f19 5px 10px) 3;
+  background: #4c101c;
+}
+
+.edge-threat .edge-arrow {
+  color: var(--ivory);
+}
+
+.edge-threat,
+.edge-rival[data-threat='1'] {
+  animation: warn-pulse 0.4s steps(2) infinite;
+}
+
+.edge-rival[data-threat='1']::before {
+  border: 3px solid #ff5a66;
+  border-image: repeating-linear-gradient(135deg, #ff5a66 0 5px, #0b0f19 5px 10px) 3;
+  background: #4c101c;
+}
+
+.edge-rival[data-threat='1'] .edge-arrow {
+  color: var(--ivory);
+}
+
+/* --- Banners --------------------------------------------------------------------------------- */
+
+.banner {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--safe-top) + 8px);
+  transform: translateX(-50%);
+}
+
+.countdown {
+  animation: pop 0.9s steps(6) both;
+}
+
+@keyframes pop {
+  0% {
+    transform: translateX(-50%) scale(1.5);
+    opacity: 0;
+  }
+  18% {
+    transform: translateX(-50%) scale(1);
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.debug-block {
+  position: absolute;
+  left: calc(var(--safe-left) + var(--hud-pad));
+  bottom: calc(var(--safe-bottom) + var(--hud-pad));
+  max-width: min(520px, 56vw);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.hand-right .debug-block {
+  left: auto;
+  right: calc(var(--safe-right) + var(--hud-pad));
+}
+
+.debug {
+  padding: 1px 5px;
+  font:
+    11px/1.3 ui-monospace,
+    Menlo,
+    Consolas,
+    monospace;
+  color: var(--mint);
+  background: rgba(14, 19, 32, 0.8);
+}
+
+/* --- Short landscape phones ------------------------------------------------------------------ */
+
+@media (max-height: 359px) {
+  .hud {
+    --hud-gap: 4px;
+    --map-w: 84px;
+  }
+  .hud-race {
+    gap: 4px;
+  }
+  .hud .panel {
+    padding: 5px 7px;
+  }
+  .car-diagram {
+    width: 40px;
+    height: 60px;
+  }
+  /* Best and last lap give their line up; each lap's time is still called out as it ends. */
+  .hud .hud-times {
+    display: none;
+  }
+  .status-row {
+    height: 20px;
+  }
+  .status-icon {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+@media (min-width: 1100px) and (min-height: 600px) {
+  .hud {
+    --hud-pad: 12px;
+    --hud-gap: 8px;
+    --hud-col: 228px;
+    --map-w: 150px;
+  }
+}
+
+/* Portrait fallback: the same two columns, with the route ribbon as small as it goes. */
+@media (orientation: portrait) {
+  .hud {
+    --hud-col: clamp(124px, 36vw, 160px);
+    --map-w: 72px;
+  }
+}
+
+.reduce-flashes .hud-warning,
+.reduce-flashes .edge-threat,
+.reduce-flashes .edge-rival,
+.reduce-flashes .car-seg.is-critical .car-seg-base,
+.reduce-flashes .gauge .glyph,
+.reduce-flashes .fire-lock {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-warning,
+  .edge-threat,
+  .car-seg.is-critical .car-seg-base,
+  .gauge .glyph,
+  .fire-lock,
+  .hud-callout,
+  .car-seg-repair {
+    animation: none;
+  }
+  .car-seg-repair {
+    opacity: 0;
+  }
+}
+
+/* --- Results --------------------------------------------------------------------------------- */
+
+.overlay-results {
+  background: rgba(14, 19, 32, 0.74);
+  padding: calc(var(--safe-top) + 8px) calc(var(--safe-right) + 10px) calc(var(--safe-bottom) + 8px)
+    calc(var(--safe-left) + 10px);
+}
+
+.results {
+  width: min(900px, 100%);
+  max-height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px 12px;
+  text-align: left;
+}
+
+.results-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.results-line {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.results-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.2fr) minmax(0, 1.05fr);
+  gap: 6px 16px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  padding-right: 2px;
+}
+
+.results-body section {
+  min-width: 0;
+}
+
+.results h3 {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 0 3px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ivory-dim);
+  border-bottom: 1px solid #1c2536;
+  padding-bottom: 2px;
+}
+
+.results h3:first-child {
+  margin-top: 0;
+}
+
+.results-total {
+  color: var(--ivory);
+  font-variant-numeric: tabular-nums;
+}
+
+.results-compare table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.results-compare th,
+.results-compare td {
+  padding: 3px 0 3px 8px;
+  text-align: right;
+  font-weight: 700;
+  border-bottom: 1px solid #1c2536;
+  white-space: nowrap;
+}
+
+.results-compare tbody th {
+  padding-left: 0;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ivory-dim);
+}
+
+.results-compare thead th {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.results-compare thead .is-you {
+  color: var(--cyan);
+}
+
+.results-compare thead .is-rival {
+  color: #ff9a8c;
+}
+
+.results-list,
+.results-facts,
+.results-tags {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.results-list li {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0 8px;
+  padding: 2px 0;
+  font-size: 13px;
+}
+
+.results-list.is-plain li {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.results-list .part-icon {
+  grid-row: span 2;
+}
+
+.results-name {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.results-sub {
+  font-size: 12px;
+  color: var(--ivory-dim);
+  white-space: nowrap;
+}
+
+.results-num {
+  min-width: 28px;
+  text-align: right;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.results-bar {
+  grid-column: 2 / -1;
+  height: 4px;
+  background: var(--steel-dark);
+}
+
+.results-bar span {
+  display: block;
+  height: 100%;
+  background: var(--gold);
+}
+
+.results-facts li {
+  position: relative;
+  padding: 1px 0 3px 12px;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.results-facts li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  width: 5px;
+  height: 5px;
+  background: var(--gold);
+}
+
+.results-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.results-tags li {
+  padding: 1px 6px 2px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #1c2536;
+  border: 1px solid var(--steel-dark);
+}
+
+.results-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ivory-dim);
+}
+
+.results-actions {
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #1c2536;
+}
+
+@media (max-height: 420px) {
+  .results-actions .btn {
+    min-height: 44px;
+    padding: 6px 16px;
+  }
+}
+
+@media (max-width: 699px) {
+  .results-body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .results-notes {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (orientation: portrait) {
+  .results-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* --- Garage: what a weapon covers, on the workbench floor ------------------------------------- */
+
+/* Under the car and under the tiles; clipped to the floor even where the car itself is not. */
+.g-coverage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  shape-rendering: crispEdges;
+}
+
+.coverage-fill {
+  fill: rgba(246, 195, 91, 0.26);
+  fill-rule: evenodd;
+  stroke: var(--gold);
+  stroke-width: 2;
+  stroke-linejoin: miter;
+}
+
+.coverage-edge {
+  fill: none;
+  stroke: rgba(11, 15, 25, 0.75);
+  stroke-width: 5;
+  stroke-linejoin: miter;
+}
+
+/* The same shape over the dimmed car: a light wash and a thin line, so the bodywork still reads. */
+.g-coverage.is-ghost .coverage-fill {
+  fill: rgba(246, 195, 91, 0.16);
+  stroke-width: 1.5;
+  stroke-opacity: 0.85;
+}
+
+.g-coverage.is-ghost.is-drop .coverage-area .coverage-fill {
+  fill: rgba(255, 180, 84, 0.1);
+}
+
+/* A drop zone is a hazard on the road: hatched, in the warning color. */
+.g-coverage.is-drop .coverage-area .coverage-fill {
+  fill: url(#g-drop-hatch);
+  stroke: var(--amber);
+}
+
+/* The part of a drop zone that sets it off, and the flight of a lobbed shot: lines only. */
+.coverage-core .coverage-fill,
+.coverage-path .coverage-fill {
+  fill: none;
+  stroke-dasharray: 6 4;
+}
+
+.coverage-core .coverage-fill {
+  stroke: var(--ivory);
+}
+
+.coverage-core .coverage-edge,
+.coverage-path .coverage-edge {
+  stroke-width: 4;
+}
+
+/* With the weapon's arc drawn, the arrow at its muzzle would only repeat it. It stays in the
+   page, where the tests of facing read it, and is not painted. */
+.facing.is-minor {
+  visibility: hidden;
 }

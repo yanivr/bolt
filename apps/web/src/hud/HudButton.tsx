@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { useRef } from 'react';
+import { uiSound } from '../game/audio/index.js';
 
 type Props = {
   onPress: () => void;
@@ -12,7 +13,8 @@ type Props = {
  * A HUD control that works while another finger is steering. Browsers only synthesize `click`
  * for the primary touch, so a button pressed by a second finger would never fire. This one
  * acts on its own pointer's release instead, and keeps `click` only for keyboard activation.
- * Weapon and repair buttons in later milestones use the same component.
+ * It is for menu controls. Weapon and equipment buttons act on the press and hold, and are
+ * `FireButton`.
  */
 export function HudButton({ onPress, label, className, children }: Props) {
   const active = useRef<number | null>(null);
@@ -24,6 +26,7 @@ export function HudButton({ onPress, label, className, children }: Props) {
       onPointerDown={(event) => {
         active.current = event.pointerId;
         event.currentTarget.setPointerCapture?.(event.pointerId);
+        uiSound('tap');
       }}
       onPointerUp={(event) => {
         if (active.current !== event.pointerId) return;

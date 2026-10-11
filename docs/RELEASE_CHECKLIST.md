@@ -65,7 +65,7 @@ Still open in Milestone B:
 - [x] Sprites for all five chassis (with mount heights for every mount), 20 engines, 20 wheel kits and 60 mounted parts, plus 32 and 24 pixel catalog icons rendered from the same models. `SPRITES_PENDING` in `tests/unit/assets.test.ts` is empty and the test fails if any catalog part loses its sheet. The car atlas is 1.13 MB in 143 files (it was 2.23 MB in 203 with twenty chassis). **Art quality is unreviewed by a person.** Known weak spots: the Spider's wheels read as dark blobs at race size; the larger engines overhang the Pickup's hood and the Trike's frame; several tire kits (Balloon, Mud, Monster, Rain) differ mostly by size on a dark road; catalog icons are small inside their tiles.
 - [x] Mounted parts drawn on the car in the race, the garage and every thumbnail through the one shared compositor, lifted to the bodywork height of their mount. Checked in screenshots (`tests/visual/loaded.ts`, `tests/visual/garage.ts`).
 - [x] Engines in mid and front bays draw a sheet without tail pipes (`engineInBay`), so pipes no longer cross the cab.
-- [ ] Player-facing HUD for heat and power. Only the debug readout shows them.
+- [x] Player-facing HUD for heat and power: two gauges in the car condition widget, with a marked limit, a pattern and a word when hot or low, and `ENGINE HOT` and `LOW POWER` callouts (Milestone C part 2, track H). Low power is the HUD's own reading; the snapshot has no flag for it (DECISIONS 164).
 - [ ] Blueprint storage and codes on the server (PostgreSQL arrives in Milestone E); blueprints live in local storage today.
 - [ ] Balance review of the values by a person, the five retuned chassis first. One known question, narrowed in 0.4.0: Tiny Trouble is 2.1 s behind the Straight-Line Rocket in the dry for two thirds of the price (`docs/BALANCE_CHANGELOG.md`).
 - [x] Weapons, defenses and utilities act in a race (Milestone C part 1, below).
@@ -84,6 +84,13 @@ Part 1, the simulation (October 11, 2026). Contract for part 2: `docs/COMBAT_API
 - [x] Balance harness and a first report (`docs/evidence/balance/`, `docs/BALANCE_CHANGELOG.md` 0.6.0). **Flags are open, not resolved:** six of eleven shipped builds win over 70 or under 30 percent of bot races because pace decides them; the bullet guns deal several times the median damage per credit when two cars stay together. Both are for the owner and a second pass.
 - [ ] **The sparring rival is not the game's AI.** One simple driver, no difficulty levels, no build choice. Milestone D.
 - [ ] **Part 2, not started:** weapon art and animation on the car, projectiles, impacts, explosions, status and damage visuals, the combat HUD (fire buttons, cooldowns, ammunition, damage silhouette, warnings, position and gap), sound. Today combat is drawn by `CombatDebugView` as dots, outlines and rings, the fire buttons are unstyled debug buttons, and state is a debug text row. None of it is final and none of it may ship.
+- [x] Part 2, track A, sound: synthesized in code with no audio files. Twenty engine voices, tire skid and rumble by surface, a signature per weapon with its charge, lock, flight, impact and aftermath, what-was-hit impacts, status loops, warnings, race cues, interface and garage sounds, one adaptive music theme, haptics behind a switch, seven buses into a limiter, voice caps and rate limits. Rendered and measured offline and played through all 33 scenarios in the real client (`docs/AUDIO_GUIDE.md`, `docs/evidence/audio/`).
+- [ ] **No person has listened to any sound, the mix or the music.** Measurements only. A listening pass on headphones and on a phone speaker is required before any of it can be called done.
+- [x] Sound call sites owned by the interface track are wired (DECISIONS 170): `Music`, `Interface`, `Softer Impacts` and `Vibration` in settings; interface sounds on HUD and menu buttons, toggles, sliders and choices; garage sounds for install, removal, turn, refusal, selection, Ready and the last ten seconds of the clock. **Not wired:** dialogs opening and closing, saving a blueprint, error screens. Unheard by a person.
+- [x] Part 2, track H, the race HUD and results (DECISIONS 154 to 172): hold-to-fire buttons with cooldown, charge, ammunition and worded block reasons; equipment buttons and pips for automatic parts; a car diagram with four condition tiers told by pattern, hit flashes and repair rings; armor, hull, heat and power; timed statuses; position and a steadied gap; an off-screen rival arrow; the rival's hull; lock, missile and trap warnings with direction; rate-limited callouts with a setting; countdown, pause and finish; a results screen from the server's result and the event log. Two columns that swap whole for the other hand, with nothing persistent in the band the car can reach, asserted at five phone sizes. Checked by unit and end-to-end tests (three-finger CDP touch) and in screenshots at 870 x 370, 667 x 375 and 1440 x 900 (`tests/visual/out/hud`). **Not checked on a phone, by a thumb, or by a person other than its author.**
+- [ ] HUD gaps (DECISIONS 168, 169, 172): no repair target chooser (the scene sends target 0); the server's race does not pause for the menu in AI mode; HUD covers 21.3 percent of a 667 x 375 screen against a target of 18; no podium or car composition on the results screen; `Save This Car` and `Share Blueprint` are not on it; the rival's components are not shown, only its hull.
+- [x] Garage: a selected weapon's coverage drawn on the workbench floor from the simulation's own module values, and the rest of the car dimmed in focus (DECISIONS 173, 174). In focus the drawing is fitted to the free floor, so range is approximate there; arc and facing are exact.
+- [ ] Seven more music themes, with the seven more tracks. No "last 30 seconds" layer: the client is not told the time limit.
 - [ ] Track-side repairs (Section 8.2 pit pads) and destructible track objects: no track data for them yet.
 - [ ] Balance review by a person. Not checked on a phone.
 
@@ -104,23 +111,23 @@ settings. G: load, security, Docker deployment, public HTTPS.
 - [ ] Arbitrary legal assemblies composited and physically validated. _Compositor draws any legal blueprint including mounted parts; all templates are raced in tests._
 - [ ] Multiplayer garage locks after 60 seconds and never spends more than 1,000 credits.
 - [ ] Every car has meaningful heat, energy, mass and stability behavior. _Implemented in the simulation; only the debug readout shows heat and power in a race._
-- [ ] Top-down float steering, braking and left-handed actions work with two fingers. _Automated two-finger tests pass; real-device check open. Fire and utility buttons exist on the action side as unstyled debug buttons; the designed ones are Milestone C part 2._
+- [ ] Top-down float steering, braking and left-handed actions work with two fingers. _Automated two-finger tests pass; real-device check open. The designed fire and equipment buttons hold, fire on the press and work with three and four simultaneous touches in an automated CDP test, in both hand layouts; unverified under a real thumb._
 - [ ] Two friends can enter by code or link and finish a synchronized match.
 - [ ] AI uses the same physics, funds and weapon rules as a human. _The sparring rival races a legal 1,000-credit template and acts only through the control sample a player sends, with the same cooldowns, ammunition and physics (asserted). It is a stand-in for the AI of Milestone D._
 - [ ] Sixteen directional chassis frames and coherent attachments render without flicker. _Sixteen frames per chassis are baked and tested; "without flicker" needs a device._
-- [ ] Each of 20 weapons has a unique visual and audible signature.
+- [ ] Each of 20 weapons has a unique visual and audible signature. _Audible: each weapon has its own recipes, and their rendered scenarios differ by a measured fingerprint distance of at least 0.9; unheard by a person._
 - [ ] Rocket and mortar explosions have layered flashes, fire, debris and smoke.
 - [ ] Wet road reflections, rain spray, sand dust and forest ambience work on real phones.
 - [ ] Damage appears on the correct component and a spare wheel visibly repairs it. _True in the simulation and its events (hit localisation and the spare wheel are tested). Nothing shows it on the car yet._
 - [ ] All launch tracks, weather, checkpoints and shortcuts are operational. _1 of 8 tracks, 1 of its 2 weather presets is baked; the rain preset has physics but no art._
-- [ ] One authoritative result is shown consistently to both players. _The server produces one `RaceResult` and sends it in the state; there is one human in a room and no result screen yet._
+- [ ] One authoritative result is shown consistently to both players. _The server produces one `RaceResult` and sends it in the state; there is one human in a room. The results screen shows that result and nothing that contradicts it (the end-to-end test of a whole race compares them)._
 - [ ] Short car codes create, persist, import and validate across browsers.
 - [ ] Rematch, edit build, swap cars and share flows work without an account.
 - [ ] No placeholder buttons, stock images, generic square cars or empty scenes remain. _True of what exists: every control shown does what it says. The home scene is a plain workbench, not the animated garage of Section 5.3._
 - [ ] Low-effects settings preserve readability and touch responsiveness. _Shake amount and reduced flashes exist; the camera no longer rotates or zooms at all; particle quality tiers do not._
 - [ ] Device tests and network stress tests meet documented budgets.
 - [ ] Privacy disclosure, deletion controls, error handling, backups and HTTPS are in place. _Guest tokens carry no personal data and can be cleared locally; no privacy page yet._
-- [ ] Automated tests and clean install and build commands pass on the committed revision. *Locally, on the working tree of October 11, 2026 after Milestone C part 1 (not committed; the directory is not a git repository): `tsc -b` and ESLint are clean, 1,274 Vitest tests in 39 files and 59 Playwright tests pass, and the build succeeds. CI itself has never run.*
+- [ ] Automated tests and clean install and build commands pass on the committed revision. _Locally, on the working tree of October 11, 2026 after Milestone C part 1 (not committed; the directory is not a git repository): `tsc -b` and ESLint are clean, 1,274 Vitest tests in 39 files and 59 Playwright tests pass, and the build succeeds. CI itself has never run._
 
 ## Launch blockers known today
 
@@ -128,5 +135,6 @@ settings. G: load, security, Docker deployment, public HTTPS.
 2. Repository access, so CI can run and the work is not confined to one machine.
 3. A server and domain for deployment (Milestone G).
 4. Human art review. Section 21 is explicit that code cannot vouch for its own visuals.
+   4a. Human listening review. No sound in the game has been heard by a person.
 5. Legal review of child privacy and regional rules before public launch (Section 16).
 6. Trademark check on the working name (document header).
