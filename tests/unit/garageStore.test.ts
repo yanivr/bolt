@@ -25,7 +25,23 @@ import {
   validateBlueprint,
   wheelKitPrice,
 } from '@bolt/shared';
+import { readFileSync } from 'node:fs';
+import type { CarAtlasManifest } from '@bolt/shared';
+import { accessoryMounts, removePart } from '@bolt/shared';
 import { describe, expect, it } from 'vitest';
+import type { BenchLayout, Box } from '../../apps/web/src/garage/benchLayout.js';
+import {
+  landscapeFloor,
+  layoutBench,
+  segmentsCross,
+} from '../../apps/web/src/garage/benchLayout.js';
+import { VIEW_FRAMES, carBounds, projectMounts } from '../../apps/web/src/garage/carGeometry.js';
+import {
+  ACCESSORY_CATEGORIES,
+  catalogEntries,
+  fitsMount,
+  partsForSlot,
+} from '../../apps/web/src/garage/slots.js';
 import {
   LIBRARY_KEY,
   MAX_SAVED_BLUEPRINTS,
@@ -40,9 +56,20 @@ import {
   serializeLibrary,
   writeLibrary,
 } from '../../apps/web/src/garage/blueprintLibrary.js';
-import { blockingIssue, planInstall, secondsLeft } from '../../apps/web/src/garage/buildSession.js';
+import {
+  activeSlot,
+  blockingIssue,
+  planInstall,
+  secondsLeft,
+} from '../../apps/web/src/garage/buildSession.js';
 import { createGarageStore } from '../../apps/web/src/garage/garageStore.js';
-import { fill, listNames, mountName, signedDelta } from '../../apps/web/src/garage/text.js';
+import {
+  fill,
+  listNames,
+  mountName,
+  mountShort,
+  signedDelta,
+} from '../../apps/web/src/garage/text.js';
 import { buildTips, trackFacts } from '../../apps/web/src/garage/trackFacts.js';
 
 /** A garage store on a clock the test controls. */
@@ -875,5 +902,431 @@ describe('copy helpers', () => {
         const name = mountName(mount.id);
         expect(name, mount.id).toMatch(/^[A-Z][a-z]+( [a-z]+)*$/);
       }
+  });
+});
+
+describe('garage session: slots', () => {
+  it('opens idle on the whole car with no slot selected', () => {
+    const { session } = garage();
+    expect(session().view).toBe('car');
+    expect(activeSlot(session(), CATALOG)).toBeNull();
+  });
+
+  it('opens an essential slot, and closes it on a second tap', () => {
+    const { act, session, left } = garage();
+    act.selectSlot({ kind: 'tires' });
+    expect(session().view).toBe('parts');
+    expect(session().category).toBe('tires');
+    expect(activeSlot(session(), CATALOG)).toEqual({ kind: 'tires' });
+    expect(left()).toBe(630);
+    act.selectSlot({ kind: 'engine' });
+    expect(activeSlot(session(), CATALOG)).toEqual({ kind: 'engine' });
+    act.selectSlot({ kind: 'engine' });
+    expect(session().view).toBe('car');
+    expect(activeSlot(session(), CATALOG)).toBeNull();
+  });
+
+  it('an empty mount lists what fits; an occupied one shows its part; neither buys', () => {
+    const { act, session, left } = garage();
+    act.selectSlot({ kind: 'mount', mountId: 'roof_mid' });
+    expect(session().selection).toEqual({ kind: 'mount', mountId: 'roof_mid' });
+    expect(activeSlot(session(), CATALOG)).toEqual({ kind: 'mount', mountId: 'roof_mid' });
+    expect(left()).toBe(630);
+    act.focusPart('weapon_turret');
+    act.install('weapon_turret');
+    // Installing lands on the part's card for that same slot, with the pane closed.
+    expect(session().focusPartId).toBeNull();
+    expect(session().selection.kind).toBe('instance');
+    expect(activeSlot(session(), CATALOG)).toEqual({ kind: 'mount', mountId: 'roof_mid' });
+    act.selectSlot({ kind: 'chassis' });
+    expect(session().selection).toEqual({ kind: 'none' });
+    act.selectSlot({ kind: 'mount', mountId: 'roof_mid' });
+    expect(session().selection.kind).toBe('instance');
+    expect(left()).toBe(500);
+    // A mount that is not on this chassis selects nothing.
+    act.clearSelection();
+    act.selectSlot({ kind: 'mount', mountId: 'rear_boom' });
+    expect(activeSlot(session(), CATALOG)).toBeNull();
+    // Undoing the install leaves nothing selected that is no longer on the car.
+    act.selectSlot({ kind: 'mount', mountId: 'roof_mid' });
+    act.undo();
+    expect(session().selection).toEqual({ kind: 'none' });
+    expect(activeSlot(session(), CATALOG)).toBeNull();
+  });
+
+  it('a swap from an essential slot returns to its list', () => {
+    const { act, session, car } = garage();
+    act.selectSlot({ kind: 'tires' });
+    act.focusPart('tires_rain');
+    act.install('tires_rain');
+    expect(car().tireKitId).toBe('tires_rain');
+    expect(session().focusPartId).toBeNull();
+    expect(activeSlot(session(), CATALOG)).toEqual({ kind: 'tires' });
+  });
+
+  it('browses the whole catalog with nothing selected, and installs on the best free mount', () => {
+    const { act, session, car } = garage();
+    act.selectSlot({ kind: 'mount', mountId: 'roof_mid' });
+    act.browse();
+    expect(session().view).toBe('browse');
+    expect(session().category).toBe('weapon');
+    expect(session().selection).toEqual({ kind: 'none' });
+    expect(activeSlot(session(), CATALOG)).toBeNull();
+    act.browse('utility');
+    expect(session().category).toBe('utility');
+    act.focusPart('utility_fan');
+    act.install('utility_fan');
+    expect(car().parts.map((p) => p.partId)).toEqual(['utility_fan']);
+    expect(session().view).toBe('parts');
+    act.clearSelection();
+    expect(session().view).toBe('car');
+    expect(session().selection).toEqual({ kind: 'none' });
+  });
+
+  it('loading a car and locking the build both return to the idle view', () => {
+    const { act, session } = garage();
+    act.selectSlot({ kind: 'chassis' });
+    act.load(ROOKIE_BLUEPRINT, 'Loaded.');
+    expect(session().view).toBe('car');
+    act.selectSlot({ kind: 'engine' });
+    act.lockWith(BASELINE_BLUEPRINT);
+    expect(session().view).toBe('car');
+  });
+});
+
+/** Reasons that mean "this part does not go on this mount at all". */
+const FIT_CODES = ['NO_COMPATIBLE_MOUNT', 'UNKNOWN_MOUNT', 'PART_TOO_LARGE', 'BAD_ROTATION'];
+
+describe('parts for a slot', () => {
+  const accessories = Object.values(CATALOG.parts);
+
+  it('lists for every mount of every chassis exactly the parts the validator lets sit there', () => {
+    let listed = 0;
+    for (const chassis of Object.values(CATALOG.chassis)) {
+      const car = baselineBlueprint({ chassisId: chassis.id }, 'Probe');
+      for (const mount of accessoryMounts(chassis)) {
+        const entries = partsForSlot(car, CATALOG, { kind: 'mount', mountId: mount.id });
+        const ids = new Set(entries.map((e) => e.part.id));
+        for (const part of accessories) {
+          const result = installPart(car, CATALOG, part.id, { mountId: mount.id });
+          const where = `${part.id} on ${chassis.id}/${mount.id}`;
+          if (ids.has(part.id)) {
+            listed++;
+            // Listed: it installs, or is refused for a reason that is not about fit.
+            if (!result.ok) expect(FIT_CODES, where).not.toContain(result.issue.code);
+          } else {
+            // Not listed: the validator refuses it there, for a reason about fit.
+            expect(result.ok, where).toBe(false);
+            if (!result.ok) expect(FIT_CODES, where).toContain(result.issue.code);
+          }
+        }
+        // Grouped in the order Weapons, Defense, Utility.
+        const order = entries.map((e) => ACCESSORY_CATEGORIES.indexOf(e.part.category as never));
+        expect([...order].sort((a, b) => a - b)).toEqual(order);
+      }
+    }
+    expect(listed).toBeGreaterThan(500);
+  });
+
+  it('marks a row blocked with the reason the press would give, and only then', () => {
+    // 75 credits left on a Beetle.
+    let car = BASELINE_BLUEPRINT;
+    for (const [partId, mountId, turns] of [
+      ['weapon_turret', 'roof_mid', 0],
+      ['defense_heavy_plate', 'front_center', 0],
+      ['defense_heavy_plate', 'rear_center', 2],
+      ['utility_nitro', 'left_utility', 0],
+      ['utility_overdrive', 'right_utility', 0],
+    ] as const) {
+      const next = installPart(car, CATALOG, partId, {
+        mountId,
+        offsetX: 0,
+        offsetY: 0,
+        rotationQuarterTurns: turns,
+      });
+      expect(next.ok, partId).toBe(true);
+      car = next.blueprint;
+    }
+    expect(STARTING_CREDITS - blueprintCost(car, CATALOG).total).toBe(75);
+    const entries = partsForSlot(car, CATALOG, { kind: 'mount', mountId: 'right_utility' });
+    expect(entries.length).toBeGreaterThan(3);
+    for (const entry of entries) {
+      const plan = planInstall(car, CATALOG, entry.part.id, 'right_utility');
+      expect(entry.blocked === null, entry.part.id).toBe(plan.result.ok);
+    }
+    // The occupied roof: the turret is marked as what is there, the rest are replacements.
+    const roof = partsForSlot(car, CATALOG, { kind: 'mount', mountId: 'roof_mid' });
+    const turret = roof.find((e) => e.part.id === 'weapon_turret')!;
+    expect(turret).toMatchObject({ here: true, action: 'current', blocked: null, installed: 1 });
+    const shotgun = roof.find((e) => e.part.id === 'weapon_shotgun')!;
+    expect(shotgun).toMatchObject({ here: false, action: 'replace', replaces: 'Swivel Turret' });
+    // Essentials: the current one is marked, a dearer one is blocked by credits.
+    const engines = partsForSlot(car, CATALOG, { kind: 'engine' });
+    expect(engines.map((e) => e.part.id)).toEqual(Object.keys(CATALOG.engines));
+    expect(engines.find((e) => e.part.id === car.engineId)).toMatchObject({ here: true });
+    expect(engines.find((e) => e.part.id === 'engine_v12')?.blocked).toBe('Not enough credits');
+    // Removing the turret frees the roof, and the plan for it becomes a plain install.
+    const cleared = removePart(
+      car,
+      CATALOG,
+      car.parts.find((p) => p.partId === 'weapon_turret')!.instanceId,
+    );
+    const after = partsForSlot(cleared.blueprint, CATALOG, { kind: 'mount', mountId: 'roof_mid' });
+    expect(after.find((e) => e.part.id === 'weapon_turret')).toMatchObject({
+      here: false,
+      action: 'install',
+    });
+  });
+
+  it('holds chassis the atlas cannot draw back as pending, never as blocked', () => {
+    const drawable = new Set(['chassis_beetle', 'chassis_arrow']);
+    const entries = partsForSlot(BASELINE_BLUEPRINT, CATALOG, { kind: 'chassis' }, { drawable });
+    expect(entries).toHaveLength(20);
+    for (const entry of entries) {
+      expect(entry.pending, entry.part.id).toBe(!drawable.has(entry.part.id));
+      if (entry.pending) expect(entry.blocked).toBeNull();
+    }
+  });
+
+  it('Browse All lists every part, says why one cannot go on this car, and where one can', () => {
+    let homeless = 0;
+    for (const category of ['weapon', 'defense', 'utility'] as const) {
+      const entries = catalogEntries(BASELINE_BLUEPRINT, CATALOG, category);
+      expect(entries.map((e) => e.part.id)).toEqual(
+        accessories.filter((p) => p.category === category).map((p) => p.id),
+      );
+      const beetle = accessoryMounts(CATALOG.chassis.chassis_beetle!);
+      for (const entry of entries) {
+        const fits = beetle.filter((mount) => fitsMount(mount, entry.part));
+        if (fits.length === 0) {
+          homeless++;
+          expect(entry.blocked, entry.part.id).toBe('No compatible mount');
+          expect(entry.mountId).toBeNull();
+        } else {
+          expect(entry.blocked, entry.part.id).not.toBe('No compatible mount');
+          // It offers a real mount of this chassis that the part fits.
+          if (entry.blocked === null)
+            expect(
+              fits.map((m) => m.id),
+              entry.part.id,
+            ).toContain(entry.mountId);
+        }
+      }
+    }
+    // The Beetle has no mount for some of the catalog: that is what Browse All is for.
+    expect(homeless).toBeGreaterThan(0);
+    expect(catalogEntries(BASELINE_BLUEPRINT, CATALOG, 'chassis')).toHaveLength(20);
+    // With the roof taken, a roof-only part is offered as a replacement there, not refused.
+    const roofed = installPart(BASELINE_BLUEPRINT, CATALOG, 'weapon_turret', {
+      mountId: 'roof_mid',
+    }).blueprint;
+    const emp = catalogEntries(roofed, CATALOG, 'weapon').find((e) => e.part.id === 'weapon_emp');
+    expect(emp).toMatchObject({
+      action: 'replace',
+      mountId: 'roof_mid',
+      blocked: null,
+      replaces: 'Swivel Turret',
+    });
+  });
+});
+
+describe('workbench layout', () => {
+  const cars = JSON.parse(
+    readFileSync('apps/web/public/assets/atlases/cars/manifest.json', 'utf8'),
+  ) as CarAtlasManifest;
+  const VIEWPORTS = [
+    { width: 844, height: 390 },
+    { width: 870, height: 340 },
+    { width: 667, height: 375 },
+    { width: 932, height: 430 },
+  ];
+  const overlap = (a: Box, b: Box) =>
+    a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+  const tileBox = (t: BenchLayout['tiles'][number]): Box => ({
+    left: t.x,
+    top: t.y,
+    right: t.x + t.w,
+    bottom: t.y + t.h,
+  });
+  /** The body art is smaller than the chassis box; the page measures it. This stands in. */
+  const shrink = (b: Box, by: number): Box => ({
+    left: b.left * by,
+    top: b.top * by,
+    right: b.right * by,
+    bottom: b.bottom * by,
+  });
+
+  it('has the floor the stylesheet gives it', () => {
+    expect(landscapeFloor({ width: 870, height: 340 })).toEqual({ width: 462, height: 189 });
+    expect(landscapeFloor({ width: 844, height: 390 })).toEqual({ width: 447, height: 228 });
+  });
+
+  it('places every chassis at every phone size and view: no overlaps, in bounds, no crossings', () => {
+    let checked = 0;
+    let scrolling = 0;
+    for (const viewport of VIEWPORTS) {
+      const floor = landscapeFloor(viewport);
+      for (const chassis of Object.values(CATALOG.chassis)) {
+        const sprite = cars.chassis[chassis.id]!;
+        for (const frame of VIEW_FRAMES)
+          for (const tight of [1, 0.85]) {
+            const mounts = projectMounts(chassis, sprite, frame);
+            const bounds = shrink(carBounds(chassis, sprite, frame), tight);
+            const layout = layoutBench({ ...floor, mounts, bounds });
+            const at = `${chassis.id} view ${frame} at ${viewport.width}x${viewport.height}`;
+            checked++;
+
+            expect(layout.scale, at).toBeGreaterThanOrEqual(1);
+            expect(Number.isInteger(layout.scale), at).toBe(true);
+            expect(layout.tiles.map((t) => t.id).sort(), at).toEqual(
+              accessoryMounts(chassis)
+                .map((m) => m.id)
+                .sort(),
+            );
+            // The car is whole and on the floor.
+            expect(layout.carBox.left, at).toBeGreaterThanOrEqual(0);
+            expect(layout.carBox.right, at).toBeLessThanOrEqual(floor.width);
+            if (layout.scale > 1) {
+              expect(layout.carBox.top, at).toBeGreaterThanOrEqual(0);
+              expect(layout.carBox.bottom, at).toBeLessThanOrEqual(floor.height);
+            }
+            for (const tile of layout.tiles) {
+              expect(tile.w, at).toBeGreaterThanOrEqual(44);
+              expect(tile.h, at).toBeGreaterThanOrEqual(44);
+              expect(tile.x, at).toBeGreaterThanOrEqual(0);
+              expect(tile.x + tile.w, at).toBeLessThanOrEqual(floor.width);
+              expect(overlap(tileBox(tile), layout.carBox), `${at} ${tile.id} on car`).toBe(false);
+            }
+            for (let i = 0; i < layout.tiles.length; i++)
+              for (let j = i + 1; j < layout.tiles.length; j++)
+                expect(
+                  overlap(tileBox(layout.tiles[i]!), tileBox(layout.tiles[j]!)),
+                  `${at} ${layout.tiles[i]!.id} on ${layout.tiles[j]!.id}`,
+                ).toBe(false);
+
+            if (layout.scroll) {
+              scrolling++;
+              // Only the frames with more mounts than two columns hold.
+              expect(mounts.length, at).toBeGreaterThan(8);
+              continue;
+            }
+            for (const tile of layout.tiles) {
+              expect(tile.y, at).toBeGreaterThanOrEqual(0);
+              expect(tile.y + tile.h, at).toBeLessThanOrEqual(floor.height);
+              // A leader starts on its tile's edge and ends on its mount.
+              const mount = mounts.find((m) => m.id === tile.id)!;
+              const start = tile.leader[0]!;
+              const end = tile.leader[tile.leader.length - 1]!;
+              expect(start.x === tile.x || start.x === tile.x + tile.w, at).toBe(true);
+              expect(start.y, at).toBeGreaterThanOrEqual(tile.y);
+              expect(start.y, at).toBeLessThanOrEqual(tile.y + tile.h);
+              expect(end, at).toEqual({
+                x: layout.car.x + mount.dx * layout.scale,
+                y: layout.car.y + mount.dy * layout.scale,
+              });
+              // No leader runs under another tile.
+              for (const other of layout.tiles) {
+                if (other === tile) continue;
+                const box = tileBox(other);
+                for (let k = 0; k + 1 < tile.leader.length; k++) {
+                  const a = tile.leader[k]!;
+                  const b = tile.leader[k + 1]!;
+                  for (let step = 0; step <= 20; step++) {
+                    const x = a.x + ((b.x - a.x) * step) / 20;
+                    const y = a.y + ((b.y - a.y) * step) / 20;
+                    const inside = x > box.left && x < box.right && y > box.top && y < box.bottom;
+                    expect(inside, `${at} ${tile.id} leader under ${other.id}`).toBe(false);
+                  }
+                }
+              }
+            }
+            // No two leaders cross.
+            const segments = layout.tiles.flatMap((tile) =>
+              tile.leader.slice(1).map((p, k) => ({ id: tile.id, a: tile.leader[k]!, b: p })),
+            );
+            for (let i = 0; i < segments.length; i++)
+              for (let j = i + 1; j < segments.length; j++) {
+                const s = segments[i]!;
+                const t = segments[j]!;
+                if (s.id === t.id) continue;
+                expect(segmentsCross(s.a, s.b, t.a, t.b), `${at} ${s.id} x ${t.id}`).toBe(false);
+              }
+          }
+      }
+    }
+    expect(checked).toBe(4 * 20 * 4 * 2);
+    // Scrolling columns are the last resort: the two largest frames on the narrowest phone.
+    expect(scrolling).toBeLessThan(checked / 20);
+  });
+
+  it('orders a column by where the mounts are on screen', () => {
+    const chassis = CATALOG.chassis.chassis_beetle!;
+    const sprite = cars.chassis.chassis_beetle!;
+    const frame = VIEW_FRAMES[0]!;
+    const mounts = projectMounts(chassis, sprite, frame);
+    const layout = layoutBench({
+      ...landscapeFloor({ width: 870, height: 370 }),
+      mounts,
+      bounds: carBounds(chassis, sprite, frame),
+    });
+    expect(layout.scroll).toBe(false);
+    expect(layout.tileH).toBe(48);
+    for (const side of ['left', 'right'] as const) {
+      const column = layout.tiles.filter((t) => t.side === side);
+      expect(column.length).toBeGreaterThan(0);
+      const ys = column.map((t) => mounts.find((m) => m.id === t.id)!.dy);
+      expect([...ys].sort((a, b) => a - b)).toEqual(ys);
+    }
+    // The front of the car faces right in this view, so the front mount is in the right column.
+    expect(layout.tiles.find((t) => t.id === 'front_center')?.side).toBe('right');
+    expect(layout.tiles.find((t) => t.id === 'rear_center')?.side).toBe('left');
+  });
+
+  it('shows the car at twice its size or better on every phone, and larger with room', () => {
+    for (const viewport of VIEWPORTS)
+      for (const chassis of Object.values(CATALOG.chassis)) {
+        const sprite = cars.chassis[chassis.id]!;
+        const frame = VIEW_FRAMES[0]!;
+        const layout = layoutBench({
+          ...landscapeFloor(viewport),
+          mounts: projectMounts(chassis, sprite, frame),
+          bounds: shrink(carBounds(chassis, sprite, frame), 0.85),
+        });
+        expect(layout.scale, `${chassis.id} at ${viewport.width}`).toBeGreaterThanOrEqual(2);
+      }
+    const beetle = CATALOG.chassis.chassis_beetle!;
+    const sprite = cars.chassis.chassis_beetle!;
+    const big = layoutBench({
+      width: 650,
+      height: 690,
+      mounts: projectMounts(beetle, sprite, 18),
+      bounds: carBounds(beetle, sprite, 18),
+    });
+    expect(big.scale).toBeGreaterThanOrEqual(6);
+    // Portrait: the tiles are a row elsewhere, so only the car is placed.
+    const strip = layoutBench({
+      width: 440,
+      height: 250,
+      mounts: projectMounts(beetle, sprite, 18),
+      bounds: carBounds(beetle, sprite, 18),
+      columns: false,
+    });
+    expect(strip.tiles).toEqual([]);
+    expect(strip.scale).toBeGreaterThanOrEqual(3);
+  });
+
+  it('has a short label for every mount, unique on its chassis', () => {
+    for (const chassis of Object.values(CATALOG.chassis)) {
+      const labels = accessoryMounts(chassis).map((mount) => {
+        expect(
+          Object.prototype.hasOwnProperty.call(STRINGS.garage.mountShort, mount.id),
+          mount.id,
+        ).toBe(true);
+        const label = mountShort(mount.id);
+        expect(label.length, mount.id).toBeLessThanOrEqual(7);
+        return label;
+      });
+      expect(new Set(labels).size, chassis.id).toBe(labels.length);
+    }
   });
 });

@@ -18,7 +18,18 @@ type Props = {
   className?: string;
   /** Called with false when the chassis has no art and nothing can be drawn. */
   onDrawable?: (drawable: boolean) => void;
+  /**
+   * A mounted part to pick out with an outline traced around its own shape. `select` pulses
+   * gently in gold (it holds still under Reduced Motion); `bad` is a steady red.
+   */
+  highlight?: { instanceId: string; tone: 'select' | 'bad' | 'target' } | null;
 };
+
+const OUTLINE = {
+  select: ['#f6c35b', '#fff0c2'],
+  bad: ['#ff5a66', '#ff5a66'],
+  target: ['#67dea7', '#c9f7e2'],
+} as const;
 
 function prefersReducedMotion(): boolean {
   return (
@@ -41,6 +52,7 @@ export function CarCanvas({
   headlights = true,
   className,
   onDrawable,
+  highlight = null,
 }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [sheets, setSheets] = useState<CarSheets | null>(null);
@@ -62,12 +74,28 @@ export function CarCanvas({
     };
   }, [manifests, blueprint, onDrawable]);
 
+  const highlightId = highlight?.instanceId ?? null;
+  const highlightTone = highlight?.tone ?? null;
   useEffect(() => {
     const ctx = ref.current?.getContext('2d');
     if (!ctx || !sheets) return;
     if (!spin || prefersReducedMotion()) {
-      drawCar(ctx, sheets, { frame, headlights });
-      return;
+      if (!highlightId || !highlightTone) {
+        drawCar(ctx, sheets, { frame, headlights });
+        return;
+      }
+      const colors = OUTLINE[highlightTone];
+      const draw = (phase: number) =>
+        drawCar(ctx, sheets, {
+          frame,
+          headlights,
+          outline: { instanceId: highlightId, color: colors[phase % 2]! },
+        });
+      draw(0);
+      if (colors[0] === colors[1] || prefersReducedMotion()) return;
+      let phase = 0;
+      const pulse = window.setInterval(() => draw(++phase), 520);
+      return () => window.clearInterval(pulse);
     }
     let at = frame;
     let timer = 0;
@@ -79,7 +107,7 @@ export function CarCanvas({
     };
     step();
     return () => window.clearTimeout(timer);
-  }, [sheets, frame, spin, headlights]);
+  }, [sheets, frame, spin, headlights, highlightId, highlightTone]);
 
   return (
     <canvas

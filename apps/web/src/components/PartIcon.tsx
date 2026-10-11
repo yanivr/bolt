@@ -23,8 +23,9 @@ export function PartIcon({ manifests, partId, category, size = 40 }: Props) {
       .sort((a, b) => b.size - a.size)[0] ?? null;
   if (manifests && sheet) {
     const index = sheet.index[partId] ?? 0;
-    // Whole-number zoom keeps the pixels square.
-    const zoom = Math.max(1, Math.floor(size / sheet.size));
+    // Whole and half steps: one and a half is exact on a 2x screen and all but exact on a 3x
+    // one, and it lets a 32 pixel icon fill a 48 pixel row.
+    const zoom = Math.max(1, Math.floor((size / sheet.size) * 2) / 2);
     const cell = sheet.size * zoom;
     return (
       <span

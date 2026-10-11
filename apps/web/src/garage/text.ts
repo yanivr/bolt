@@ -1,3 +1,5 @@
+import { STRINGS } from '@bolt/content';
+
 /** Fills `{name}` placeholders in a string from the shared copy table. */
 export function fill(template: string, values: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (whole, key: string) =>
@@ -15,6 +17,15 @@ const MOUNT_WORDS: Record<string, string> = {
 export function mountName(mountId: string): string {
   const words = mountId.split('_').map((word) => MOUNT_WORDS[word] ?? word);
   const text = words.join(' ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** The few letters a slot tile has room for: "Roof F", "L Rear". */
+export function mountShort(mountId: string): string {
+  const table: Record<string, string> = STRINGS.garage.mountShort;
+  if (Object.prototype.hasOwnProperty.call(table, mountId)) return table[mountId]!;
+  const words = mountId.split('_').filter((word) => word !== 'center');
+  const text = (words[0] ?? mountId).slice(0, 7);
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 

@@ -177,7 +177,43 @@ export type DrawOptions = {
   headlights?: boolean;
   /** Body offset in car-local pixels, for the idle shudder. */
   bodyShiftY?: number;
+  /** A mounted part to trace with a one-pixel outline in a color, without covering it. */
+  outline?: { instanceId: string; color: string } | null;
 };
+
+const silhouettes = new Map<string, HTMLCanvasElement>();
+
+/** One frame of a sheet as a flat silhouette in a color, for tracing an outline. */
+function silhouette(sheet: Sheet, frame: number, color: string): HTMLCanvasElement | null {
+  const key = `${sheet.ref.file}:${frame}:${color}`;
+  const cached = silhouettes.get(key);
+  if (cached) return cached;
+  const { frameWidth: fw, frameHeight: fh } = sheet.ref;
+  const columns = sheet.ref.columns || CAR_SHEET_COLUMNS;
+  const canvas = document.createElement('canvas');
+  canvas.width = fw;
+  canvas.height = fh;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(
+    sheet.image,
+    (frame % columns) * fw,
+    Math.floor(frame / columns) * fh,
+    fw,
+    fh,
+    0,
+    0,
+    fw,
+    fh,
+  );
+  ctx.globalCompositeOperation = 'source-in';
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, fw, fh);
+  if (silhouettes.size > 256) silhouettes.clear();
+  silhouettes.set(key, canvas);
+  return canvas;
+}
 
 /** Draws one frame of a car, centred on a square canvas of `sheets.size` pixels. */
 export function drawCar(
@@ -208,6 +244,21 @@ export function drawCar(
     if (!sheet) continue;
     const { frameWidth: fw, frameHeight: fh } = sheet.ref;
     const columns = sheet.ref.columns || CAR_SHEET_COLUMNS;
+    if (op.kind === 'part' && options.outline && op.instanceId === options.outline.instanceId) {
+      // The part's own shape, one pixel out in each direction, drawn under the part: a halo
+      // that follows the silhouette and hides nothing.
+      const halo = silhouette(sheet, op.frame, options.outline.color);
+      const x = Math.round(size / 2 + op.dx - fw / 2);
+      const y = Math.round(size / 2 + op.dy - fh / 2);
+      if (halo)
+        for (const [ox, oy] of [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+        ] as const)
+          ctx.drawImage(halo, x + ox, y + oy);
+    }
     ctx.drawImage(
       sheet.image,
       (op.frame % columns) * fw,
@@ -222,56 +273,75 @@ export function drawCar(
   }
 }
 
-export type LocalPoint = { id: string; x: number; y: number; z: number };
-export type ScreenPoint = { id: string; dx: number; dy: number };
+export type { LocalPoint, ScreenPoint } from './carProjection.js';
+export { mountHeight, projectPoints, screenToLocal } from './carProjection.js';
 
-const NO_SHEET: SpriteSheetRef = { file: '', frameWidth: 1, frameHeight: 1, columns: 1, rows: 1 };
-const NO_WHEELS: WheelSpriteManifest = { id: '', sheet: NO_SHEET, rollFrames: 1 };
-const NO_ENGINE: EngineSpriteManifest = { id: '', sheet: NO_SHEET, exhaustStyle: 'none' };
+export type SpriteBox = { left: number; top: number; right: number; bottom: number };
+
+const measured = new Map<string, SpriteBox>();
+
+/** The measured bounds of a chassis at a heading frame, once `measureChassis` has run. */
+export function measuredBounds(chassisId: string, frame: number): SpriteBox | undefined {
+  return measured.get(`${chassisId}:${frame}`);
+}
 
 /**
- * Where chassis-local points land on the drawn car at a heading frame, as offsets from the
- * car's centre in sprite pixels. The points are run through `layoutCar` itself as if they
- * were mounted parts, so a mount marker sits exactly where the compositor draws the part.
+ * Measures what a chassis really draws at some heading frames: the opaque pixels of its body
+ * and shadow, in sprite pixels from the car's centre. The workbench sizes the car from this,
+ * so the scale is as large as the art allows rather than as large as a guess allows.
  */
-export function projectPoints(
-  chassis: ChassisSpriteManifest,
-  frame: number,
-  points: readonly LocalPoint[],
-): Map<string, ScreenPoint> {
-  const pose: CarPose = {
-    headingRad: (frame * TAU) / CAR_HEADINGS,
-    steer: 0,
-    roll: 0,
-    braking: false,
-    headlights: false,
-    bodyShiftX: 0,
-    bodyShiftY: 0,
-  };
-  const ops = layoutCar(
-    chassis,
-    NO_WHEELS,
-    NO_ENGINE,
-    pose,
-    points.map((p) => ({ instanceId: p.id, partId: '', x: p.x, y: p.y, z: p.z, quarterTurns: 0 })),
-  );
-  const out = new Map<string, ScreenPoint>();
-  for (const op of ops)
-    if (op.kind === 'part' && op.instanceId !== undefined)
-      out.set(op.instanceId, { id: op.instanceId, dx: op.dx, dy: op.dy });
-  return out;
-}
-
-/** A screen-space drag, in sprite pixels, as a chassis-local offset at a heading frame. */
-export function screenToLocal(frame: number, dx: number, dy: number): { x: number; y: number } {
-  const rad = (-frame * TAU) / CAR_HEADINGS;
-  const c = Math.cos(rad);
-  const s = Math.sin(rad);
-  return { x: dx * c - dy * s, y: dx * s + dy * c };
-}
-
-/** Height of the bodywork under a mount, as the compositor reads it. */
-export function mountHeight(chassis: ChassisSpriteManifest, mountId: string): number {
-  const heights = chassis.mountHeights ?? {};
-  return Object.prototype.hasOwnProperty.call(heights, mountId) ? heights[mountId]! : 10;
+export async function measureChassis(
+  manifests: GameManifests,
+  chassisId: string,
+  frames: readonly number[],
+): Promise<void> {
+  const chassis = manifests.cars.chassis[chassisId];
+  if (!chassis || frames.every((frame) => measured.has(`${chassisId}:${frame}`))) return;
+  const [body, shadow] = await Promise.all([
+    loadImage(`${manifests.carsBase}/${chassis.body.file}`),
+    loadImage(`${manifests.carsBase}/${chassis.shadow.file}`),
+  ]);
+  const size = chassis.body.frameWidth;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return;
+  for (const frame of frames) {
+    ctx.clearRect(0, 0, size, size);
+    for (const [image, ref, ox, oy] of [
+      [shadow, chassis.shadow, 2, 3],
+      [body, chassis.body, 0, 0],
+    ] as const) {
+      const columns = ref.columns || CAR_SHEET_COLUMNS;
+      ctx.drawImage(
+        image,
+        (frame % columns) * ref.frameWidth,
+        Math.floor(frame / columns) * ref.frameHeight,
+        ref.frameWidth,
+        ref.frameHeight,
+        Math.round(size / 2 - ref.frameWidth / 2) + ox,
+        Math.round(size / 2 - ref.frameHeight / 2) + oy,
+        ref.frameWidth,
+        ref.frameHeight,
+      );
+    }
+    const data = ctx.getImageData(0, 0, size, size).data;
+    const box: SpriteBox = { left: size, top: size, right: -1, bottom: -1 };
+    for (let y = 0; y < size; y++)
+      for (let x = 0; x < size; x++)
+        if (data[(y * size + x) * 4 + 3]! > 0) {
+          if (x < box.left) box.left = x;
+          if (x > box.right) box.right = x;
+          if (y < box.top) box.top = y;
+          if (y > box.bottom) box.bottom = y;
+        }
+    if (box.right < 0) continue;
+    measured.set(`${chassisId}:${frame}`, {
+      left: box.left - size / 2,
+      top: box.top - size / 2,
+      right: box.right + 1 - size / 2,
+      bottom: box.bottom + 1 - size / 2,
+    });
+  }
 }

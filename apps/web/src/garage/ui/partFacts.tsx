@@ -1,7 +1,7 @@
 import type { PartCard } from '@bolt/content';
 import { CATALOG, STRINGS } from '@bolt/content';
 import type { AnyPartDefinition, MountPoint } from '@bolt/shared';
-import { accessoryMounts, allowedRotations, mountAccepts, rotatedFootprint } from '@bolt/shared';
+import { accessoryMounts } from '@bolt/shared';
 import type { ReactNode } from 'react';
 import { Glyph } from '../../components/Glyph.js';
 import type { GlyphName } from '../../components/glyphs.js';
@@ -90,17 +90,6 @@ export function FactRow({ facts }: { facts: Fact[] }) {
       ))}
     </span>
   );
-}
-
-/** Whether a part can physically go on a mount in some allowed orientation. */
-export function fitsMount(mount: MountPoint, part: AnyPartDefinition): boolean {
-  if (part.category === 'chassis' || part.category === 'engine' || part.category === 'tires')
-    return false;
-  if (!mountAccepts(mount, part)) return false;
-  return allowedRotations(mount, part).some((turns) => {
-    const size = rotatedFootprint(part.footprint, turns);
-    return size.w <= mount.maxFootprint.w && size.h <= mount.maxFootprint.h;
-  });
 }
 
 export function findMountOf(chassisId: string, mountId: string | null): MountPoint | null {

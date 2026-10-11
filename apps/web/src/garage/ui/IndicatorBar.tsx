@@ -1,13 +1,13 @@
 import { STRINGS } from '@bolt/content';
 import type { BuildStats, StatsWarningCode } from '@bolt/shared';
-import { useState } from 'react';
 import { Dialog } from '../../components/Dialog.js';
 import { Glyph } from '../../components/Glyph.js';
 import type { GlyphName } from '../../components/glyphs.js';
 import { compactNumber, fill } from '../text.js';
 
-const KEYS = ['budget', 'load', 'energy', 'heat', 'stability'] as const;
-type Key = (typeof KEYS)[number];
+const KEYS = ['load', 'energy', 'heat', 'stability'] as const;
+export type IndicatorKey = 'budget' | (typeof KEYS)[number];
+type Key = IndicatorKey;
 
 const GLYPH: Record<Key, GlyphName> = {
   budget: 'coin',
@@ -46,12 +46,18 @@ function reading(stats: BuildStats, key: Key): { value: string; mark: number | n
 }
 
 /**
- * The five engineering indicators (Section 6.2) as labelled gauges with their raw numbers.
- * Each is a button: it opens the plain-English working behind the number and any warning.
+ * The engineering indicators (Section 6.2) as one thin row of labelled gauges with their raw
+ * numbers: Load, Energy, Heat and Stability. Budget is the Credits Left number in the header.
+ * Each is a button that opens the plain-English working behind the number and any warning.
  * Status is always carried by text and a glyph as well as by color.
  */
-export function IndicatorBar({ stats }: { stats: BuildStats | null }) {
-  const [open, setOpen] = useState<Key | null>(null);
+export function IndicatorBar({
+  stats,
+  onOpen,
+}: {
+  stats: BuildStats | null;
+  onOpen: (key: IndicatorKey) => void;
+}) {
   const g = STRINGS.garage;
   if (!stats) return <div className="g-indicators" />;
   return (
@@ -71,7 +77,7 @@ export function IndicatorBar({ stats }: { stats: BuildStats | null }) {
               g.indicatorHelp,
               { name: g.indicators[key] },
             )}`}
-            onClick={() => setOpen(key)}
+            onClick={() => onOpen(key)}
           >
             <span className="indicator-top">
               <span className="indicator-glyph">
@@ -90,39 +96,53 @@ export function IndicatorBar({ stats }: { stats: BuildStats | null }) {
           </button>
         );
       })}
-      {open && (
-        <Dialog
-          title={g.indicators[open]}
-          onClose={() => setOpen(null)}
-          className="sheet sheet-narrow"
-          head={
-            <button className="btn btn-small" onClick={() => setOpen(null)} data-autofocus>
-              {STRINGS.home.close}
-            </button>
-          }
-        >
-          <div className="sheet-body" data-testid="indicator-detail">
-            <p className={`indicator-status is-${stats.indicators[open].status}`}>
-              <Glyph name={stats.indicators[open].status === 'ok' ? 'check' : 'warn'} size={12} />
-              <strong>{reading(stats, open).value}</strong>
-              <span>{g.status[stats.indicators[open].status]}</span>
-            </p>
-            <ul className="indicator-lines">
-              {stats.indicators[open].lines.map((line) => (
-                <li key={line}>{line}</li>
-              ))}
-            </ul>
-            {stats.warnings
-              .filter((warning) => WARNINGS[open].includes(warning.code))
-              .map((warning) => (
-                <p key={warning.code} className="g-warning">
-                  <Glyph name="warn" size={12} />
-                  <span>{warning.message}</span>
-                </p>
-              ))}
-          </div>
-        </Dialog>
-      )}
     </div>
+  );
+}
+
+/** The working behind one indicator, with the warnings that belong to it. */
+export function IndicatorDialog({
+  stats,
+  open,
+  onClose,
+}: {
+  stats: BuildStats;
+  open: IndicatorKey;
+  onClose: () => void;
+}) {
+  const g = STRINGS.garage;
+  const indicator = stats.indicators[open];
+  return (
+    <Dialog
+      title={g.indicators[open]}
+      onClose={onClose}
+      className="sheet sheet-narrow"
+      head={
+        <button className="btn btn-small" onClick={onClose} data-autofocus>
+          {STRINGS.home.close}
+        </button>
+      }
+    >
+      <div className="sheet-body" data-testid="indicator-detail">
+        <p className={`indicator-status is-${indicator.status}`}>
+          <Glyph name={indicator.status === 'ok' ? 'check' : 'warn'} size={12} />
+          <strong>{reading(stats, open).value}</strong>
+          <span>{g.status[indicator.status]}</span>
+        </p>
+        <ul className="indicator-lines">
+          {indicator.lines.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+        {stats.warnings
+          .filter((warning) => WARNINGS[open].includes(warning.code))
+          .map((warning) => (
+            <p key={warning.code} className="g-warning">
+              <Glyph name="warn" size={12} />
+              <span>{warning.message}</span>
+            </p>
+          ))}
+      </div>
+    </Dialog>
   );
 }

@@ -1,6 +1,6 @@
 import { CATALOG, ROOKIE_BLUEPRINT, STRINGS, getPart } from '@bolt/content';
 import type { BlueprintIssue, PartCategory } from '@bolt/shared';
-import { buildHash, installedParts, own } from '@bolt/shared';
+import { accessoryMounts, buildHash, drawableChassisIds, installedParts, own } from '@bolt/shared';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getManifests } from '../app/App.js';
 import { buildSeconds } from '../app/flags.js';
@@ -11,16 +11,20 @@ import { Dialog } from '../components/Dialog.js';
 import { Glyph } from '../components/Glyph.js';
 import { StarterList } from '../components/StarterList.js';
 import { useViewport } from '../components/useViewport.js';
-import { issueText, planFor, secondsLeft, targetMountFor } from '../garage/buildSession.js';
+import type { Slot } from '../garage/buildSession.js';
+import { activeSlot, issueText, planFor, secondsLeft } from '../garage/buildSession.js';
 import { garageStore, useGarage } from '../garage/garageStore.js';
-import { fill } from '../garage/text.js';
-import { CategoryRail } from '../garage/ui/CategoryRail.js';
-import { IndicatorBar } from '../garage/ui/IndicatorBar.js';
+import { catalogEntries, fitsMount, partsForSlot, slotKey } from '../garage/slots.js';
+import { fill, mountName } from '../garage/text.js';
+import { CarPanel } from '../garage/ui/CarPanel.js';
+import type { IndicatorKey } from '../garage/ui/IndicatorBar.js';
+import { IndicatorBar, IndicatorDialog } from '../garage/ui/IndicatorBar.js';
 import { PaintNameDialog } from '../garage/ui/PaintNameDialog.js';
 import { PartDetail } from '../garage/ui/PartDetail.js';
-import { PartList, useListedParts } from '../garage/ui/PartList.js';
+import { PartList } from '../garage/ui/PartList.js';
 import { PartTools } from '../garage/ui/PartTools.js';
 import { TopBar } from '../garage/ui/TopBar.js';
+import type { CoachMarks } from '../garage/ui/Workbench.js';
 import { Workbench } from '../garage/ui/Workbench.js';
 import { useBuildPreview, useBuildStats } from '../garage/ui/useBuildStats.js';
 import type { GameManifests } from '../game/assets.js';
@@ -28,8 +32,8 @@ import type { GameManifests } from '../game/assets.js';
 type Overlay = 'leave' | 'reset' | 'paint' | 'quick' | 'blueprints' | 'more' | null;
 type Line = { tone: 'ok' | 'warn' | 'error'; text: string; key: string };
 
-const STEP_CATEGORIES = ['chassis', 'tires', 'weapon'] as const;
-type Step = (typeof STEP_CATEGORIES)[number];
+const STEPS = ['chassis', 'tires', 'weapon'] as const;
+type Step = (typeof STEPS)[number];
 
 /** How long the lock banner stays up before the race starts, in milliseconds. */
 const LOCK_BANNER_MS = 1600;
@@ -68,14 +72,15 @@ function Garage({ manifests }: { manifests: GameManifests }) {
   const completeMilestone = useApp((s) => s.completeMilestone);
   const tipsDone = useApp((s) => s.milestones[MILESTONE_GARAGE_TIPS] === true);
   const { width, height } = useViewport();
-  const wide = width >= 1100 && width > height;
-  // On the narrowest landscape phones the three secondary actions fold into one menu, so the
-  // indicators keep their numbers and Ready keeps its size.
-  const folded = width < 740 && width > height;
+  const portrait = width <= height;
+  // Room for the list and the compare pane side by side.
+  const wide = width >= 1100 && !portrait;
+  const g = STRINGS.garage;
 
   const blueprint = session.history.present;
   const locked = session.phase === 'locked';
   const [overlay, setOverlay] = useState<Overlay>(null);
+  const [indicator, setIndicator] = useState<IndicatorKey | null>(null);
   const [dragIssue, setDragIssue] = useState<BlueprintIssue | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [seen, setSeen] = useState<Record<Step, boolean>>({
@@ -100,6 +105,7 @@ function Garage({ manifests }: { manifests: GameManifests }) {
   useEffect(() => {
     if (!lockedCar) return;
     setOverlay(null);
+    setIndicator(null);
     setBlueprint(lockedCar);
     completeMilestone(MILESTONE_BUILT);
     const timer = window.setTimeout(
@@ -121,7 +127,6 @@ function Garage({ manifests }: { manifests: GameManifests }) {
     plan && plan.action !== 'current' && plan.result.ok ? plan.result.blueprint : null;
   const preview = useBuildPreview(stats, previewBlueprint);
 
-  const listed = useListedParts(session, blueprint, manifests);
   const parts = useMemo(() => installedParts(blueprint, CATALOG), [blueprint]);
   const selectedPart =
     session.selection.kind === 'instance'
@@ -132,6 +137,25 @@ function Garage({ manifests }: { manifests: GameManifests }) {
         ) ?? null)
       : null;
   const selectedId = selectedPart?.instance.instanceId ?? null;
+
+  // --- What the side panel shows -------------------------------------------------------------
+  const slot = activeSlot(session, CATALOG);
+  const slotId = slot ? slotKey(slot) : null;
+  const browsing = session.view === 'browse';
+  const drawableSet = useMemo(
+    () => new Set(drawableChassisIds(manifests.cars, CATALOG)),
+    [manifests],
+  );
+  const entries = useMemo(
+    () => {
+      const options = { drawable: drawableSet };
+      if (browsing) return catalogEntries(blueprint, CATALOG, session.category, options);
+      return slot ? partsForSlot(blueprint, CATALOG, slot, options) : [];
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [blueprint, browsing, session.category, slotId, drawableSet],
+  );
+  const listOpen = browsing || slot !== null;
 
   const errors = useMemo(
     () => (stats?.issues ?? []).filter((issue) => issue.severity === 'error'),
@@ -148,16 +172,14 @@ function Garage({ manifests }: { manifests: GameManifests }) {
     ],
     [session.flagged, errors],
   );
-  const flaggedCategories = useMemo(() => {
-    const set = new Set<PartCategory>();
-    for (const issue of errors) {
+  const flaggedEssentials = useMemo(() => {
+    const set = new Set<string>();
+    for (const issue of errors)
       if (issue.slot === 'chassis' || issue.slot === 'engine' || issue.slot === 'tires')
         set.add(issue.slot);
-      const def = issue.partId ? own(CATALOG.parts, issue.partId) : undefined;
-      if (def) set.add(def.category);
-    }
+    if (!drawable) set.add('chassis');
     return set;
-  }, [errors]);
+  }, [errors, drawable]);
 
   // --- The status line -----------------------------------------------------------------------
   const notice = session.notice;
@@ -177,11 +199,16 @@ function Garage({ manifests }: { manifests: GameManifests }) {
   if (dragIssue) line = { tone: 'error', text: issueText(dragIssue), key: 'drag' };
   else if (notice && notice.tone === 'error')
     line = { tone: 'error', text: notice.text, key: `n${notice.stamp}` };
-  else if (urgent) line = { tone: 'warn', text: STRINGS.garage.tenSeconds, key: 'ten' };
+  else if (urgent) line = { tone: 'warn', text: g.tenSeconds, key: 'ten' };
   else if (notice) line = { tone: notice.tone, text: notice.text, key: `n${notice.stamp}` };
   else if (blocking) line = { tone: 'error', text: issueText(blocking), key: 'blocked' };
-  else if (!drawable) line = { tone: 'error', text: STRINGS.garage.artInProgressNote, key: 'art' };
-  else line = { tone: 'ok', text: STRINGS.garage.readyToRace, key: 'ready' };
+  else if (!drawable) line = { tone: 'error', text: g.artInProgressNote, key: 'art' };
+  else line = { tone: 'ok', text: g.readyToRace, key: 'ready' };
+  // With nothing to report the line is only for assistive technology: Ready says the rest.
+  // A build that cannot race is spelled out on the idle panel, so the line stays off the car
+  // while that panel is up.
+  const idle = !browsing && slot === null && !focused && !selectedPart;
+  const quiet = line.key === 'ready' || ((line.key === 'blocked' || line.key === 'art') && idle);
 
   // --- First-build teaching (Section 4) ------------------------------------------------------
   const hasWeapon = parts.some((p) => p.def.category === 'weapon');
@@ -196,24 +223,67 @@ function Garage({ manifests }: { manifests: GameManifests }) {
   useEffect(() => {
     if (coaching && allDone) completeMilestone(MILESTONE_GARAGE_TIPS);
   }, [coaching, allDone, completeMilestone]);
-  const steps = coaching
-    ? Object.fromEntries(
-        STEP_CATEGORIES.map((id, index) => [
-          id,
-          { number: index + 1, done: done[id], label: STRINGS.garage.tips[id] },
-        ]),
-      )
+  // The weapon step points at the first free mount that takes a weapon.
+  const chassisDef = own(CATALOG.chassis, blueprint.chassisId);
+  const weaponMount = useMemo(() => {
+    if (!chassisDef) return null;
+    const taken = new Set(parts.map((p) => p.mount.id));
+    const weapons = Object.values(CATALOG.parts).filter((p) => p.category === 'weapon');
+    const free = accessoryMounts(chassisDef).filter((m) => !taken.has(m.id));
+    return free.find((m) => weapons.some((w) => fitsMount(m, w)))?.id ?? null;
+  }, [chassisDef, parts]);
+  const marks: CoachMarks = coaching
+    ? {
+        chassis: { number: 1, done: done.chassis, label: g.tips.chassis },
+        tires: { number: 2, done: done.tires, label: g.tips.tires },
+        weapon: { number: 3, done: done.weapon, label: g.tips.weapon, mountId: weaponMount },
+      }
     : {};
+  const stepSlot = (step: Step): Slot | null =>
+    step === 'weapon'
+      ? weaponMount
+        ? { kind: 'mount', mountId: weaponMount }
+        : null
+      : { kind: step };
+  const openStep = (step: Step) => {
+    const target = stepSlot(step);
+    if (!target) actions.browse('weapon');
+    else if (!slot || slotKey(slot) !== slotKey(target)) actions.selectSlot(target);
+  };
+  const nextStep = STEPS.find((step) => !done[step]) ?? null;
+  // The step the open list belongs to, for its header.
+  const listStep = coaching
+    ? (STEPS.find((step) => {
+        const target = stepSlot(step);
+        return !done[step] && target !== null && slot !== null && slotKey(target) === slotId;
+      }) ?? null)
+    : null;
+  const useStarter = () => {
+    actions.load(ROOKIE_BLUEPRINT, g.starterLoaded);
+    completeMilestone(MILESTONE_GARAGE_TIPS);
+  };
+  const skipTips = () => completeMilestone(MILESTONE_GARAGE_TIPS);
 
   // --- Presses -------------------------------------------------------------------------------
-  const pickCategory = useCallback(
-    (category: PartCategory) => garageStore.getState().setCategory(category),
+  const browseCategory = useCallback(
+    (category: PartCategory) => garageStore.getState().browse(category),
     [],
   );
 
+  const focusPart = (partId: string) => {
+    // On a wide screen the list stays beside the part's card; a row picked there is a
+    // replacement for that mount, not a second part for the best free one.
+    if (selectedPart) actions.targetMount(selectedPart.mount.id);
+    actions.focusPart(partId);
+    // From the whole catalog, a part whose only mounts are taken opens as the replacement
+    // its row offered.
+    const offer = browsing ? entries.find((entry) => entry.part.id === partId) : undefined;
+    if (offer?.action === 'replace' && offer.mountId) actions.chooseMount(offer.mountId);
+  };
+
   const stepFocus = (direction: 1 | -1) => {
     if (!focused) return;
-    const open = listed.filter((entry) => !entry.pending);
+    const open = entries.filter((entry) => !entry.pending);
     const at = open.findIndex((entry) => entry.part.id === focused.id);
     const next = open[(at + direction + open.length) % open.length];
     if (next) actions.focusPart(next.part.id);
@@ -225,8 +295,8 @@ function Garage({ manifests }: { manifests: GameManifests }) {
     actions.ready();
   };
 
-  // Focus follows the panes for keyboard and switch users. Opening a card moves focus to its
-  // buy button; closing it returns to the card; a fresh install lands on the part's marker,
+  // Focus follows the panes for keyboard and switch users. Opening a row moves focus to its
+  // buy button; closing it returns to the row; a fresh install lands on the part's slot tile,
   // where the arrow keys nudge it.
   const focusId = session.focusPartId;
   const lastFocus = useRef<{ part: string | null; selected: string | null }>({
@@ -250,17 +320,19 @@ function Garage({ manifests }: { manifests: GameManifests }) {
       }
     } else if (!focusId && before.part && adrift) {
       if (selectedId && selectedId !== before.selected)
-        focus(`.mount[data-instance="${selectedId}"]`);
-      else focus(`.part-card[data-part="${before.part}"]`);
+        focus(`.slot-tile[data-instance="${selectedId}"]`);
+      else if (document.querySelector(`.part-card[data-part="${before.part}"]`))
+        focus(`.part-card[data-part="${before.part}"]`);
+      else focus('.slot-tile.is-selected');
     }
   }, [focusId, selectedId]);
 
   // Keyboard: undo and redo, and Escape to back out one level.
-  const overlayRef = useRef(overlay);
-  overlayRef.current = overlay;
+  const overlayRef = useRef(false);
+  overlayRef.current = overlay !== null || indicator !== null;
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (overlayRef.current !== null) return;
+      if (overlayRef.current) return;
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
       const store = garageStore.getState();
@@ -275,7 +347,7 @@ function Garage({ manifests }: { manifests: GameManifests }) {
       } else if (event.key === 'Escape') {
         const current = store.session;
         if (current?.focusPartId) store.focusPart(null);
-        else if (current && current.selection.kind !== 'none') store.clearSelection();
+        else store.clearSelection();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -291,21 +363,33 @@ function Garage({ manifests }: { manifests: GameManifests }) {
     : 0;
   const removable = focused
     ? (parts.find((p) => p.instance.instanceId === selectedId && p.def.id === focused.id) ??
-      parts.find((p) => p.def.id === focused.id) ??
+      (slot?.kind === 'mount'
+        ? parts.find((p) => p.def.id === focused.id && p.mount.id === slot.mountId)
+        : undefined) ??
+      (browsing ? parts.find((p) => p.def.id === focused.id) : undefined) ??
       null)
     : null;
 
-  const filterMountId = targetMountFor(session);
+  const heading = browsing
+    ? g.browseTitle
+    : slot?.kind === 'mount'
+      ? mountName(slot.mountId)
+      : slot
+        ? g.categories[slot.kind]
+        : '';
   const list = (
     <PartList
       manifests={manifests}
       blueprint={blueprint}
-      category={session.category}
-      parts={listed}
+      entries={entries}
+      heading={heading}
+      listKey={browsing ? 'browse' : (slotId ?? 'none')}
+      grouped={!browsing && slot?.kind === 'mount'}
+      browse={browsing ? { category: session.category, onCategory: browseCategory } : null}
       focusPartId={session.focusPartId}
-      filterMountId={filterMountId}
-      onFocus={actions.focusPart}
-      onClearFilter={actions.clearSelection}
+      coach={listStep ? { number: STEPS.indexOf(listStep) + 1, label: g.tips[listStep] } : null}
+      onFocus={focusPart}
+      onBrowse={browsing ? null : () => actions.browse()}
     />
   );
   const detail =
@@ -319,6 +403,7 @@ function Garage({ manifests }: { manifests: GameManifests }) {
         preview={preview}
         installed={installedCount}
         targetMountId={session.targetMountId}
+        pickMount={browsing}
         locked={locked}
         onBack={() => actions.focusPart(null)}
         onStep={stepFocus}
@@ -335,17 +420,70 @@ function Garage({ manifests }: { manifests: GameManifests }) {
       onReplace={() => actions.targetMount(selectedPart.mount.id)}
       onNudge={(dx, dy) => actions.nudge(selectedPart.instance.instanceId, dx, dy)}
       onRotate={() => actions.rotate(selectedPart.instance.instanceId)}
-      onFire={(slot) => actions.setFire(selectedPart.instance.instanceId, slot)}
+      onFire={(choice) => actions.setFire(selectedPart.instance.instanceId, choice)}
       onRemove={() => actions.remove(selectedPart.instance.instanceId)}
     />
   ) : null;
 
   const readyBlocked = blocking !== null || !drawable;
-  const canRepair = blocking !== null && !notice && !dragIssue && !urgent && !locked;
+  const canRepair = blocking !== null && !locked;
+  const swatch = manifests.cars.paints[blueprint.paintId]?.ramp[3] ?? '#cf3440';
+  const carPanel = (
+    <CarPanel
+      name={blueprint.name}
+      swatch={swatch}
+      stats={stats}
+      blocked={blocking ? issueText(blocking) : !drawable ? g.artInProgressNote : null}
+      locked={locked}
+      onPaint={() => setOverlay('paint')}
+      onBrowse={() => actions.browse()}
+      onRepair={canRepair ? actions.repair : null}
+    >
+      {coaching && !portrait && (
+        <aside className="g-coach" aria-label={g.tips.title}>
+          <div className="g-coach-steps">
+            {STEPS.map((id, index) => (
+              <button
+                key={id}
+                type="button"
+                className={`chip g-coach-step${done[id] ? ' is-done' : ''}`}
+                onClick={() => openStep(id)}
+              >
+                <span className="g-step-number">
+                  {done[id] ? <Glyph name="check" size={12} /> : index + 1}
+                </span>
+                {g.tips[id]}
+              </button>
+            ))}
+          </div>
+          <div className="g-coach-actions">
+            <button className="btn btn-small" onClick={useStarter}>
+              {g.tips.useStarter}
+            </button>
+            <button className="btn btn-small btn-quiet" onClick={skipTips}>
+              {g.tips.skip}
+            </button>
+          </div>
+        </aside>
+      )}
+    </CarPanel>
+  );
+
+  const target =
+    focused && plan
+      ? {
+          mountId: plan.mountId,
+          replacedId: plan.replaced && plan.result.ok ? plan.replaced.instance.instanceId : null,
+        }
+      : null;
 
   return (
-    <main className={`screen garage${wide ? ' is-wide' : ''}${height < 470 ? ' is-short' : ''}`}>
-      <h1 className="visually-hidden">{STRINGS.garage.title}</h1>
+    <main
+      className={`screen garage${wide ? ' is-wide' : ''}${portrait ? ' is-portrait' : ''}${
+        height < 470 ? ' is-short' : ''
+      }${coaching ? ' is-coaching' : ''}`}
+    >
+      <h1 className="visually-hidden">{g.title}</h1>
       <TopBar
         stats={stats}
         preview={preview}
@@ -356,33 +494,34 @@ function Garage({ manifests }: { manifests: GameManifests }) {
         onBack={() => setOverlay('leave')}
         onUndo={actions.undo}
         onRedo={actions.redo}
+        onCredits={() => setIndicator('budget')}
       />
-      <CategoryRail
-        category={session.category}
-        flagged={flaggedCategories}
-        steps={steps}
-        onPick={pickCategory}
-      />
-      <div className="g-stage">
-        <Workbench
-          manifests={manifests}
-          blueprint={blueprint}
-          selection={session.selection}
-          targetMountId={focused ? (plan?.mountId ?? null) : null}
-          flagged={flaggedParts}
-          locked={locked}
-          onTapMount={actions.tapMount}
-          onSelectInstance={actions.selectInstance}
-          onMove={actions.moveTo}
-          onNudge={actions.nudge}
-          onRotate={actions.rotate}
-          onRemove={actions.remove}
-          onClearSelection={actions.clearSelection}
-          onOpenPaint={() => setOverlay('paint')}
-          onDragIssue={setDragIssue}
-        />
+      <Workbench
+        manifests={manifests}
+        blueprint={blueprint}
+        row={portrait}
+        slot={slot}
+        selectedInstanceId={selectedId}
+        target={target}
+        flagged={flaggedParts}
+        flaggedEssentials={flaggedEssentials}
+        marks={marks}
+        idle={idle}
+        locked={locked}
+        onSlot={actions.selectSlot}
+        onShowCar={actions.clearSelection}
+        onSelectInstance={actions.selectInstance}
+        onMove={actions.moveTo}
+        onNudge={actions.nudge}
+        onRotate={actions.rotate}
+        onRemove={actions.remove}
+        onClearSelection={actions.clearSelection}
+        onDragIssue={setDragIssue}
+      >
         <p
-          className={`g-status tone-${line.tone}${canRepair ? ' has-action' : ''}`}
+          className={`g-status tone-${line.tone}${quiet ? ' is-quiet' : ''}${
+            line.key === 'blocked' || line.key === 'art' ? ' is-standing' : ''
+          }`}
           role="status"
           aria-live="polite"
           aria-atomic="true"
@@ -391,143 +530,142 @@ function Garage({ manifests }: { manifests: GameManifests }) {
         >
           <Glyph name={line.tone === 'ok' ? 'check' : 'warn'} size={12} />
           <span key={line.key}>{line.text}</span>
-          {canRepair ? (
-            <button className="btn btn-small g-repair" onClick={actions.repair}>
-              {STRINGS.garage.repair}
-            </button>
-          ) : (
-            <span className="g-status-name" aria-hidden="true" data-testid="car-name">
-              {blueprint.name}
-            </span>
-          )}
         </p>
-      </div>
-      <div className="g-side">
-        {coaching && (
-          <aside className="g-coach" aria-label={STRINGS.garage.tips.title}>
-            <div className="g-coach-steps">
-              {STEP_CATEGORIES.map((id, index) => (
-                <button
-                  key={id}
-                  type="button"
-                  className={`chip g-coach-step${done[id] ? ' is-done' : ''}`}
-                  onClick={() => pickCategory(id)}
-                >
-                  <span className="g-step-number">
-                    {done[id] ? <Glyph name="check" size={12} /> : index + 1}
-                  </span>
-                  {STRINGS.garage.tips[id]}
-                </button>
-              ))}
-            </div>
-            <div className="g-coach-actions">
-              <button
-                className="btn btn-small"
-                onClick={() => {
-                  actions.load(ROOKIE_BLUEPRINT, STRINGS.garage.starterLoaded);
-                  completeMilestone(MILESTONE_GARAGE_TIPS);
-                }}
-              >
-                {STRINGS.garage.tips.useStarter}
-              </button>
-              <button
-                className="btn btn-small btn-quiet"
-                onClick={() => completeMilestone(MILESTONE_GARAGE_TIPS)}
-              >
-                {STRINGS.garage.tips.skip}
-              </button>
-            </div>
-          </aside>
-        )}
-        <div className="g-panes">
-          {wide ? (
-            <>
-              {list}
-              {detail ?? tools ?? (
-                <section className="g-detail is-empty">
-                  <Glyph name={session.category} size={36} />
-                  <p>{STRINGS.garage.detailEmpty}</p>
-                  <p className="dim">{STRINGS.garage.tapMount}</p>
-                </section>
-              )}
-            </>
-          ) : (
-            (detail ?? tools ?? list)
+      </Workbench>
+      {coaching && portrait && (
+        <aside className="g-coach-line" aria-label={g.tips.title}>
+          {nextStep && (
+            <button type="button" className="chip g-coach-step" onClick={() => openStep(nextStep)}>
+              <span className="g-step-number">{STEPS.indexOf(nextStep) + 1}</span>
+              <span className="g-coach-text">{g.tips[nextStep]}</span>
+            </button>
           )}
-        </div>
+          <button className="btn btn-small" onClick={useStarter}>
+            {g.tips.useStarter}
+          </button>
+          <button className="btn btn-small btn-quiet" onClick={skipTips}>
+            {g.tips.skip}
+          </button>
+        </aside>
+      )}
+      <div className="g-panel">
+        {wide ? (
+          <>
+            {listOpen || selectedPart ? list : carPanel}
+            {detail ??
+              tools ??
+              (listOpen ? (
+                carPanel
+              ) : (
+                <section className="g-detail is-empty">
+                  <Glyph name="chassis" size={36} />
+                  <p>{g.detailEmpty}</p>
+                  <p className="dim">{g.tapMount}</p>
+                </section>
+              ))}
+          </>
+        ) : (
+          (detail ?? tools ?? (listOpen ? list : carPanel))
+        )}
       </div>
       <footer className="g-bottom">
-        <IndicatorBar stats={stats} />
-        {folded ? (
-          <button
-            className="btn btn-small g-more"
-            onClick={() => setOverlay('more')}
-            disabled={locked}
-            aria-haspopup="dialog"
-          >
-            {STRINGS.garage.more}
-          </button>
-        ) : (
-          <>
-            <button className="btn btn-small" onClick={() => setOverlay('reset')} disabled={locked}>
-              {STRINGS.garage.reset}
-            </button>
-            <button
-              className="btn btn-small"
-              onClick={() => setOverlay('blueprints')}
-              disabled={locked}
-              aria-label={`${STRINGS.garage.save}: ${STRINGS.blueprints.title}`}
-            >
-              {STRINGS.garage.save}
-            </button>
-            <button className="btn btn-small" onClick={() => setOverlay('quick')} disabled={locked}>
-              {STRINGS.garage.quickBuild}
-            </button>
-          </>
-        )}
+        <IndicatorBar stats={stats} onOpen={setIndicator} />
         <button
-          className="btn btn-primary g-ready"
-          onClick={ready}
-          aria-disabled={readyBlocked || locked}
-          aria-describedby="g-ready-why"
-          data-testid="ready"
+          className="btn btn-small g-more"
+          onClick={() => setOverlay('more')}
+          disabled={locked}
+          aria-haspopup="dialog"
+          aria-label={g.more}
         >
-          {STRINGS.garage.ready}
+          <Glyph name="more" size={24} />
+          <span className="g-more-text">{g.more}</span>
         </button>
-        <span id="g-ready-why" className="visually-hidden">
-          {readyBlocked ? line.text : STRINGS.garage.readyToRace}
-        </span>
       </footer>
+      <button
+        className="btn btn-primary g-ready"
+        onClick={ready}
+        aria-disabled={readyBlocked || locked}
+        aria-describedby="g-ready-why"
+        data-testid="ready"
+      >
+        {g.ready}
+      </button>
+      <span id="g-ready-why" className="visually-hidden">
+        {readyBlocked ? line.text : g.readyToRace}
+      </span>
 
       {urgent && (
         <p className="visually-hidden" role="alert">
-          {STRINGS.garage.tenSeconds}
+          {g.tenSeconds}
         </p>
       )}
 
+      {indicator && stats && (
+        <IndicatorDialog stats={stats} open={indicator} onClose={() => setIndicator(null)} />
+      )}
       {overlay === 'more' && (
         <Dialog
-          title={STRINGS.garage.more}
+          title={g.more}
           onClose={() => setOverlay(null)}
           className="dialog g-more-menu"
           hideTitle
         >
-          <button className="btn" onClick={() => setOverlay('reset')}>
-            {STRINGS.garage.reset}
+          <button className="btn" onClick={() => setOverlay('paint')}>
+            {g.paintAndName}
           </button>
           <button
             className="btn"
             onClick={() => setOverlay('blueprints')}
-            aria-label={`${STRINGS.garage.save}: ${STRINGS.blueprints.title}`}
+            aria-label={`${g.save}: ${STRINGS.blueprints.title}`}
           >
-            {STRINGS.garage.save}
+            {g.save}
           </button>
           <button className="btn" onClick={() => setOverlay('quick')}>
-            {STRINGS.garage.quickBuild}
+            {g.quickBuild}
           </button>
-          <button className="btn" onClick={() => setOverlay('paint')}>
-            {STRINGS.garage.paintAndName}
+          <button className="btn" onClick={() => setOverlay('reset')}>
+            {g.reset}
           </button>
+          <button
+            className="btn"
+            onClick={() => {
+              actions.browse();
+              setOverlay(null);
+            }}
+          >
+            {g.browseAll}
+          </button>
+          <button
+            className="btn"
+            onClick={() => {
+              actions.clearSelection();
+              setOverlay(null);
+            }}
+          >
+            {g.carStats}
+          </button>
+          {canRepair && (
+            <button
+              className="btn"
+              onClick={() => {
+                actions.repair();
+                setOverlay(null);
+              }}
+            >
+              {g.repair}
+            </button>
+          )}
+          {coaching && (
+            <button
+              className="btn"
+              onClick={() => {
+                skipTips();
+                setOverlay(null);
+              }}
+            >
+              {g.tips.skip}
+            </button>
+          )}
           <button className="btn btn-primary" onClick={() => setOverlay(null)} data-autofocus>
             {STRINGS.home.close}
           </button>

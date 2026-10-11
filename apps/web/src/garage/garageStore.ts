@@ -2,7 +2,7 @@ import { CATALOG } from '@bolt/content';
 import type { Catalog, PartCategory, VehicleBlueprint } from '@bolt/shared';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
-import type { FireChoice, GarageSession, StartOptions } from './buildSession.js';
+import type { FireChoice, GarageSession, Slot, StartOptions } from './buildSession.js';
 import * as build from './buildSession.js';
 
 /**
@@ -37,6 +37,10 @@ export type GarageState = {
   undo: () => void;
   redo: () => void;
   setCategory: (category: PartCategory) => void;
+  /** A tap on a slot tile: an essential, or an accessory mount of the chassis. */
+  selectSlot: (slot: Slot) => void;
+  /** Opens the whole catalog, at a category when one is given. */
+  browse: (category?: PartCategory) => void;
   focusPart: (partId: string | null) => void;
   chooseMount: (mountId: string | null) => void;
   tapMount: (mountId: string) => void;
@@ -80,6 +84,8 @@ export function createGarageStore(deps: GarageDeps) {
       undo: () => apply((s) => build.undoEdit(s, catalog)),
       redo: () => apply((s) => build.redoEdit(s, catalog)),
       setCategory: (category) => apply((s) => build.setCategory(s, category)),
+      selectSlot: (slot) => apply((s) => build.selectSlot(s, catalog, slot)),
+      browse: (category) => apply((s) => build.browse(s, category)),
       focusPart: (partId) => apply((s) => build.focusPart(s, partId)),
       chooseMount: (mountId) => apply((s) => build.chooseMount(s, mountId)),
       tapMount: (mountId) => apply((s) => build.tapMount(s, catalog, mountId)),

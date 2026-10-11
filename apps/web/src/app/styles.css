@@ -1739,18 +1739,28 @@ button:focus-visible,
 
 /* --- Garage ------------------------------------------------------------------------------ */
 
+/*
+ * Landscape: a header, then the workbench on the left (the car with its slot tiles around it,
+ * the chassis, engine and wheels under it, the gauges under those) and the side panel on the
+ * right for the full remaining height, so a 340 pixel tall phone still shows five parts.
+ * `landscapeFloor` in garage/benchLayout.ts mirrors the numbers below for the unit tests.
+ */
 .garage {
-  --g-gap: 6px;
-  --g-rail: 76px;
-  padding: calc(var(--safe-top) + 6px) calc(var(--safe-right) + 8px) calc(var(--safe-bottom) + 6px)
-    calc(var(--safe-left) + 8px);
+  --g-gap: 4px;
+  --g-pad: 4px;
+  --g-top: 48px;
+  --g-tile: 48px;
+  --g-row: 56px;
+  --g-ready: 132px;
+  padding: calc(var(--safe-top) + var(--g-pad)) calc(var(--safe-right) + 4px)
+    calc(var(--safe-bottom) + var(--g-pad)) calc(var(--safe-left) + 4px);
   display: grid;
-  grid-template-columns: var(--g-rail) minmax(0, 45fr) minmax(0, 55fr);
-  grid-template-rows: 46px minmax(0, 1fr) 52px;
+  grid-template-columns: minmax(0, 54fr) minmax(0, 46fr);
+  grid-template-rows: var(--g-top) minmax(0, 1fr) 44px;
   grid-template-areas:
-    'top top top'
-    'rail stage side'
-    'rail bottom bottom';
+    'top top'
+    'bench panel'
+    'bottom panel';
   gap: var(--g-gap);
   background: var(--navy);
 }
@@ -1758,20 +1768,33 @@ button:focus-visible,
 .g-top {
   grid-area: top;
   display: flex;
-  align-items: stretch;
+  align-items: flex-start;
   gap: var(--g-gap);
   min-width: 0;
+  padding-right: calc(var(--g-ready) + var(--g-gap));
+}
+
+.g-top > * {
+  flex: none;
+  height: 44px;
 }
 
 .g-top .btn {
-  flex: none;
   min-height: 44px;
-  align-self: center;
   white-space: nowrap;
+  box-shadow:
+    inset var(--px) var(--px) 0 var(--steel-light),
+    inset calc(var(--px) * -1) calc(var(--px) * -1) 0 #1c2536,
+    0 3px 0 var(--steel-dark);
 }
 
 .g-back {
   padding: 0 12px;
+}
+
+.g-top .g-top-space {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .g-track {
@@ -1823,63 +1846,20 @@ button:focus-visible,
   }
 }
 
-.g-scores {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  gap: 8px;
-  margin: 0;
-  padding: 3px 8px 5px;
-  background: var(--steel);
-  border: 1px solid var(--steel-dark);
-  box-shadow:
-    inset 2px 2px 0 var(--steel-light),
-    inset -2px -2px 0 #1c2536;
-}
-
-.g-score {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.g-score dt {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.1;
-  color: var(--ivory-dim);
-  white-space: nowrap;
-}
-
-.g-score dt .glyph {
-  display: none;
-}
-
-.g-score dd {
-  margin: 0;
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  font-size: 16px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.05;
-}
-
 .g-credits {
+  appearance: none;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: flex-end;
   padding: 0 10px;
+  font: inherit;
+  color: var(--ivory);
   background: var(--steel-dark);
   border: 1px solid #05070c;
-  border-right: 3px solid var(--gold);
+  border-right: 4px solid var(--gold);
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 .g-credits-label {
@@ -1906,108 +1886,50 @@ button:focus-visible,
   height: 20px;
 }
 
-.g-rail {
-  grid-area: rail;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-height: 0;
+.g-credits.is-over {
+  border-color: var(--red);
+  background: #3a1820;
 }
 
-.g-rail-tab {
-  position: relative;
-  appearance: none;
-  flex: 1 1 0;
-  min-height: 44px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  padding: 0 2px;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ivory-dim);
-  background: #1c2536;
-  border: 1px solid var(--steel-dark);
-  border-left: 4px solid transparent;
-  box-shadow: inset 0 -2px 0 #141b29;
-  cursor: pointer;
-  touch-action: manipulation;
+.g-credits.is-over .g-credits-value {
+  color: #ff8d86;
 }
 
-.g-rail-tab.is-selected {
-  color: var(--ivory);
-  background: var(--steel);
-  border-left-color: var(--gold);
+/* Ready is the one gold control on the screen, at the right end of the header. */
+.g-ready {
+  grid-area: top;
+  justify-self: end;
+  z-index: 1;
+  width: var(--g-ready);
+  min-height: 48px;
+  height: 48px;
+  padding: 0;
+  font-size: 23px;
+  letter-spacing: 0.03em;
   box-shadow:
-    inset 0 2px 0 var(--steel-light),
-    inset 0 -2px 0 #1c2536;
+    inset var(--px) var(--px) 0 #ffe3a0,
+    inset calc(var(--px) * -1) calc(var(--px) * -1) 0 #c8923a,
+    0 3px 0 #7a4a1c;
 }
 
-.g-rail-tab.is-selected .glyph {
-  color: var(--gold);
-}
+/* --- The workbench ----------------------------------------------------------------------- */
 
-.g-rail-tab.is-step {
-  outline: 2px solid var(--gold);
-  outline-offset: -2px;
-}
-
-.g-rail-flag {
-  position: absolute;
-  top: 3px;
-  left: 5px;
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  color: var(--ivory);
-  background: var(--red);
-}
-
-.g-step,
-.g-step-number {
-  display: inline-grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1;
-  color: var(--navy);
-  background: var(--gold);
-}
-
-.g-step {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-}
-
-.g-step.is-done,
-.is-done > .g-step-number {
-  background: var(--mint);
-}
-
-.g-stage {
-  grid-area: stage;
+.g-bench {
+  grid-area: bench;
   position: relative;
   min-width: 0;
   min-height: 0;
-}
-
-.g-bench {
-  position: absolute;
-  inset: 0;
-}
-
-.g-bench-floor {
-  position: absolute;
-  inset: 0;
   display: grid;
-  place-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) var(--g-tile);
+  gap: var(--g-gap);
+}
+
+.g-floor {
+  grid-column: 1 / -1;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
   background:
     repeating-conic-gradient(#222e45 0 25%, #1b2539 0 50%) 0 0 / 32px 32px,
@@ -2020,8 +1942,6 @@ button:focus-visible,
 
 .g-car {
   position: absolute;
-  left: 50%;
-  top: 50%;
 }
 
 .g-car-lines {
@@ -2031,143 +1951,37 @@ button:focus-visible,
   overflow: visible;
 }
 
+/* A dashed socket marks a mount only where there is no part sprite to outline instead. */
 .socket {
-  fill: rgba(14, 19, 32, 0.35);
-  stroke: rgba(245, 238, 217, 0.7);
-  stroke-width: 1.5;
+  fill: rgba(246, 195, 91, 0.16);
+  stroke: var(--gold);
+  stroke-width: 2;
   stroke-dasharray: 4 3;
 }
 
-.socket.is-selected {
-  fill: rgba(246, 195, 91, 0.22);
-  stroke: var(--gold);
-  stroke-width: 2;
-}
-
-.socket.is-target,
-.footprint.is-target {
-  fill: rgba(103, 222, 167, 0.28);
+.socket.is-target {
+  fill: rgba(103, 222, 167, 0.2);
   stroke: var(--mint);
-  stroke-width: 2;
 }
 
-.footprint {
-  fill: rgba(70, 213, 230, 0.2);
-  stroke: var(--cyan);
-  stroke-width: 1.5;
-}
-
-.footprint.is-selected {
-  fill: rgba(246, 195, 91, 0.25);
-  stroke: var(--gold);
-  stroke-width: 2;
-}
-
-.footprint.is-bad {
-  fill: rgba(216, 63, 73, 0.4);
+.socket.is-bad {
+  fill: rgba(216, 63, 73, 0.3);
   stroke: var(--red);
-  stroke-width: 2;
 }
 
-.region {
-  fill: none;
-  stroke: rgba(246, 195, 91, 0.75);
-  stroke-width: 1;
-  stroke-dasharray: 2 3;
-}
-
-.nose {
-  stroke: var(--cyan);
-  stroke-width: 3;
-}
-
-.nose.is-selected {
-  stroke: var(--gold);
-}
-
-.mount {
+.g-grab {
   position: absolute;
+  z-index: 3;
   transform: translate(-50%, -50%);
-  appearance: none;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  color: var(--ivory);
-  background: transparent;
-  border: 0;
-  cursor: pointer;
+  cursor: grab;
   touch-action: none;
 }
 
-.mount:disabled {
-  cursor: default;
-}
-
-.mount-face {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: min(100%, 30px);
-  height: min(100%, 30px);
-  background: rgba(14, 19, 32, 0.82);
-  border: 2px dashed var(--ivory-dim);
-}
-
-.mount.is-occupied .mount-face {
-  background: var(--steel-dark);
-  border: 2px solid var(--cyan);
-}
-
-.mount.is-occupied.has-art .mount-face {
-  background: transparent;
-}
-
-.mount.is-selected .mount-face {
-  border-color: var(--gold);
-  box-shadow:
-    0 0 0 2px var(--navy),
-    0 0 0 4px var(--gold);
-}
-
-.mount.is-target .mount-face {
-  border-color: var(--mint);
-  animation: mount-target 0.9s steps(2) infinite;
-}
-
-@keyframes mount-target {
-  50% {
-    box-shadow: 0 0 0 3px var(--mint);
-  }
-}
-
-.mount.is-bad .mount-face {
-  border-color: var(--red);
-  box-shadow: 0 0 0 2px var(--red);
-}
-
-.mount.is-dragging {
+.g-grab.is-dragging {
   cursor: grabbing;
-  z-index: 3;
 }
 
-.mount .part-icon {
-  border: 0;
-  background: transparent;
-}
-
-.mount-alert {
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  display: grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  color: var(--ivory);
-  background: var(--red);
-}
-
-.mount-tag {
+.g-drag-tag {
   position: absolute;
   z-index: 4;
   transform: translate(-50%, -100%);
@@ -2176,89 +1990,338 @@ button:focus-visible,
   font-weight: 800;
   line-height: 1.2;
   white-space: nowrap;
-  color: var(--navy);
-  background: var(--gold);
+  color: var(--ivory);
+  background: var(--red);
   pointer-events: none;
 }
 
-.mount-tag.is-bad {
-  color: var(--ivory);
-  background: var(--red);
+.g-leaders {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
 }
 
-.g-name {
-  position: absolute;
-  top: 6px;
-  left: 6px;
+.leader polyline {
+  fill: none;
+  stroke: rgba(245, 238, 217, 0.5);
+  stroke-width: 1;
+}
+
+.leader rect {
+  fill: var(--ivory);
+}
+
+.leader.is-selected polyline {
+  stroke: var(--gold);
+  stroke-width: 2;
+}
+
+.leader.is-selected rect {
+  fill: var(--gold);
+}
+
+.leader.is-target polyline {
+  stroke: var(--mint);
+  stroke-width: 2;
+}
+
+.leader.is-target rect {
+  fill: var(--mint);
+}
+
+.leader.is-bad polyline {
+  stroke: var(--red);
+  stroke-width: 2;
+}
+
+.leader.is-bad rect {
+  fill: var(--red);
+}
+
+/* One slot of the car: an icon over a short label. */
+.slot-tile {
+  position: relative;
   appearance: none;
+  flex: none;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  width: 58px;
-  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 0;
+  font: inherit;
   color: var(--ivory);
   background: var(--steel);
   border: 1px solid var(--steel-dark);
   box-shadow:
     inset 2px 2px 0 var(--steel-light),
-    inset -2px -2px 0 #1c2536,
-    0 3px 0 var(--steel-dark);
+    inset -2px -2px 0 #1c2536;
   cursor: pointer;
   touch-action: manipulation;
 }
 
-.g-name-swatch {
-  width: 20px;
-  height: 24px;
-  border: 1px solid var(--steel-dark);
-  box-shadow:
-    inset 2px 2px 0 rgba(255, 255, 255, 0.35),
-    inset -2px -2px 0 rgba(0, 0, 0, 0.35);
+.slot-tile:disabled {
+  cursor: default;
 }
 
-.g-view {
+.g-floor > .slot-tile {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  z-index: 2;
 }
 
-.g-status {
+.slot-tile.is-empty {
+  color: #8f9bb3;
+  background: rgba(14, 19, 32, 0.9);
+  border: 1px dashed #6f7a90;
+  box-shadow: none;
+}
+
+.slot-art {
+  position: relative;
+  flex: 0 1 32px;
+  min-height: 0;
+  width: 32px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.slot-tile.is-empty .slot-art {
+  overflow: visible;
+}
+
+.slot-art .part-icon {
+  background: transparent;
+  border: 0;
+}
+
+.slot-plus {
   position: absolute;
-  left: 3px;
-  right: 3px;
-  bottom: 3px;
-  height: 26px;
+  top: 1px;
+  right: -9px;
+  color: var(--mint);
+}
+
+.slot-text {
+  flex: none;
   display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-  padding: 0 8px;
-  overflow: hidden;
-  font-size: 14px;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.slot-label {
+  font-size: 12px;
   font-weight: 700;
+  line-height: 14px;
   white-space: nowrap;
-  background: rgba(14, 19, 32, 0.92);
-  border-left: 3px solid var(--mint);
-}
-
-.g-status > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.g-status > .g-status-name {
-  flex: 0 1 auto;
-  margin-left: auto;
-  padding-left: 10px;
-  font-weight: 600;
   color: var(--ivory-dim);
 }
 
-.g-status > .glyph + span {
-  flex: 0 0 auto;
-  max-width: 100%;
+.slot-name {
+  display: none;
+}
+
+.slot-tile.is-selected {
+  z-index: 3;
+  background: #3a3520;
+  border: 1px solid var(--gold);
+  box-shadow: 0 0 0 2px var(--gold);
+}
+
+.slot-tile.is-selected .slot-label {
+  color: var(--gold);
+}
+
+.slot-tile.is-target {
+  border: 1px solid var(--mint);
+  box-shadow: 0 0 0 1px var(--mint);
+  animation: slot-target 0.9s steps(2) infinite;
+}
+
+@keyframes slot-target {
+  50% {
+    box-shadow: 0 0 0 3px var(--mint);
+  }
+}
+
+.slot-tile.is-bad {
+  background: #3a1820;
+  border: 1px solid var(--red);
+  box-shadow: 0 0 0 1px var(--red);
+}
+
+.slot-tile.is-bad .slot-label {
+  color: #ff8d86;
+}
+
+.slot-tile.is-step {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+
+.slot-alert {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  color: var(--ivory);
+  background: var(--red);
+}
+
+.slot-count {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  min-width: 14px;
+  padding: 0 3px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 14px;
+  color: var(--navy);
+  background: var(--cyan);
+}
+
+.g-step,
+.g-step-number {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--navy);
+  background: var(--gold);
+}
+
+.g-step {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+}
+
+.g-step.is-done,
+.is-done > .g-step-number {
+  background: var(--mint);
+}
+
+/* Too many mounts for the height: the two columns scroll. */
+.g-column {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  scrollbar-width: none;
+}
+
+.g-column.is-left {
+  left: 4px;
+}
+
+.g-column.is-right {
+  right: 4px;
+}
+
+/* The chassis, engine and wheels under the car, then the two workbench tools. */
+.g-slot-row {
+  display: flex;
+  gap: var(--g-gap);
+  min-width: 0;
+}
+
+.g-slot-row .slot-tile {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.g-slot-row .slot-tile.has-name {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 0 6px 0 4px;
+  text-align: left;
+}
+
+.g-slot-row .slot-tile.has-name .slot-text {
+  flex: 1 1 auto;
+}
+
+.g-slot-row .slot-tile.has-name .slot-name {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 13px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.g-bench-tools {
+  display: flex;
+  gap: var(--g-gap);
+}
+
+.slot-tile.is-tool {
+  width: 48px;
+  color: var(--ivory);
+}
+
+.slot-tile.is-tool .slot-art {
+  flex-basis: 26px;
+}
+
+/* The status line: a short strip over the clear floor above the car, only when there is
+   something to say. */
+.g-status {
+  position: absolute;
+  z-index: 4;
+  top: 3px;
+  left: calc(var(--col-left, 0px) + 6px);
+  right: calc(var(--col-right, 0px) + 6px);
+  width: fit-content;
+  max-width: calc(100% - var(--col-left, 0px) - var(--col-right, 0px) - 12px);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+  background: rgba(14, 19, 32, 0.94);
+  border: 1px solid #05070c;
+  border-left: 3px solid var(--mint);
+  pointer-events: none;
+}
+
+.g-status > span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.g-status.is-quiet {
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  border: 0;
+  white-space: nowrap;
 }
 
 .g-status.tone-ok {
@@ -2275,150 +2338,115 @@ button:focus-visible,
   border-left-color: var(--red);
 }
 
-.g-repair {
-  margin-left: auto;
-  min-height: 44px;
-  flex: none;
+/* A standing reason (the build cannot race) keeps to one line so it stays off the car. */
+.g-status.is-standing > span {
+  -webkit-line-clamp: 1;
 }
 
-/* A build that cannot race says why in full and offers the repair beside it. */
-.g-status.has-action {
-  height: auto;
-  min-height: 50px;
-  padding: 3px 3px 3px 8px;
-  line-height: 1.2;
-  white-space: normal;
-}
+/* --- The side panel ---------------------------------------------------------------------- */
 
-.g-status.has-action > .glyph + span {
-  flex: 1 1 auto;
-}
-
-.g-side {
-  grid-area: side;
+.g-panel {
+  grid-area: panel;
   min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--g-gap);
-}
-
-.g-coach {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 4px 6px;
-  background: #2a2412;
-  border: 1px solid #6e5a1c;
-  border-left: 4px solid var(--gold);
-}
-
-.g-coach-steps,
-.g-coach-actions {
-  display: flex;
-  gap: 4px;
-}
-
-.g-coach-step {
-  flex: 1 1 0;
-  flex-direction: row;
-  align-items: center;
-  gap: 5px;
-  min-height: 44px;
-  padding: 2px 6px;
-  font-size: 13px;
-  line-height: 1.15;
-  text-align: left;
-}
-
-.g-coach-step.is-done {
-  color: var(--mint);
-}
-
-.g-coach-actions {
-  justify-content: space-between;
-}
-
-.g-panes {
-  flex: 1 1 auto;
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: var(--g-gap);
 }
 
 .g-list,
 .g-detail,
-.g-tools {
+.g-tools,
+.g-carpanel {
   min-width: 0;
   min-height: 0;
   background: var(--steel);
   border: 1px solid var(--steel-dark);
-  box-shadow:
-    inset 2px 2px 0 var(--steel-light),
-    inset -2px -2px 0 #1c2536;
 }
 
 .g-list {
+  container: list / size;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
-  padding: 4px;
+  background: #1c2536;
   scrollbar-width: thin;
   scrollbar-color: var(--steel-light) var(--steel-dark);
 }
 
-.g-filter {
+.g-group-head {
   position: sticky;
-  top: -4px;
+  top: 0;
   z-index: 2;
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin: -4px -4px 4px;
-  padding: 3px 4px 3px 10px;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--navy);
-  background: var(--gold);
+  gap: 8px;
+  height: 20px;
+  margin: 0;
+  padding: 0 8px;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 20px;
+  white-space: nowrap;
+  color: var(--ivory);
+  background: #0e1320;
 }
 
-.g-filter .btn {
+.g-group-name {
+  color: var(--gold);
+}
+
+.g-group-count {
   margin-left: auto;
-}
-
-.g-list-empty {
-  margin: 16px 8px;
-  font-size: 15px;
+  font-weight: 600;
   color: var(--ivory-dim);
 }
 
-.g-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 4px;
+.g-group-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--gold);
+}
+
+.g-group-step .g-step-number {
+  width: 16px;
+  height: 16px;
+}
+
+.g-rows {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+.g-list-empty {
+  margin: 16px 10px;
+  font-size: 15px;
+  color: var(--ivory-dim);
+}
+
+/* One part, one row: icon, name and price, then weight and one short line. */
 .part-card {
   appearance: none;
   width: 100%;
+  height: var(--g-row);
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 48px minmax(0, 1fr);
   gap: 8px;
-  align-items: start;
-  padding: 6px 8px 7px 6px;
+  align-items: center;
+  padding: 0 8px 0 0;
+  overflow: hidden;
   font: inherit;
   text-align: left;
   color: var(--ivory);
   background: #1c2536;
-  border: 1px solid var(--steel-dark);
-  border-left: 4px solid transparent;
-  box-shadow: inset 0 -2px 0 #141b29;
+  border: 0;
+  border-bottom: 1px solid #0e1320;
+  box-shadow: inset 3px 0 0 transparent;
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -2427,14 +2455,23 @@ button:focus-visible,
   background: #212b3f;
 }
 
+.part-card:focus-visible,
+.g-browse-row:focus-visible,
+.g-tab:focus-visible {
+  outline-offset: -2px;
+}
+
 .part-card.is-installed {
-  border-left-color: var(--mint);
+  box-shadow: inset 3px 0 0 var(--mint);
+}
+
+.part-card.is-here {
+  background: #1f3330;
 }
 
 .part-card.is-focused {
   background: #26334b;
-  border-color: var(--cyan);
-  border-left-color: var(--cyan);
+  box-shadow: inset 3px 0 0 var(--cyan);
 }
 
 .part-card.is-blocked .pc-name,
@@ -2448,28 +2485,23 @@ button:focus-visible,
 
 .part-card.is-pending .part-icon,
 .part-card.is-blocked .part-icon {
-  opacity: 0.55;
+  opacity: 0.6;
 }
 
-/* The reason a part cannot be installed takes the place of its downside line, so a card
-   never changes height. The full downside is one tap away in the compare pane. */
-.part-card.is-blocked .pc-bad,
-.part-card.is-pending .pc-bad {
-  display: none;
-}
-
+/* Icons sit on a lighter plate than the panel, with no padding, so the art reads. */
 .part-icon {
   display: grid;
   place-items: center;
   flex: none;
   overflow: hidden;
   color: var(--ivory-dim);
-  background: var(--steel-dark);
-  border: 1px solid #05070c;
+  background: #3d4d6c;
+  border: 0;
 }
 
 .part-icon-art {
   display: block;
+  flex: none;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   background-repeat: no-repeat;
@@ -2491,10 +2523,15 @@ button:focus-visible,
   color: var(--amber);
 }
 
+.part-card .part-icon {
+  align-self: stretch;
+  height: auto !important;
+}
+
 .pc-main {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
 }
 
@@ -2519,20 +2556,138 @@ button:focus-visible,
   font-size: 15px;
 }
 
-.facts {
+.pc-sub {
   display: flex;
-  flex-wrap: wrap;
-  gap: 1px 10px;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
   font-size: 12.5px;
   line-height: 1.25;
   color: var(--ivory-dim);
 }
 
-.fact {
-  display: inline-flex;
+.pc-weight {
+  flex: none;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pc-note {
+  flex: 1 1 auto;
+  display: flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
+}
+
+.pc-note > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The benefit line is long; it is shown only where the row has the width for it. */
+.pc-benefit {
+  display: none;
+}
+
+@container list (min-width: 380px) {
+  .pc-benefit {
+    display: flex;
+  }
+}
+
+.pc-reason {
+  font-weight: 700;
+  color: var(--amber);
+}
+
+.pc-where {
+  color: var(--mint);
+}
+
+.g-browse-row {
+  appearance: none;
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: left;
+  color: var(--ivory);
+  background: #222d42;
+  border: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.g-browse-row > span {
+  flex: 1 1 auto;
+}
+
+.g-browse-row .glyph {
+  color: var(--cyan);
+}
+
+.g-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  overflow-x: auto;
+  background: #0e1320;
+  scrollbar-width: none;
+}
+
+.g-tab {
+  flex: 1 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 5px;
+  font-size: 13px;
+}
+
+.g-tab .glyph {
+  display: none;
+}
+
+@container list (min-width: 480px) {
+  .g-tab .glyph {
+    display: block;
+  }
+}
+
+/* The filter chips appear on a long list where the panel is tall enough to spare a row. */
+.g-chips {
+  display: none;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  gap: 4px;
+  padding: 4px;
+  background: #0e1320;
+}
+
+.g-chips .chip {
+  flex: 1 1 0;
+  align-items: center;
+}
+
+@container list (min-height: 400px) {
+  .g-chips {
+    display: flex;
+  }
+  .g-chips ~ .g-group .g-group-head {
+    top: 52px;
+  }
 }
 
 .pc-line {
@@ -2551,13 +2706,6 @@ button:focus-visible,
 
 .pc-line > span {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pc-line.is-full > span {
-  white-space: normal;
 }
 
 .pc-good .glyph {
@@ -2568,15 +2716,34 @@ button:focus-visible,
   color: var(--amber);
 }
 
-.pc-reason {
-  font-weight: 700;
-  color: var(--amber);
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px 10px;
+  font-size: 12.5px;
+  line-height: 1.25;
+  color: var(--ivory-dim);
+}
+
+.fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
 }
 
 .g-detail,
-.g-tools {
+.g-tools,
+.g-carpanel {
   display: flex;
   flex-direction: column;
+  box-shadow:
+    inset 2px 2px 0 var(--steel-light),
+    inset -2px -2px 0 #1c2536;
+}
+
+.g-detail {
+  container: detail / size;
 }
 
 .g-detail.is-empty {
@@ -2628,6 +2795,32 @@ button:focus-visible,
   padding: 6px 8px;
   scrollbar-width: thin;
   scrollbar-color: var(--steel-light) var(--steel-dark);
+}
+
+/* A short, wide pane: the facts and the comparison side by side. */
+@container detail (min-width: 370px) and (max-height: 440px) {
+  .g-pane-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-auto-rows: min-content;
+    align-content: start;
+    gap: 4px 12px;
+  }
+  .g-pane-body > * {
+    grid-column: 1;
+  }
+  .g-pane-body > .g-compare {
+    grid-column: 2;
+    grid-row: 1 / span 12;
+    gap: 2px;
+  }
+  .cmp-row {
+    line-height: 1.2;
+  }
+  .g-detail-title .part-icon {
+    width: 48px !important;
+    height: 48px !important;
+  }
 }
 
 .g-detail-title {
@@ -2801,24 +2994,25 @@ p.g-spend.is-blocked {
   font-size: 17px;
 }
 
+/* The card for the part on the selected slot. Nothing on it scrolls on a landscape phone. */
+.g-tools {
+  container: tools / size;
+}
+
+.g-tools-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 4px;
+  border-bottom: 1px solid #1c2536;
+}
+
 .g-tools-title {
   display: flex;
   flex-direction: column;
   min-width: 0;
   font-size: 13px;
-}
-
-.g-tools-body {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-content: start;
-  gap: 6px 14px;
-}
-
-.g-tools .g-pane-head .btn {
-  flex: none;
-  padding-left: 10px;
-  padding-right: 10px;
 }
 
 .g-tools-title h2 {
@@ -2827,28 +3021,86 @@ p.g-spend.is-blocked {
   white-space: nowrap;
 }
 
-.g-tools-move,
-.g-tools-side {
+.g-tools-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   display: flex;
   flex-direction: column;
+  gap: 6px;
+  padding: 6px 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--steel-light) var(--steel-dark);
+}
+
+.g-fire-row {
+  display: flex;
+  align-items: center;
   gap: 4px;
 }
 
-.g-tools-side {
+.g-fire-row .g-block-title {
+  flex: none;
+  width: 50px;
+  line-height: 1.15;
+}
+
+.g-fire-row .chip {
+  flex: 1 1 0;
+  min-width: 0;
+  align-items: center;
+  padding: 4px 2px;
+  font-size: 13.5px;
+}
+
+.g-fire-note {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.g-tools-grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 4px 12px;
+}
+
+.g-tools-actions {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px;
   font-size: 13px;
 }
 
-.g-tools-facts {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  font-size: 12.5px;
-  line-height: 1.3;
+.g-tools-actions .btn {
+  padding: 4px 8px;
+  white-space: nowrap;
 }
 
-.g-tools-facts p {
+.g-turn-row {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.g-turn-row .btn {
+  flex: none;
+}
+
+.g-remove .credits {
+  margin-left: 6px;
+  font-size: 14px;
+}
+
+.g-tools-hint {
+  grid-column: 1 / -1;
   margin: 0;
+  font-size: 12px;
+  line-height: 1.25;
 }
 
 .dpad {
@@ -2889,36 +3141,303 @@ p.g-spend.is-blocked {
   border: 1px solid #05070c;
 }
 
-.g-turn-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+/* A narrow card: the three actions stack beside the arrows, and the fire chips take the row. */
+@container tools (max-width: 349px) {
+  .g-tools-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .g-tools-hint,
+  .g-fire-row .g-block-title {
+    display: none;
+  }
+  .g-fire-row .chip {
+    font-size: 13px;
+  }
+  .g-turn-row {
+    gap: 6px;
+    font-size: 12px;
+    line-height: 1.2;
+  }
+  .g-tools-grid {
+    gap: 4px 8px;
+  }
 }
 
-.g-fire {
+/* The idle panel: the whole car at a glance. */
+.g-carpanel {
+  container: carpanel / size;
+}
+
+.g-carpanel-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 4px;
+  border-bottom: 1px solid #1c2536;
+}
+
+.g-name {
+  appearance: none;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 8px 2px 4px;
+  font: inherit;
+  text-align: left;
+  color: var(--ivory);
+  background: #1c2536;
+  border: 1px solid var(--steel-dark);
+  box-shadow: inset 0 -2px 0 #141b29;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.g-name-swatch {
+  flex: none;
+  width: 22px;
+  height: 32px;
+  border: 1px solid var(--steel-dark);
+  box-shadow:
+    inset 2px 2px 0 rgba(255, 255, 255, 0.35),
+    inset -2px -2px 0 rgba(0, 0, 0, 0.35);
+}
+
+.g-name-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.g-name-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ivory-dim);
+}
+
+.g-name-text strong {
+  overflow: hidden;
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.g-carpanel-state {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  color: var(--mint);
+}
+
+.g-carpanel-state.is-blocked {
+  color: #ff8d86;
+}
+
+.g-carpanel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--steel-light) var(--steel-dark);
+}
+
+.g-carpanel-issue {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 8px;
+  background: #3a1820;
+  border: 1px solid var(--red);
+}
+
+.g-carpanel-issue .g-warning {
+  flex: 1 1 auto;
+  color: #ffb1ab;
+}
+
+.g-carpanel-issue .btn {
+  flex: none;
+  white-space: nowrap;
+}
+
+.g-scores {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.g-score {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.g-score dt {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--ivory-dim);
+  white-space: nowrap;
+}
+
+.g-score dt .glyph {
+  display: none;
+}
+
+.g-score dd {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+}
+
+@container carpanel (min-width: 470px) {
+  .g-score dt .glyph {
+    display: block;
+  }
+}
+
+/* No room for five words: each score keeps its glyph, its number and its bar. The names stay
+   in the accessibility tree and in the compare pane. */
+@container carpanel (max-width: 349px) {
+  .g-score dt .glyph {
+    display: block;
+  }
+  .g-score-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
+.g-carpanel-credits {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.g-carpanel-next {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.g-carpanel-next p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.g-carpanel-next .btn {
+  flex: none;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+/* First-build steps: three chips that open their slot, and the two ways out. */
+.g-coach {
+  flex: none;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: 2px;
+  padding: 4px 6px;
+  background: #2a2412;
+  border: 1px solid #6e5a1c;
+  border-left: 4px solid var(--gold);
 }
 
-.g-fire .chip {
-  padding: 4px 10px;
+.g-coach-steps,
+.g-coach-actions {
+  display: flex;
+  gap: 4px;
 }
 
-.g-remove .credits {
-  margin-left: 6px;
-  font-size: 14px;
-}
-
-.g-fire .chips {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.g-fire .chip {
+.g-coach-step {
+  flex: 1 1 0;
+  flex-direction: row;
   align-items: center;
+  gap: 5px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 2px 6px;
+  font-size: 13px;
+  line-height: 1.15;
+  text-align: left;
 }
+
+.g-coach-step.is-done {
+  color: var(--mint);
+}
+
+.g-coach-actions {
+  justify-content: space-between;
+}
+
+/* Portrait: the same teaching as one line. */
+.g-coach-line {
+  grid-area: coach;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 2px 2px 2px 4px;
+  background: #2a2412;
+  border: 1px solid #6e5a1c;
+  border-left: 4px solid var(--gold);
+}
+
+.g-coach-line .g-coach-step {
+  flex: 1 1 auto;
+}
+
+.g-coach-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.g-coach-line .btn {
+  flex: none;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+/* --- The gauges -------------------------------------------------------------------------- */
 
 .g-bottom {
   grid-area: bottom;
@@ -2928,30 +3447,22 @@ p.g-spend.is-blocked {
   min-width: 0;
 }
 
-.g-bottom > .btn {
-  min-height: 46px;
-  align-self: center;
-  padding: 0 12px;
-  white-space: nowrap;
-}
-
 .g-indicators {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
-  gap: 4px;
+  gap: var(--g-gap);
 }
 
 .indicator {
   appearance: none;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 44px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 1px;
-  padding: 4px 5px 5px;
+  padding: 3px 5px 4px;
   font: inherit;
   text-align: left;
   color: var(--ivory);
@@ -2964,6 +3475,10 @@ p.g-spend.is-blocked {
   touch-action: manipulation;
 }
 
+.indicator[data-indicator='load'] {
+  flex-grow: 1.5;
+}
+
 .indicator.is-ok .indicator-glyph {
   display: none;
 }
@@ -2974,7 +3489,7 @@ p.g-spend.is-blocked {
   gap: 4px;
   font-size: 12px;
   font-weight: 700;
-  line-height: 1.1;
+  line-height: 1.05;
   color: var(--ivory-dim);
   white-space: nowrap;
 }
@@ -2982,29 +3497,36 @@ p.g-spend.is-blocked {
 .indicator-value {
   font-size: 14px;
   font-weight: 800;
-  line-height: 1.1;
+  line-height: 1.05;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.indicator[data-indicator='budget'] .bar-fill {
-  background: var(--gold);
+.indicator .bar {
+  height: 5px;
 }
 
 .indicator.is-ok .bar-fill {
   background: var(--mint);
 }
 
-.indicator[data-indicator='budget'].is-ok .bar-fill {
-  background: var(--gold);
-}
-
 .indicator.is-caution .bar-fill {
   background: repeating-linear-gradient(90deg, var(--amber) 0 4px, #b3611a 4px 6px);
 }
 
+.indicator.is-caution {
+  border-color: var(--amber);
+}
+
 .indicator.is-caution .indicator-top {
   color: var(--amber);
+}
+
+/* Over the limit is unmissable: a red plate, a warning glyph and a hatched bar. */
+.indicator.is-over {
+  background: #3a1820;
+  border-color: var(--red);
+  box-shadow: inset 0 0 0 1px var(--red);
 }
 
 .indicator.is-over .bar-fill {
@@ -3047,22 +3569,33 @@ p.g-spend.is-blocked {
   line-height: 1.4;
 }
 
-.g-ready {
-  min-width: 132px;
-  font-size: 22px;
-  letter-spacing: 0.03em;
+.g-bottom > .g-more {
+  flex: none;
+  width: 48px;
+  min-width: 48px;
+  min-height: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    inset var(--px) var(--px) 0 var(--steel-light),
+    inset calc(var(--px) * -1) calc(var(--px) * -1) 0 #1c2536;
 }
 
-.g-bottom > .g-ready {
-  min-height: 50px;
-  padding: 0 22px;
+.g-more-text {
+  display: none;
 }
 
 .g-more-menu {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  width: min(420px, 100%);
+  gap: 8px;
+  width: min(440px, 100%);
+}
+
+.g-more-menu > .btn {
+  padding: 8px 10px;
 }
 
 .g-more-menu > .btn-primary {
@@ -3089,61 +3622,79 @@ p.g-spend.is-blocked {
   color: var(--ivory);
 }
 
-/* Wide screens: the list and the compare pane sit side by side. */
+/* --- Garage sizes ------------------------------------------------------------------------ */
+
+/* Wide screens: the list and the compare pane sit side by side, and the car scales up. */
 .garage.is-wide {
   --g-gap: 8px;
-  --g-rail: 104px;
-  grid-template-columns: var(--g-rail) minmax(0, 40fr) minmax(0, 60fr);
-  grid-template-rows: 56px minmax(0, 1fr) 60px;
+  --g-pad: 8px;
+  --g-top: 56px;
+  --g-tile: 56px;
+  --g-ready: 200px;
+  grid-template-columns: minmax(0, 46fr) minmax(0, 54fr);
+  grid-template-rows: var(--g-top) minmax(0, 1fr) 52px;
 }
 
-.garage.is-wide .g-panes {
+.garage.is-wide .g-top > * {
+  height: 52px;
+}
+
+.garage.is-wide .g-ready {
+  height: 56px;
+  font-size: 27px;
+}
+
+.garage.is-wide .g-panel {
   grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
 }
 
-.garage.is-wide .g-score dt .glyph {
-  display: block;
+.garage.is-wide .g-bottom > .g-more {
+  width: auto;
+  padding: 0 14px;
+  gap: 6px;
 }
 
-.garage.is-wide .g-rail-tab {
-  font-size: 15px;
+.garage.is-wide .g-more-text {
+  display: inline;
 }
 
-.garage.is-wide .g-bottom > .btn {
-  min-height: 52px;
-  padding: 0 18px;
+.garage.is-wide .indicator-value {
+  font-size: 16px;
 }
 
-.garage.is-wide .g-bottom > .g-ready {
-  min-width: 200px;
-  min-height: 58px;
-  font-size: 26px;
-}
-
-@media (min-width: 760px) and (orientation: landscape) {
-  /* Room for the facts and the comparison side by side in the compare pane. */
-  .garage:not(.is-wide) .g-detail .g-pane-body {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-auto-rows: min-content;
-    align-content: start;
-    gap: 4px 12px;
+@media (orientation: landscape) and (max-height: 389px) {
+  .garage {
+    --g-row: 52px;
   }
-  .garage:not(.is-wide) .g-detail .g-pane-body > * {
-    grid-column: 1;
+}
+
+@media (orientation: landscape) and (max-height: 359px) {
+  .garage {
+    --g-gap: 3px;
+    --g-pad: 2px;
+    --g-tile: 44px;
+    --g-row: 48px;
   }
-  .garage:not(.is-wide) .g-detail .g-compare {
-    grid-column: 2;
-    grid-row: 1 / span 12;
+  .g-tools-head .part-icon {
+    width: 44px !important;
+    height: 44px !important;
+  }
+}
+
+@media (min-width: 740px) and (orientation: landscape) {
+  /* Room for the item's name beside each essential's icon. */
+  .g-slot-row .slot-tile.has-name .slot-label {
+    font-size: 12px;
+    line-height: 13px;
   }
 }
 
 @media (max-width: 739px) and (orientation: landscape) {
   .garage {
-    --g-rail: 68px;
+    --g-ready: 112px;
   }
   .g-back span,
-  .g-track-text span,
+  .g-track,
   .g-credits-label {
     display: none;
   }
@@ -3151,56 +3702,35 @@ p.g-spend.is-blocked {
     width: 44px;
     padding: 0;
   }
-  .g-track {
-    padding: 0 8px 0 6px;
-  }
   .g-timer {
     padding: 0 6px;
     font-size: 18px;
   }
-  .g-timer .glyph {
-    display: none;
-  }
-  .g-scores {
-    gap: 6px;
-    padding: 3px 6px 5px;
-  }
-  /* No room for five words: each score keeps its glyph, its number and its bar. The names
-     stay in the accessibility tree and in the compare pane. */
-  .g-score dt .glyph {
-    display: block;
-  }
-  .g-score-name {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-  }
-  .g-score dd {
-    font-size: 15px;
-    gap: 2px;
-  }
-  .g-score .delta-number {
-    display: none;
-  }
-  .g-score .delta-arrow {
-    display: block;
-  }
   .g-credits-value {
     font-size: 22px;
   }
-  .g-bottom > .btn {
-    padding: 0 12px;
+  .g-ready {
+    font-size: 21px;
   }
-  .g-bottom > .g-ready {
-    min-width: 104px;
-    padding: 0 14px;
-    font-size: 20px;
+  /* The essentials keep their icon and category; the item's name is in the tile's label. */
+  .g-slot-row .slot-tile.has-name {
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
+    padding: 0;
+    text-align: center;
   }
-  .g-rail-tab {
-    font-size: 12px;
+  .g-slot-row .slot-tile.has-name .slot-text {
+    flex: none;
+  }
+  .g-slot-row .slot-tile.has-name .slot-name {
+    display: none;
+  }
+  .indicator {
+    padding: 3px 3px 4px;
+  }
+  .indicator-value {
+    font-size: 13px;
   }
   .g-buy {
     min-width: 84px;
@@ -3240,44 +3770,74 @@ p.g-spend.is-blocked {
 }
 
 @media (orientation: portrait) {
+  /* The car as a strip, every slot in one scrolling row under it, then the list. The gauges
+     are one thin row above Ready. */
   .garage {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(200px, 32vh) auto minmax(0, 1fr) auto;
-    grid-template-areas: 'top' 'stage' 'rail' 'side' 'bottom';
+    grid-template-rows: var(--g-top) auto auto minmax(0, 1fr) 44px 52px;
+    grid-template-areas: 'top' 'bench' 'coach' 'panel' 'bottom' 'ready';
   }
   .g-top {
-    flex-wrap: wrap;
+    padding-right: 0;
   }
-  .g-top > * {
-    min-height: 44px;
+  .g-track {
+    display: none;
   }
-  .g-scores {
-    order: 9;
-    flex-basis: 100%;
+  .g-ready {
+    grid-area: ready;
+    justify-self: stretch;
+    width: auto;
+    height: 52px;
+    font-size: 24px;
   }
-  .g-credits {
-    margin-left: auto;
+  .g-bench {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: clamp(150px, 30vh, 360px) 48px;
   }
-  .g-rail {
-    flex-direction: row;
+  .g-slot-row {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x;
+    scrollbar-width: none;
   }
-  .g-rail-tab {
-    min-height: 52px;
-    border-left: 1px solid var(--steel-dark);
-    border-bottom: 4px solid transparent;
+  .g-slot-row .slot-tile,
+  .g-slot-row .slot-tile.has-name {
+    flex: 0 0 auto;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
+    width: 56px !important;
+    height: 48px !important;
+    padding: 0;
+    text-align: center;
   }
-  .g-rail-tab.is-selected {
-    border-bottom-color: var(--gold);
+  .g-slot-row .slot-tile.has-name .slot-text {
+    flex: none;
   }
-  .g-bottom {
-    flex-wrap: wrap;
+  .g-slot-row .slot-tile.has-name .slot-name {
+    display: none;
   }
-  .g-indicators {
-    flex-basis: 100%;
-    min-height: 50px;
+  .g-bench-tools {
+    position: absolute;
+    z-index: 3;
+    top: 4px;
+    left: 4px;
+    right: 4px;
+    justify-content: space-between;
+    pointer-events: none;
   }
-  .g-bottom > .g-ready {
-    flex: 1 1 auto;
+  .g-bench-tools > * {
+    height: 48px;
+    pointer-events: auto;
+  }
+  /* While the first-build line is up, rows tighten so six parts still show. */
+  .garage.is-coaching {
+    --g-row: 48px;
+  }
+  .g-bench.is-row .g-status {
+    left: 62px;
+    right: 62px;
+    max-width: calc(100% - 124px);
   }
   .preview {
     grid-template-columns: minmax(0, 1fr);
@@ -3318,10 +3878,10 @@ p.g-spend.is-blocked {
 
 @media (prefers-reduced-motion: reduce) {
   .g-timer.is-urgent,
-  .mount.is-target .mount-face {
+  .slot-tile.is-target {
     animation: none;
   }
-  .mount.is-target .mount-face {
+  .slot-tile.is-target {
     box-shadow: 0 0 0 3px var(--mint);
   }
 }

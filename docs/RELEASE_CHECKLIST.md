@@ -36,7 +36,7 @@ production of the remaining sixteen chassis until the car art and driving feel a
 
 ### Milestone B: garage and engineering
 
-Implemented and passing the automated suite (1,375 unit, integration and feel tests; 41
+Implemented and passing the automated suite (1,390 unit, integration and feel tests; 47
 end-to-end tests in headless Chromium). **Not passed**: nobody has used the garage on a real
 phone, and the art has not been reviewed by a person.
 
@@ -54,7 +54,7 @@ Data and rules (verified by the automated suite, see `docs/TEST_PLAN.md`):
 
 Still open in Milestone B:
 
-- [x] Garage screen (Section 5.6): workbench with mount markers, six categories, part cards, compare pane with deltas, five indicators with breakdowns, undo and redo, paint and name, first-build tips. Verified by 41 unit and 25 end-to-end tests in headless Chromium at phone, tablet and desktop sizes. **Not verified on a real phone or by a person.**
+- [x] Garage screen (Section 5.6), redesigned after the product owner's test on a real iPhone (cramped: markers over the car, small car, two and a half parts in the list): a clean car at the largest whole-number scale with a slot tile and leader line for every mount, Chassis, Engine and Wheels tiles under it, a per-slot part list of compact rows (five or more at 870 x 340, six in portrait at 450 x 840), Browse All Parts, compare pane with the five scores and five indicators, one card for an installed part, four gauges with breakdowns, a More menu, undo and redo, paint and name, first-build tips on the tiles. Verified by 56 unit and 31 end-to-end tests in headless Chromium at the owner's viewport sizes, phone, tablet and desktop. **The redesign itself has not been used on a real phone or reviewed by a person yet.** See `docs/DECISIONS.md` 76 to 86.
 - [x] Flow: Home, Track Preview, 60-second garage, race, `Change My Build`; `Use Last Build` and `Quick Build` from Home.
 - [x] My Blueprints in local storage, 30 cars, with flagged stale builds and repair.
 - [ ] **Deferred to Milestone E:** short share codes (`Load Code`, `Copy Code`) and a server-owned build timer. The client clock locks the last legal snapshot today; `setDeadline` and `lockWith` are the hooks for the server. No code control is shown.
@@ -100,7 +100,7 @@ settings. G: load, security, Docker deployment, public HTTPS.
 - [ ] Low-effects settings preserve readability and touch responsiveness. _Shake amount and reduced flashes exist; the camera no longer rotates or zooms at all; particle quality tiers do not._
 - [ ] Device tests and network stress tests meet documented budgets.
 - [ ] Privacy disclosure, deletion controls, error handling, backups and HTTPS are in place. _Guest tokens carry no personal data and can be cleared locally; no privacy page yet._
-- [ ] Automated tests and clean install and build commands pass on the committed revision. *Locally: 1,375 Vitest tests and 41 Playwright tests pass and the build succeeds. CI itself has never run.*
+- [ ] Automated tests and clean install and build commands pass on the committed revision. *Locally: 1,390 Vitest tests and 47 Playwright tests pass and the build succeeds. CI itself has never run.*
 
 ## Launch blockers known today
 

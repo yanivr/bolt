@@ -51,6 +51,19 @@ export type Selection =
   /** An installed part, with its move, rotate, fire-button and remove tools. */
   | { kind: 'instance'; instanceId: string };
 
+/**
+ * A place on the car that holds something: the three essentials, or one accessory mount of
+ * the chassis. The garage is navigated by slot: tap one and the panel shows what goes there.
+ */
+export type Slot = { kind: 'chassis' | 'engine' | 'tires' } | { kind: 'mount'; mountId: string };
+
+/**
+ * What the side panel is for. `car` is the idle view of the whole build; `parts` is the
+ * selected slot (its list, or the card of the part on it); `browse` is the whole catalog by
+ * category, for finding parts that fit no mount on this chassis.
+ */
+export type PanelView = 'car' | 'parts' | 'browse';
+
 export type NoticeTone = 'ok' | 'warn' | 'error';
 
 export type Notice = {
@@ -69,7 +82,9 @@ export type GarageSession = {
   /** The newest snapshot the validator accepted. This is what the timer locks. */
   lastLegal: VehicleBlueprint;
   selection: Selection;
+  /** The essential slot that is open, or the category being browsed. */
   category: PartCategory;
+  view: PanelView;
   /** The catalog card open in the detail pane. */
   focusPartId: string | null;
   /** A mount the player picked for the focused part, overriding the suggestion. */
@@ -116,6 +131,7 @@ export function startSession(
     lastLegal: legal ?? fallback ?? BASELINE_BLUEPRINT,
     selection: { kind: 'none' },
     category: options.category ?? 'chassis',
+    view: 'car',
     focusPartId: null,
     targetMountId: null,
     deadline: seconds > 0 ? options.now + seconds * 1000 : null,
@@ -400,7 +416,7 @@ export function install(session: GarageSession, catalog: Catalog, partId: string
       catalog,
       plan.result,
       `${fill(STRINGS.garage.swappedMsg, { part: name })} ${removedNote(removed, catalog)}`,
-      { selection: { kind: 'none' }, targetMountId: null },
+      { selection: { kind: 'none' }, targetMountId: null, focusPartId: null },
     );
     return {
       ...next,
@@ -409,7 +425,9 @@ export function install(session: GarageSession, catalog: Catalog, partId: string
     };
   }
   if (plan.action === 'swap')
-    return commit(session, catalog, plan.result, fill(STRINGS.garage.swappedMsg, { part: name }));
+    return commit(session, catalog, plan.result, fill(STRINGS.garage.swappedMsg, { part: name }), {
+      focusPartId: null,
+    });
   const instanceId = plan.result.instanceId;
   return commit(
     session,
@@ -417,7 +435,12 @@ export function install(session: GarageSession, catalog: Catalog, partId: string
     plan.result,
     fill(STRINGS.garage.installedMsg, { part: name }),
     instanceId
-      ? { selection: { kind: 'instance', instanceId }, targetMountId: null, focusPartId: null }
+      ? {
+          selection: { kind: 'instance', instanceId },
+          targetMountId: null,
+          focusPartId: null,
+          view: 'parts',
+        }
       : {},
   );
 }
@@ -437,7 +460,7 @@ export function remove(
   const next = commit(session, catalog, removePart(blueprint, catalog, instanceId), text);
   if (next === session || next.notice?.tone === 'error' || !instance) return next;
   // The emptied mount stays selected, so the list shows what else fits there.
-  return { ...next, selection: { kind: 'mount', mountId: instance.mountId } };
+  return { ...next, selection: { kind: 'mount', mountId: instance.mountId }, view: 'parts' };
 }
 
 // --- Placing ------------------------------------------------------------------------------------
@@ -568,6 +591,7 @@ export function load(
   const errors = check.issues.filter((i) => i.severity === 'error');
   const settled = settle(session, pushHistory(session.history, next), catalog, {
     selection: { kind: 'none' },
+    view: 'car',
     targetMountId: null,
     focusPartId: null,
     notice: errors[0]
@@ -666,6 +690,7 @@ export function targetMount(
   return {
     ...session,
     selection: { kind: 'mount', mountId },
+    view: 'parts',
     targetMountId: null,
     focusPartId: null,
     category: ACCESSORY.includes(session.category) ? session.category : 'weapon',
@@ -687,13 +712,20 @@ export function chooseMount(session: GarageSession, mountId: string | null): Gar
  * rack when tapped again); an empty mount filters the list to what fits. Tapping never buys.
  */
 export function tapMount(session: GarageSession, catalog: Catalog, mountId: string): GarageSession {
+  const chassis = own(catalog.chassis, currentBlueprint(session).chassisId);
+  if (!chassis?.mounts.some((m) => m.id === mountId)) return session;
   const occupants = partsOnMount(currentBlueprint(session), catalog, mountId);
   if (occupants.length === 0) {
-    if (session.selection.kind === 'mount' && session.selection.mountId === mountId)
-      return { ...session, selection: { kind: 'none' }, targetMountId: null };
+    if (
+      session.selection.kind === 'mount' &&
+      session.selection.mountId === mountId &&
+      session.focusPartId === null
+    )
+      return { ...session, selection: { kind: 'none' }, view: 'car', targetMountId: null };
     return {
       ...session,
       selection: { kind: 'mount', mountId },
+      view: 'parts',
       targetMountId: null,
       focusPartId: null,
       category: ACCESSORY.includes(session.category) ? session.category : 'weapon',
@@ -723,6 +755,7 @@ export function selectInstance(
   return {
     ...session,
     selection: { kind: 'instance', instanceId },
+    view: 'parts',
     targetMountId: null,
     focusPartId: null,
     category: def?.category ?? session.category,
@@ -730,9 +763,88 @@ export function selectInstance(
   };
 }
 
+/** Lets go of whatever is selected and goes back to the idle view of the whole car. */
 export function clearSelection(session: GarageSession): GarageSession {
-  if (session.selection.kind === 'none' && session.targetMountId === null) return session;
-  return { ...session, selection: { kind: 'none' }, targetMountId: null };
+  if (
+    session.selection.kind === 'none' &&
+    session.targetMountId === null &&
+    session.view === 'car' &&
+    session.focusPartId === null
+  )
+    return session;
+  return {
+    ...session,
+    selection: { kind: 'none' },
+    view: 'car',
+    targetMountId: null,
+    focusPartId: null,
+  };
+}
+
+const ESSENTIAL: readonly PartCategory[] = ['chassis', 'engine', 'tires'];
+
+/**
+ * The slot the panel is showing: the mount of the selection, or the open essential. Null in
+ * the idle view and while browsing the whole catalog.
+ */
+export function activeSlot(session: GarageSession, catalog: Catalog): Slot | null {
+  const { selection } = session;
+  if (selection.kind === 'mount') return { kind: 'mount', mountId: selection.mountId };
+  if (selection.kind === 'instance') {
+    const part = currentBlueprint(session).parts.find((p) => p.instanceId === selection.instanceId);
+    const chassis = own(catalog.chassis, currentBlueprint(session).chassisId);
+    return part && chassis?.mounts.some((m) => m.id === part.mountId)
+      ? { kind: 'mount', mountId: part.mountId }
+      : null;
+  }
+  if (session.view === 'parts' && ESSENTIAL.includes(session.category))
+    return { kind: session.category as 'chassis' | 'engine' | 'tires' };
+  return null;
+}
+
+/**
+ * A tap on a slot tile. An essential opens its list (a second tap closes it); a mount behaves
+ * as `tapMount` says: an empty one lists what fits, an occupied one shows its part. Tapping
+ * never buys.
+ */
+export function selectSlot(session: GarageSession, catalog: Catalog, slot: Slot): GarageSession {
+  if (slot.kind === 'mount') return tapMount(session, catalog, slot.mountId);
+  const open = activeSlot(session, catalog);
+  if (open?.kind === slot.kind && session.focusPartId === null)
+    return { ...session, view: 'car', targetMountId: null };
+  return {
+    ...session,
+    view: 'parts',
+    category: slot.kind,
+    selection: { kind: 'none' },
+    targetMountId: null,
+    focusPartId: null,
+    flagged: [],
+  };
+}
+
+/**
+ * Opens the whole catalog at a category. Nothing on the car stays selected, so an accessory
+ * bought from here goes to the best free mount unless the player picks another.
+ */
+export function browse(session: GarageSession, category?: PartCategory): GarageSession {
+  const next = category ?? (ACCESSORY.includes(session.category) ? session.category : 'weapon');
+  if (
+    session.view === 'browse' &&
+    session.category === next &&
+    session.focusPartId === null &&
+    session.selection.kind === 'none'
+  )
+    return session;
+  return {
+    ...session,
+    view: 'browse',
+    category: next,
+    selection: { kind: 'none' },
+    targetMountId: null,
+    focusPartId: null,
+    flagged: [],
+  };
 }
 
 export function dismissNotice(session: GarageSession): GarageSession {
@@ -799,6 +911,7 @@ export function lockWith(
     locked: snapshot,
     lockReason: reason,
     selection: { kind: 'none' },
+    view: 'car',
     targetMountId: null,
     notice: note(session, 'warn', STRINGS.garage.locked),
   };

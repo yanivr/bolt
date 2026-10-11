@@ -4,11 +4,12 @@ import type { Browser, Page } from '@playwright/test';
 import { chromium } from '@playwright/test';
 
 /**
- * Screenshots of the Milestone B flow for design review: home, track preview, the garage in
- * its main states and My Blueprints, on a landscape phone and on a desktop.
+ * Screenshots of the garage for design review, at the sizes it has to work at: the product
+ * owner's phone inside its host page (870 x 370 landscape, 450 x 840 portrait), two bare
+ * landscape phones, and a desktop.
  *
  *   pnpm build && PORT=2671 node apps/server/dist/main.js &
- *   npx tsx tests/visual/garage.ts http://localhost:2671 tests/visual/out/garage
+ *   npx tsx tests/visual/garage.ts http://localhost:2671 tests/visual/out/garage [sizes]
  *
  * The build clock is stretched with the debug-only `buildSeconds` switch so nothing locks
  * while a shot is being set up.
@@ -22,54 +23,73 @@ const QUERY = '?debug=1&buildSeconds=900';
 
 type Size = { name: string; width: number; height: number; mobile: boolean };
 const SIZES: Size[] = [
+  { name: '870x370', width: 870, height: 370, mobile: true },
   { name: '844x390', width: 844, height: 390, mobile: true },
   { name: '667x375', width: 667, height: 375, mobile: true },
-  { name: '932x430', width: 932, height: 430, mobile: true },
-  { name: '1024x768', width: 1024, height: 768, mobile: true },
+  { name: '450x840', width: 450, height: 840, mobile: true },
   { name: '1440x900', width: 1440, height: 900, mobile: false },
-  { name: '390x844', width: 390, height: 844, mobile: true },
 ];
 
-/** A saved build from an older catalog that is also over its frame's weight limit. */
-function staleBuild(): string {
-  const part = (instanceId: string, partId: string, mountId: string, extra = {}) => ({
-    instanceId,
-    partId,
-    mountId,
-    offsetX: 0,
-    offsetY: 0,
-    rotationQuarterTurns: 0,
-    ...extra,
-  });
-  return JSON.stringify({
-    version: 1,
-    items: [
-      {
-        id: 'bstale',
-        savedAt: '2026-09-01T10:00:00.000Z',
-        blueprint: {
-          formatVersion: 1,
-          catalogVersion: '0.2.0',
-          name: 'Old Faithful',
-          chassisId: 'chassis_beetle',
-          engineId: 'engine_v8',
-          tireKitId: 'tires_armored',
-          paintId: 'paint_cobalt',
-          parts: [
-            part('p1', 'weapon_turret', 'roof_mid', { assignedActionSlot: 0 }),
-            part('p2', 'weapon_hammer', 'front_center', { assignedActionSlot: 1 }),
-            part('p3', 'utility_nitro', 'left_utility'),
-            part('p4', 'utility_generator', 'right_utility'),
-          ],
-          createdAt: '2026-09-01T10:00:00Z',
-        },
-      },
-    ],
-  });
+type PartSpec = [partId: string, mountId: string, extra?: Record<string, unknown>];
+
+function blueprint(
+  name: string,
+  essentials: { chassisId: string; engineId?: string; tireKitId?: string; paintId?: string },
+  parts: PartSpec[],
+  catalogVersion: string,
+): Record<string, unknown> {
+  return {
+    formatVersion: 1,
+    catalogVersion,
+    name,
+    chassisId: essentials.chassisId,
+    engineId: essentials.engineId ?? 'engine_four_cylinder',
+    tireKitId: essentials.tireKitId ?? 'tires_street',
+    paintId: essentials.paintId ?? 'paint_signal',
+    parts: parts.map(([partId, mountId, extra], index) => ({
+      instanceId: `p${index + 1}`,
+      partId,
+      mountId,
+      offsetX: 0,
+      offsetY: 0,
+      rotationQuarterTurns: 0,
+      ...extra,
+    })),
+    createdAt: '2026-10-10T00:00:00Z',
+  };
 }
 
+/** The eight-mount Crab filled as far as 1,000 credits go. */
+const CRAB: PartSpec[] = [
+  ['weapon_front_mg', 'left_front', { rotationQuarterTurns: 3, assignedActionSlot: 0 }],
+  ['weapon_rear_mg', 'left_mid', { rotationQuarterTurns: 3 }],
+  ['weapon_shotgun', 'left_rear', { rotationQuarterTurns: 3 }],
+  ['weapon_foam', 'right_front', { rotationQuarterTurns: 1, assignedActionSlot: 1 }],
+  ['weapon_air', 'right_mid', { rotationQuarterTurns: 1 }],
+  ['weapon_tesla', 'right_rear'],
+  ['utility_spare', 'roof_front'],
+];
+/** The ten-mount Platform, eight of them filled. */
+const PLATFORM: PartSpec[] = [
+  ['weapon_mine', 'deck_fore', { assignedActionSlot: 1 }],
+  ['weapon_oil', 'deck_front', { assignedActionSlot: 0 }],
+  ['weapon_rear_mg', 'left_edge_front', { rotationQuarterTurns: 3 }],
+  ['utility_radar', 'left_edge_mid'],
+  ['utility_minesensor', 'left_edge_rear'],
+  ['weapon_tesla', 'right_edge_front'],
+  ['utility_fan', 'right_edge_mid'],
+  ['defense_heatguard', 'right_edge_rear'],
+];
+/** A saved build from an older catalog that is also over its frame's weight limit. */
+const STALE: PartSpec[] = [
+  ['weapon_turret', 'roof_mid', { assignedActionSlot: 0 }],
+  ['weapon_hammer', 'front_center', { assignedActionSlot: 1 }],
+  ['utility_nitro', 'left_utility'],
+  ['utility_generator', 'right_utility'],
+];
+
 async function shot(page: Page, size: Size, name: string): Promise<void> {
-  await page.waitForTimeout(350);
+  await page.waitForTimeout(450);
   await page.screenshot({ path: join(outDir, `${size.name}_${name}.png`) });
 }
 
@@ -90,114 +110,150 @@ async function capture(browser: Browser, size: Size, problems: string[]): Promis
       .getByRole('button', { name, exact: typeof name === 'string' })
       .first()
       .click();
+  const tile = (slot: string) => page.locator(`.slot-tile[data-slot="${slot}"]`);
+  const row = (partId: string) => page.locator(`.part-card[data-part="${partId}"]`);
+  const more = async (name: string | RegExp) => {
+    await press('More');
+    await page
+      .getByRole('dialog', { name: 'More' })
+      .getByRole('button', { name, exact: typeof name === 'string' })
+      .click();
+  };
+  const openGarage = async () => {
+    await page.goto(`${baseUrl}/${QUERY}`, { waitUntil: 'networkidle' });
+    await press('Start Racing');
+    await press('Build Your Car');
+    await page.getByTestId('ready').waitFor();
+    await page.locator('.g-car').waitFor({ state: 'visible' });
+    await page.waitForTimeout(500);
+  };
+  /** Makes a car the player's last build, with the first-build tips already seen. */
+  const seed = async (car: Record<string, unknown>) => {
+    await page.evaluate((json) => {
+      window.localStorage.setItem('bolt.blueprint.v1', json);
+      window.localStorage.setItem(
+        'bolt.tutorial.v1',
+        JSON.stringify({ garage_tips: true, built: true }),
+      );
+    }, JSON.stringify(car));
+  };
 
   await page.goto(`${baseUrl}/${QUERY}`, { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'Start Racing' }).waitFor({ timeout: 20_000 });
-  await page.waitForTimeout(700);
-  await shot(page, size, '01_home_first_visit');
+  const version = await page.evaluate(async () => {
+    const response = await fetch('/api/v1/health');
+    return ((await response.json()) as { catalogVersion: string }).catalogVersion;
+  });
 
-  await press('Start Racing');
-  await page.getByRole('button', { name: 'Build Your Car' }).waitFor();
-  await shot(page, size, '02_track_preview');
-  await press('Track Details');
-  await shot(page, size, '02b_track_details');
-  await press('Close');
-
-  await press('Build Your Car');
-  await page.getByTestId('ready').waitFor();
-  await page.waitForTimeout(500);
-  await shot(page, size, '03_garage_first_visit');
+  // First visit: the three steps marked on their tiles.
+  await openGarage();
+  await shot(page, size, '01_first_visit');
+  await tile('tires').click();
+  await shot(page, size, '01b_first_visit_step_list');
+  await page.getByTestId('car-stats').click();
   await press('Skip tips');
-  await shot(page, size, '04_garage_default');
+  await shot(page, size, '02_idle');
 
-  // A part selected with the compare pane open.
-  await page.getByRole('tab', { name: 'Weapons' }).click();
-  await shot(page, size, '05_garage_weapons');
-  await page.locator('.part-card[data-part="weapon_turret"]').click();
-  await shot(page, size, '06_garage_compare');
+  // A slot selected with its list, then the compare pane.
+  await tile('mount:roof_mid').click();
+  await shot(page, size, '03_slot_list');
+  await row('weapon_turret').click();
+  await shot(page, size, '04_compare');
   await page.getByTestId('install').click();
-  await shot(page, size, '07_garage_part_tools');
-  await page.getByRole('button', { name: 'Rotate view' }).click();
-  await shot(page, size, '07b_garage_view_turned');
-  for (let i = 0; i < 7; i++) await page.getByRole('button', { name: 'Rotate view' }).click();
+  await shot(page, size, '05_weapon_card');
+  await tile('mount:front_center').scrollIntoViewIfNeeded();
+  await tile('mount:front_center').click();
+  await row('weapon_front_mg').click();
+  await page.getByTestId('install').click();
+  await page.waitForTimeout(3800);
+  await shot(page, size, '05b_second_weapon_card');
+  await press('Rotate view');
+  await shot(page, size, '06_view_rotated');
+  await press('Rotate view');
+  await shot(page, size, '06b_view_rotated_twice');
+  await press('Rotate view');
+  await press('Rotate view');
 
-  // A refused purchase: spend most of the budget, then ask for the V12.
-  const buy = async (tab: string, partId: string) => {
-    await page.getByRole('tab', { name: tab }).click();
-    await page.locator(`.part-card[data-part="${partId}"]`).click();
-    await page.getByTestId('install').click();
-  };
-  await buy('Defense', 'defense_heavy_plate');
-  await buy('Defense', 'defense_heavy_plate');
-  await buy('Utility', 'utility_nitro');
-  await buy('Utility', 'utility_overdrive');
-  await page.getByRole('tab', { name: 'Engine' }).click();
-  await shot(page, size, '08_garage_engine_list_low_credits');
-  await page.locator('.part-card[data-part="engine_v12"]').click();
-  // The button is aria-disabled; pressing it anyway states the reason and changes nothing.
-  await page.getByTestId('install').click({ force: true });
-  await shot(page, size, '08b_garage_over_budget');
-  await page.getByRole('button', { name: 'All parts' }).click();
-
-  await page.getByRole('tab', { name: 'Chassis' }).click();
-  await shot(page, size, '09_garage_chassis_list');
-  await page.locator('.part-card[data-part="chassis_turtle"]').click();
-  await shot(page, size, '09b_garage_chassis_compare');
-  await page.getByRole('button', { name: 'All parts' }).click();
-
+  // The essentials, the whole catalog, and the menu.
+  await tile('chassis').scrollIntoViewIfNeeded();
+  await tile('chassis').click();
+  await shot(page, size, '07_chassis_list');
+  await row('chassis_turtle').click();
+  await shot(page, size, '07b_chassis_compare');
+  await press('Parts');
+  await more('Browse All Parts');
+  await shot(page, size, '08_browse_all');
+  await page.locator('.part-card.is-blocked').first().click();
+  await shot(page, size, '08b_browse_no_mount');
+  await press('Parts');
   await page.locator('.indicator[data-indicator="heat"]').click();
-  await shot(page, size, '10_garage_indicator_detail');
+  await shot(page, size, '09_indicator_detail');
+  await press('Close');
+  await press('More');
+  await shot(page, size, '10_more_menu');
   await press('Close');
 
-  // On the narrowest phones Reset, Save and Quick Build fold into one menu.
-  const more = page.getByRole('button', { name: 'More', exact: true });
-  const folded = await more.isVisible();
-  if (folded) {
-    await more.click();
-    await shot(page, size, '10b_garage_more_menu');
-  }
-  await press('Quick Build');
-  await shot(page, size, '11_garage_quick_build');
-  await press('Close');
+  // Frames with many mounts.
+  await seed(blueprint('Full Crab', { chassisId: 'chassis_crab' }, CRAB, version));
+  await openGarage();
+  await shot(page, size, '11_crab_loaded');
+  await tile('mount:right_mid').scrollIntoViewIfNeeded();
+  await tile('mount:right_mid').click();
+  await shot(page, size, '11b_crab_part_selected');
+  await press('Rotate view');
+  await shot(page, size, '11c_crab_rotated');
+  await seed(
+    blueprint(
+      'Full Platform',
+      { chassisId: 'chassis_platform', engineId: 'engine_v6', paintId: 'paint_cobalt' },
+      PLATFORM,
+      version,
+    ),
+  );
+  await openGarage();
+  await shot(page, size, '12_platform');
+  await tile('mount:deck_aft').scrollIntoViewIfNeeded();
+  await tile('mount:deck_aft').click();
+  await shot(page, size, '12b_platform_slot_list');
 
-  if (folded) await more.click();
-  await page.getByRole('button', { name: /^Save/ }).click();
-  await press('Save This Car');
-  await shot(page, size, '12_garage_blueprints_overlay');
-  await press('Close');
-
-  // My Blueprints from home, with a stale build to flag.
-  await page.evaluate((library) => {
-    const current = JSON.parse(window.localStorage.getItem('bolt.blueprints.v1') ?? '{"items":[]}');
-    const stale = JSON.parse(library);
-    window.localStorage.setItem(
-      'bolt.blueprints.v1',
-      JSON.stringify({ version: 1, items: [...current.items, ...stale.items] }),
-    );
-  }, staleBuild());
-  await press('Back');
-  await press('Leave Garage');
+  // An illegal build: an old saved car opened for review.
+  await page.evaluate(
+    (json) =>
+      window.localStorage.setItem(
+        'bolt.blueprints.v1',
+        JSON.stringify({
+          version: 1,
+          items: [
+            { id: 'bstale', savedAt: '2026-09-01T10:00:00.000Z', blueprint: JSON.parse(json) },
+          ],
+        }),
+      ),
+    JSON.stringify(
+      blueprint(
+        'Old Faithful',
+        {
+          chassisId: 'chassis_beetle',
+          engineId: 'engine_v8',
+          tireKitId: 'tires_armored',
+          paintId: 'paint_cobalt',
+        },
+        STALE,
+        '0.2.0',
+      ),
+    ),
+  );
+  await page.goto(`${baseUrl}/${QUERY}`, { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'My Blueprints' }).click();
-  await page.getByRole('tab', { name: 'My Builds' }).waitFor();
-  await shot(page, size, '13_blueprints');
-  await page.getByRole('tab', { name: 'Starter Cars' }).click();
-  await shot(page, size, '13b_blueprints_starters');
-  await page.getByRole('tab', { name: 'My Builds' }).click();
-
-  // An illegal build state: the stale build opened for review in the garage.
   await press('Review');
   await page.getByTestId('ready').waitFor();
+  await page.locator('.g-car').waitFor({ state: 'visible' });
   await page.waitForTimeout(500);
-  await shot(page, size, '14_garage_illegal_build');
+  await shot(page, size, '13_illegal_build');
+  await page.getByTestId('ready').click({ force: true });
+  await shot(page, size, '13b_illegal_ready_pressed');
   await page.locator('.indicator[data-indicator="load"]').click();
-  await shot(page, size, '14b_garage_illegal_load_detail');
+  await shot(page, size, '13c_illegal_load_detail');
   await press('Close');
-  await press('Back');
-  await press('Leave Garage');
-  await page.getByRole('button', { name: 'Start Racing' }).waitFor();
-  await shot(page, size, '15_home');
-  await press('Quick Build');
-  await shot(page, size, '16_home_quick_build');
 
   await context.close();
 }

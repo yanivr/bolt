@@ -1,13 +1,14 @@
 import { CATALOG, STRINGS, partCard } from '@bolt/content';
 import type { AnyPartDefinition, BuildStats, StatDelta, VehicleBlueprint } from '@bolt/shared';
-import { accessoryMounts, own } from '@bolt/shared';
+import { own } from '@bolt/shared';
 import { Glyph } from '../../components/Glyph.js';
 import { PartIcon } from '../../components/PartIcon.js';
 import type { GameManifests } from '../../game/assets.js';
 import type { InstallPlan } from '../buildSession.js';
 import { issueText, partsOnMount } from '../buildSession.js';
+import { mountsFor } from '../slots.js';
 import { compactNumber, fill, listNames, mountName } from '../text.js';
-import { Credits, FactRow, fitsMount, partFacts } from './partFacts.js';
+import { Credits, FactRow, partFacts } from './partFacts.js';
 import type { BuildPreview } from './useBuildStats.js';
 
 const SCORES = ['speed', 'control', 'defense', 'firepower', 'utility'] as const;
@@ -23,6 +24,11 @@ type Props = {
   installed: number;
   /** The mount the player picked for it, or null for the best free mount. */
   targetMountId: string | null;
+  /**
+   * Offers the choice of mount. Off when the part was opened from a slot: the slot is where
+   * it goes.
+   */
+  pickMount: boolean;
   locked: boolean;
   onBack: () => void;
   onStep: (direction: 1 | -1) => void;
@@ -33,10 +39,12 @@ type Props = {
 };
 
 function Change({
+  id,
   label,
   change,
   format,
 }: {
+  id?: string;
   label: string;
   change: StatDelta;
   format: (value: number) => string;
@@ -44,7 +52,7 @@ function Change({
   const same = Math.abs(change.delta) < 1e-9 || format(change.before) === format(change.after);
   const tone = same || change.better === null ? '' : change.better ? ' is-better' : ' is-worse';
   return (
-    <div className={`cmp-row${tone}`}>
+    <div className={`cmp-row${tone}`} data-testid={id}>
       <dt>{label}</dt>
       <dd>
         <span className="cmp-before">{format(change.before)}</span>
@@ -80,6 +88,7 @@ export function PartDetail({
   preview,
   installed,
   targetMountId,
+  pickMount,
   locked,
   onBack,
   onStep,
@@ -92,8 +101,13 @@ export function PartDetail({
   const card = partCard(part, chassis?.wheelCount ?? 4);
   const accessory =
     part.category === 'weapon' || part.category === 'defense' || part.category === 'utility';
-  const mounts =
-    accessory && chassis ? accessoryMounts(chassis).filter((m) => fitsMount(m, part)) : [];
+  const mounts = accessory ? mountsFor(blueprint, CATALOG, part) : [];
+  const kinds =
+    part.category === 'weapon' || part.category === 'defense' || part.category === 'utility'
+      ? part.compatibleMounts
+          .map((kind) => (g.mountKinds as Record<string, string>)[kind])
+          .filter((name): name is string => typeof name === 'string')
+      : [];
   const result = plan.result;
   const blocked = result.ok ? null : issueText(result.issue);
   const isCurrent = plan.action === 'current';
@@ -126,7 +140,7 @@ export function PartDetail({
       </header>
       <div className="g-pane-body">
         <div className="g-detail-title">
-          <PartIcon manifests={manifests} partId={part.id} category={part.category} size={44} />
+          <PartIcon manifests={manifests} partId={part.id} category={part.category} size={64} />
           <div>
             <h2>{part.displayName}</h2>
             <p className="g-detail-price">
@@ -168,7 +182,16 @@ export function PartDetail({
           </p>
         )}
 
-        {accessory && mounts.length > 0 && (
+        {accessory && mounts.length === 0 && (
+          <p className="g-warning" data-testid="no-mount">
+            <Glyph name="warn" size={12} />
+            <span>
+              {g.noMountHere}
+              {kinds.length > 0 ? ` ${fill(g.fitsKinds, { kinds: listNames(kinds) })}` : ''}
+            </span>
+          </p>
+        )}
+        {accessory && pickMount && mounts.length > 0 && (
           <div className="g-mount-pick" role="radiogroup" aria-label={g.goesOn}>
             <span className="g-block-title">{g.goesOn}</span>
             <div className="chips">
@@ -216,7 +239,13 @@ export function PartDetail({
             <span className="g-block-title">{g.compare}</span>
             <dl className="cmp">
               {SCORES.map((key) => (
-                <Change key={key} label={g.scores[key]} change={delta.scores[key]} format={whole} />
+                <Change
+                  key={key}
+                  id={`score-${key}`}
+                  label={g.scores[key]}
+                  change={delta.scores[key]}
+                  format={whole}
+                />
               ))}
             </dl>
             <dl className="cmp">
@@ -261,6 +290,11 @@ export function PartDetail({
         {plan.replaced && result.ok && (
           <p className="g-detail-extra dim">
             {g.replace}: {plan.replaced.def.displayName}
+          </p>
+        )}
+        {accessory && !pickMount && plan.mountId && !plan.replaced && !isCurrent && (
+          <p className="g-detail-extra dim">
+            {fill(g.goesOnMount, { mount: mountName(plan.mountId) })}
           </p>
         )}
       </div>

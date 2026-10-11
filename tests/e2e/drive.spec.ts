@@ -320,7 +320,7 @@ test('every chassis with art can be picked in the garage and driven', async ({ p
   for (const id of picks) {
     await page.getByRole('button', { name: 'Start Racing' }).tap();
     await page.getByRole('button', { name: 'Build Your Car' }).tap();
-    await page.getByRole('tab', { name: 'Chassis' }).tap();
+    await page.locator('.slot-tile[data-slot="chassis"]').tap();
     const card = page.locator(`.part-card[data-part="${id}"]`);
     if (!(await card.evaluate((el) => el.classList.contains('is-installed')))) {
       await card.tap();

@@ -13,7 +13,7 @@ the specification is the requirement list; rows are added here as milestones lan
 | `pnpm test:e2e`                   | Playwright against the production build in a phone-sized touch viewport |
 | `pnpm art:check`                  | Car atlases match the pipeline byte for byte                            |
 | `npx tsx tests/visual/capture.ts` | Screenshots and a recording for visual review                           |
-| `npx tsx tests/visual/garage.ts <url> <dir> [sizes]` | Home, preview, garage states and blueprints at six viewport sizes |
+| `npx tsx tests/visual/garage.ts <url> <dir> [sizes]` | Garage states (idle, slot list, compare, part card, rotated, Crab, Platform, Browse All, illegal build, More) at 870x370, 844x390, 667x375, 450x840 and 1440x900 |
 | `npx tsx tests/feel/report.ts`    | Handling tables for every chassis (yaw, slip, radius, direction steps)  |
 | `npx tsx tests/feel/pacingReport.ts` | Frame pacing of the shipped render pipeline at 60, 90 and 120 Hz     |
 | `npx tsx tests/feel/buildsReport.ts` | Race time, top speed, launch, heat and stability of every shipped build |
@@ -157,7 +157,7 @@ and Utility scores are checked for arithmetic and ordering, not against combat o
 
 ## Automated coverage added in Milestone B (garage and flow)
 
-**Unit (`tests/unit/garageStore.test.ts`, 41 tests)** against the garage store on a controlled
+**Unit (`tests/unit/garageStore.test.ts`, 56 tests)** against the garage store on a controlled
 clock: install, replace and remove with exact credits; a mount tap never buys; wheel kits
 priced for the chassis; paint and name leave the hash alone; nudge, rotate and the two-button
 rule; over-budget, overweight, no-mount, one-per-car and unknown-part refusals leave the build
@@ -169,25 +169,46 @@ lock, repair; My Blueprints round trip, corrupt and hostile storage, flagged sta
 repair, the 30-car limit, duplicate, rename, delete; track facts and tips checked against
 the balance tables; copy helpers.
 
-**End to end (`tests/e2e/garage.spec.ts`, 25 tests)** on the production build: the first-run
-flow from a blank browser to a race in a car built in the garage; Use Starter Car and skipped
-tips; over-budget and overweight attempts; undo and redo by button and keyboard; chassis swap
-with refund notice; move, drag, rotate, fire buttons, replace and remove; markers following
-the rotate-view control; chassis without art (the manifest is filtered in the test, because
-the artists are still adding to it); the ten-second warning, the lock and the race; an
-illegal draft at zero racing the last legal car; the test clock ignored without the debug
-flag; flagged build, Ready gating and Repair Build; save, duplicate, rename and delete across
-reloads; corrupt storage; three taps and one tap to a race; Quick Build; Change My Build
-after a full race; a keyboard-only install, nudge and Ready; layout at 844 x 390, 667 x 375,
-932 x 430 and 1024 x 768 (no page scroll, every fixed control whole and inside the viewport,
-touch targets of 44 px or more, Ready and credits uncovered, no shift when messages appear);
-portrait; home, preview and blueprints at 667 x 375.
+Added with the slot redesign (Decisions 76 to 86): slot selection (essentials open and close,
+an empty mount lists, an occupied one shows its part, Browse All, the idle view after a load
+or a lock); `partsForSlot` against the validator for every mount of every chassis (a listed
+part installs or is refused for a reason that is not about fit; an unlisted part is refused
+for a reason that is); blocked reasons equal to the plan the press would run; pending chassis;
+Browse All offering a free mount, a replacement, or "No compatible mount" only when no mount
+fits; `layoutBench` for all 20 chassis at 844 x 390, 870 x 340, 667 x 375 and 932 x 430, in
+all four views and with two body extents (no tile on another tile or on the car, tiles and
+car on the floor, every leader from its tile's edge to its mount, no leader under a tile, no
+two leaders crossing, scrolling only for more than eight mounts); column order; scale of two
+or better on every phone; a unique short label for every mount.
+
+**End to end (`tests/e2e/garage.spec.ts`, 31 tests)** on the production build: the first-run
+flow from a blank browser to a race in a car built in the garage, by slot; Use Starter Car and
+skipped tips; over-budget and overweight attempts; undo and redo by button and keyboard, and
+Reset from More; chassis swap with refund notice; nudge, drag on the clean car, rotate, fire
+buttons with their explanation, replace and remove; a car with nothing drawn over it and
+leaders that follow the four views; chassis without art (the manifest is filtered in the
+test); the ten-second warning, the lock and the race; an illegal draft at zero racing the
+last legal car; the test clock ignored without the debug flag; a flagged build (red tile with
+badge, red leader, Ready held back and explaining itself, Repair Build); save, duplicate,
+rename and delete across reloads; corrupt storage; three taps and one tap to a race; Quick
+Build; Change My Build after a full race; a keyboard-only install, nudge, catalog tabs and
+Ready; Browse All Parts; layout at 870 x 370, 870 x 340, 844 x 390, 667 x 375, 932 x 430,
+1024 x 768 and 1440 x 900 (no page scroll, every control whole and inside the viewport, touch
+targets of 44 px or more and rows of 48, Ready a full 48 px and the only primary control,
+Ready and credits uncovered, the car drawn whole at an integer scale of two or more, no tile
+on the car's drawn pixels or on another tile, five whole list rows with a slot selected, the
+part card without scrolling from 370 px of height, no shift when messages appear, all four
+views); the Crab and the Platform loaded with parts at five phone sizes; portrait at 450 x
+840 (car strip of about 30 percent, one row of slots in car order, one-line tips, six whole
+rows, gauges directly above Ready); home, preview and blueprints at 667 x 375.
 
 `tests/e2e/drive.spec.ts` now reaches a race through the garage (Start Racing, Build Your
-Car, Ready) and picks chassis there.
+Car, Ready) and picks chassis there, from the Chassis slot.
 
 Not automated: screen-reader output, real touch drag on a phone, Reduced Motion (the styles
-are there; nothing asserts them), and whether a child finds the garage clear in 60 seconds.
+and the still outline are there; nothing asserts them), the redesign on the owner's real
+phone (it has been checked only in headless Chromium at his viewport sizes), and whether a
+child finds the garage clear in 60 seconds.
 
 ## Cannot be verified from this repository
 
