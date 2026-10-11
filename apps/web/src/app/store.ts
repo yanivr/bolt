@@ -6,7 +6,15 @@ import { create } from 'zustand';
 import type { SteeringMode } from '../input/driveInput.js';
 import type { LinkMode, LinkStatus } from '../network/link.js';
 
-export type Screen = 'boot' | 'home' | 'race';
+/**
+ * The flow of Section 1.3: Home, Track Preview, the timed garage, the race. My Blueprints is
+ * reached from Home; inside the garage it opens as an overlay so the build clock keeps running.
+ */
+export type Screen = 'boot' | 'home' | 'preview' | 'garage' | 'race' | 'blueprints';
+
+/** Tutorial milestones kept in local storage (Section 4). */
+export const MILESTONE_BUILT = 'built';
+export const MILESTONE_GARAGE_TIPS = 'garage_tips';
 
 export type Settings = {
   drivingHand: 'left' | 'right';
@@ -96,8 +104,15 @@ type AppState = {
   milestones: Record<string, boolean>;
   /** The car the player will race: always a legal blueprint for the current catalog. */
   blueprint: VehicleBlueprint;
+  /**
+   * A saved build the player asked to review in the garage. It may not be legal; the garage
+   * opens it as a draft and it only reaches a race once the validator accepts it.
+   */
+  garageDraft: VehicleBlueprint | null;
   paused: boolean;
   setScreen: (screen: Screen) => void;
+  openGarageWith: (draft: VehicleBlueprint) => void;
+  takeGarageDraft: () => VehicleBlueprint | null;
   setBoot: (boot: BootState) => void;
   updateSettings: (patch: Partial<Settings>) => void;
   completeMilestone: (id: string) => void;
@@ -112,8 +127,15 @@ export const useApp = create<AppState>((set, get) => ({
   settings: loadSettings(),
   milestones: loadMilestones(),
   blueprint: loadBlueprint(),
+  garageDraft: null,
   paused: false,
   setScreen: (screen) => set({ screen, paused: false }),
+  openGarageWith: (draft) => set({ garageDraft: draft, screen: 'garage', paused: false }),
+  takeGarageDraft: () => {
+    const draft = get().garageDraft;
+    if (draft) set({ garageDraft: null });
+    return draft;
+  },
   setBoot: (boot) => set({ boot }),
   updateSettings: (patch) => {
     const settings = { ...get().settings, ...patch };

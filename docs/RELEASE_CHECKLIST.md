@@ -4,7 +4,7 @@ Tracks the milestone gates of Section 20 and the launch acceptance list of Secti
 An item is checked only when it has actually been verified, and the note says how. "Done in
 code" is not the same as "verified"; where those differ, the item stays open.
 
-Last updated: October 10, 2026, Milestone B data and rules implemented.
+Last updated: October 11, 2026, Milestone B implemented: rules, garage and art for all 120 parts.
 
 ## Milestone gates
 
@@ -36,8 +36,9 @@ production of the remaining sixteen chassis until the car art and driving feel a
 
 ### Milestone B: garage and engineering
 
-Split between three engineers. The data and rules half is implemented and tested; the art
-and the garage screen are not, so the milestone is **in progress**.
+Implemented and passing the automated suite (1,375 unit, integration and feel tests; 41
+end-to-end tests in headless Chromium). **Not passed**: nobody has used the garage on a real
+phone, and the art has not been reviewed by a person.
 
 Data and rules (verified by the automated suite, see `docs/TEST_PLAN.md`):
 
@@ -53,9 +54,14 @@ Data and rules (verified by the automated suite, see `docs/TEST_PLAN.md`):
 
 Still open in Milestone B:
 
-- [ ] Garage screen (Section 15.4 to 15.6). **Not started here.** The home screen has only the Milestone A chassis picker, now backed by blueprints.
-- [ ] Sprites for 16 chassis, 19 engines, 19 wheel kits and all 60 mounted parts. Tracked by `SPRITES_PENDING` in `tests/unit/assets.test.ts`. Until they exist those chassis cannot be picked and mounted parts are not drawn.
-- [ ] Mounted parts drawn on the car. Needs the sprites and the composition work.
+- [x] Garage screen (Section 5.6): workbench with mount markers, six categories, part cards, compare pane with deltas, five indicators with breakdowns, undo and redo, paint and name, first-build tips. Verified by 41 unit and 25 end-to-end tests in headless Chromium at phone, tablet and desktop sizes. **Not verified on a real phone or by a person.**
+- [x] Flow: Home, Track Preview, 60-second garage, race, `Change My Build`; `Use Last Build` and `Quick Build` from Home.
+- [x] My Blueprints in local storage, 30 cars, with flagged stale builds and repair.
+- [ ] **Deferred to Milestone E:** short share codes (`Load Code`, `Copy Code`) and a server-owned build timer. The client clock locks the last legal snapshot today; `setDeadline` and `lockWith` are the hooks for the server. No code control is shown.
+- [ ] **Not built:** two-finger zoom on the workbench, flipping paired parts, the biome diorama on Track Preview, a second weather preset to choose.
+- [x] Sprites for all 20 chassis (with mount heights), 20 engines, 20 wheel kits and 60 mounted parts, plus 32 and 24 pixel catalog icons rendered from the same models. `SPRITES_PENDING` in `tests/unit/assets.test.ts` is empty and the test fails if any catalog part loses its sheet. **Art quality is unreviewed by a person.** Known weak spots: Wagon and Pickup are close in outline; Cobra reads as a red mass; several tire kits (Balloon, Mud, Monster, Rain) differ mostly by size on a dark road; catalog icons are small inside their tiles.
+- [x] Mounted parts drawn on the car in the race, the garage and every thumbnail through the one shared compositor, lifted to the bodywork height of their mount. Checked in screenshots (`tests/visual/loaded.ts`, `tests/visual/garage.ts`).
+- [x] Engines in mid and front bays draw a sheet without tail pipes (`engineInBay`), so pipes no longer cross the cab.
 - [ ] Player-facing HUD for heat and power. Only the debug readout shows them.
 - [ ] Blueprint storage and codes on the server (PostgreSQL arrives in Milestone E); blueprints live in local storage today.
 - [ ] Balance review of the seed values by a person. One known question: Tiny Trouble is nearly as fast as the Straight-Line Rocket for two thirds of the price (`docs/BALANCE_CHANGELOG.md`).
@@ -72,12 +78,12 @@ settings. G: load, security, Docker deployment, public HTTPS.
 
 - [ ] Public HTTPS browser build opens on target mobile devices. _No deployment; no URL exists._
 - [ ] First-time onboarding and starter car work from a blank session. _Partial: a blank session reaches a drive with one steering hint. No garage or first race against AI yet._
-- [ ] All seven principal screen families plus connection and error states are interactive. _Boot, a reduced Home, Race and Settings exist. Lobby, track preview, garage, load code, VS, results, blueprints do not._
-- [ ] 20 chassis, 20 engines, 20 tire kits, 20 weapons, 20 defenses, 20 utilities. _4 chassis, 1 engine, 1 tire kit._
+- [ ] All seven principal screen families plus connection and error states are interactive. _Boot, Home, Track Preview, Garage, My Blueprints, Race and Settings exist. Lobby, load code, VS and results do not._
+- [ ] 20 chassis, 20 engines, 20 tire kits, 20 weapons, 20 defenses, 20 utilities. _All 120 exist in rules and in art. Weapons, defenses and utilities have no race behavior until Milestone C._
 - [ ] All 120 catalog parts covered by behavior or primitive tests.
-- [ ] Arbitrary legal assemblies composited and physically validated. _Compositor is general and tested for the three mandatory layers; mounted parts arrive in Milestone B._
+- [ ] Arbitrary legal assemblies composited and physically validated. _Compositor draws any legal blueprint including mounted parts; all templates are raced in tests._
 - [ ] Multiplayer garage locks after 60 seconds and never spends more than 1,000 credits.
-- [ ] Every car has meaningful heat, energy, mass and stability behavior. _Mass and grip only._
+- [ ] Every car has meaningful heat, energy, mass and stability behavior. _Implemented in the simulation; only the debug readout shows heat and power in a race._
 - [ ] Top-down float steering, braking and left-handed actions work with two fingers. _Automated two-finger tests pass; real-device check open. No action buttons beyond the menu yet._
 - [ ] Two friends can enter by code or link and finish a synchronized match.
 - [ ] AI uses the same physics, funds and weapon rules as a human. _A centerline driver exists and uses the same controls and physics; no rival car yet._
@@ -94,7 +100,7 @@ settings. G: load, security, Docker deployment, public HTTPS.
 - [ ] Low-effects settings preserve readability and touch responsiveness. _Shake amount and reduced flashes exist; the camera no longer rotates or zooms at all; particle quality tiers do not._
 - [ ] Device tests and network stress tests meet documented budgets.
 - [ ] Privacy disclosure, deletion controls, error handling, backups and HTTPS are in place. _Guest tokens carry no personal data and can be cleared locally; no privacy page yet._
-- [ ] Automated tests and clean install and build commands pass on the committed revision. *A fresh clone installs from the lockfile, passes `pnpm check` (157 tests), builds and boots. Playwright passes 10 of 10 locally. CI itself has never run.*
+- [ ] Automated tests and clean install and build commands pass on the committed revision. *Locally: 1,375 Vitest tests and 41 Playwright tests pass and the build succeeds. CI itself has never run.*
 
 ## Launch blockers known today
 

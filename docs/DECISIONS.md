@@ -329,3 +329,68 @@ in catalog data or `packages/shared/src/balance.ts`, and can change without touc
     overshoot. The default Beetle's numbers are unchanged from 0.2.0.
 60. **HUD.** No player-facing HUD was added for heat or power; that belongs to the HUD work.
     The debug readout shows both so the model can be watched while driving.
+
+## Milestone B, garage and flow (October 10, 2026)
+
+61. **One car renderer outside the race.** `components/CarCanvas.tsx` draws any blueprint from
+    the real sheets through the shared `layoutCar`, with `resolveCarSprites` and
+    `mountedPartSprites`, the exact-color paint swap, an integer CSS scale and nearest-neighbor
+    sampling. The home turntable, the workbench and every thumbnail use it; `CarTurntable` is
+    gone. A mounted part whose sheet is missing from the manifest, or fails to download, is
+    left off the drawing and stays fully editable through its mount marker.
+62. **Mount markers are placed by the compositor.** Mount centres, socket corners and part
+    footprints are passed through `layoutCar` as if they were parts (`projectPoints`), so a
+    marker is exactly where the part sprite is drawn, including the lift of the tilted view. A
+    drag is turned back into chassis-local pixels with the inverse of the same rotation.
+63. **Rotate view steps through four headings**, nose up, right, down and left. The diagonal
+    headings need a much smaller scale to fit a phone and put mounts off the body, so they are
+    left to the turntable. The workbench picks the largest whole-number scale (2 to 6) at
+    which the body and every socket fit the current view.
+64. **Layout.** Category rail on the far left for the full height (width is cheap on a
+    landscape phone, height is not), the car in the middle, the part list on the right, the
+    five indicators and the actions along the bottom, as in the owner's mockup. Section 5.15
+    gives the car 48 percent; it has about 45 percent of what the rail leaves. Undo and Redo
+    sit in the header beside Back. Under 740 px wide, Reset, Save and Quick Build fold into a
+    `More` menu and the score strip shows glyphs instead of names, so nothing is clipped at
+    667 x 375. From 1100 px the list and the compare pane are side by side.
+65. **The compare pane replaces the list on a phone** and has previous and next buttons, so
+    stepping through a category is one tap per part. A card's benefit and downside are each
+    one line; when a part cannot be installed the validator's reason takes the place of the
+    downside line, so cards never change height. The full text is in the compare pane
+    (Section 5.15: secondary descriptions one tap away on a short phone).
+66. **Buying is always the Install, Replace or Swap button.** `planInstall` in
+    `garage/buildSession.ts` decides what a press means and is used for the card's reason,
+    the preview and the press itself, so the three cannot disagree. A blocked button stays
+    focusable (`aria-disabled`) and a press on it states the reason instead of doing nothing.
+    Replace is remove plus install as one history step, with spend and refund compared
+    against the build before either.
+67. **Selection.** Tapping an empty mount filters the list to what fits it. Tapping an
+    installed part opens its tools (nudge, rotate, fire button, remove, replace). `Replace`
+    in the tools targets the mount; opening a category from the rail lets go of a part that
+    was only selected for adjusting. Nudge arrows are relative to the car, not the screen.
+68. **Build clock.** The session holds an absolute deadline and the newest snapshot the
+    validator accepted. `tick` locks that snapshot at the deadline; `lockWith` and
+    `setDeadline` exist so a server can own the phase in Milestone E. The clock is local
+    today and runs in solo play because the brief asks for it. `?buildSeconds=N` changes it
+    only in development builds or with `?debug=1`.
+69. **Illegal drafts.** Garage edits cannot make one, so they come only from saved builds. A
+    flagged card offers `Repair Build` (the shared auto-repair, reporting what it removed) and
+    `Review`, which opens the draft in the garage with the offending part and category
+    marked, Ready held back with the reason, and the same repair one press away.
+70. **My Blueprints is local.** `bolt.blueprints.v1` holds up to 30 entries. Each is parsed
+    with the shared zod schema and then validated; anything that is not a blueprint is
+    dropped, anything no longer legal is kept and flagged. Share codes (`CAR-XXXXXX-XX`) need
+    the server and are not shown anywhere.
+71. **Track Preview shows the course map, not a diorama.** There is no biome diorama art.
+    Corners are counted from the track runtime (bends tighter than 800 px radius through 45
+    degrees or more), lap length from its measured length, and both tips from
+    `SURFACE_GRIP`, `COOLING_MULTIPLIER` and the solar factors. Only the baked weather preset
+    is offered.
+72. **Home.** The Milestone A chassis picker is replaced by the garage. `Use Last Build`
+    appears once a build has been raced. The modes of later milestones are still not shown.
+73. **Not done from Section 5.6:** two-finger zoom on the workbench, flipping a paired part,
+    and the inventory tray (a part that does not fit is refunded at once, which the
+    specification also allows).
+
+74. **Engines in a bay lose their tail pipes.** Six chassis (Scorpion, Trike, Wagon, Rammer, Drifter, Pickup) carry the engine ahead of the tail. Every engine is baked twice: the full sheet, and a `bay` sheet without the solids that hang below the deck. A chassis whose engine anchor is forward of y 15 is marked `engineInBay` and draws the bay sheet (`engineSheetFor`). The chassis art places its own exhaust anchors.
+75. **Street tire cell is 24 px.** At 20 px the tilted render clipped at some directions.

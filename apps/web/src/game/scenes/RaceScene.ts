@@ -19,6 +19,7 @@ import {
   clamp,
   createDriverScratch,
   driveCenterline,
+  engineSheetFor,
   isWrongWay,
   lapPosition,
   lerp,
@@ -130,9 +131,9 @@ export class RaceScene extends Phaser.Scene {
       manifests.cars.wheels[loadout.tireKitId]!.sheet,
     );
     sheet(
-      `engine:${loadout.engineId}`,
+      `engine:${loadout.engineId}:${chassis.engineInBay ? 'bay' : 'tail'}`,
       manifests.carsBase,
-      manifests.cars.engines[loadout.engineId]!.sheet,
+      engineSheetFor(chassis, manifests.cars.engines[loadout.engineId]!),
     );
     for (const partId of new Set(this.cfg.parts.map((p) => p.partId))) {
       const ref = manifests.cars.parts?.[partId];
@@ -210,7 +211,7 @@ export class RaceScene extends Phaser.Scene {
         brake: `car:${chassis.id}:brake`,
         head: `car:${chassis.id}:head`,
         wheels: `wheel:${loadout.tireKitId}`,
-        engine: `engine:${loadout.engineId}`,
+        engine: `engine:${loadout.engineId}:${chassis.engineInBay ? 'bay' : 'tail'}`,
         parts: Object.fromEntries(this.cfg.parts.map((p) => [p.partId, `part:${p.partId}`])),
       },
       this.cfg.parts,

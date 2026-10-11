@@ -132,6 +132,8 @@ export function RaceScreen() {
 
   const raceAgain = useCallback(() => game.current?.restart(), []);
   const goHome = useCallback(() => setScreen('home'), [setScreen]);
+  // Back to the garage with the car that just raced, on a fresh build clock.
+  const changeBuild = useCallback(() => setScreen('garage'), [setScreen]);
 
   const errorCopy =
     load.kind === 'error'
@@ -226,6 +228,9 @@ export function RaceScreen() {
             <div className="dialog-actions">
               <button className="btn btn-primary" onClick={raceAgain} autoFocus>
                 {STRINGS.race.raceAgain}
+              </button>
+              <button className="btn" onClick={changeBuild}>
+                {STRINGS.race.changeBuild}
               </button>
               <button className="btn" onClick={goHome}>
                 {STRINGS.race.backHome}

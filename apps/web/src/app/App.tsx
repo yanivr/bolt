@@ -2,8 +2,11 @@ import { useEffect } from 'react';
 import { loadManifests } from '../game/assets.js';
 import type { GameManifests } from '../game/assets.js';
 import { BootScreen } from '../pages/BootScreen.js';
+import { BlueprintsScreen } from '../pages/BlueprintsScreen.js';
+import { GarageScreen } from '../pages/GarageScreen.js';
 import { HomeScreen } from '../pages/HomeScreen.js';
 import { RaceScreen } from '../pages/RaceScreen.js';
+import { TrackPreviewScreen } from '../pages/TrackPreviewScreen.js';
 import { useApp } from './store.js';
 
 export const TRACK_ID = 'city_01';
@@ -55,6 +58,9 @@ export function App() {
     >
       {screen === 'boot' && <BootScreen />}
       {screen === 'home' && <HomeScreen />}
+      {screen === 'preview' && <TrackPreviewScreen />}
+      {screen === 'garage' && <GarageScreen />}
+      {screen === 'blueprints' && <BlueprintsScreen />}
       {screen === 'race' && <RaceScreen />}
     </div>
   );

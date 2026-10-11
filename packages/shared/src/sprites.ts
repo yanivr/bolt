@@ -1,4 +1,9 @@
-import type { CarAtlasManifest } from './assets.js';
+import type {
+  CarAtlasManifest,
+  ChassisSpriteManifest,
+  EngineSpriteManifest,
+  SpriteSheetRef,
+} from './assets.js';
 import { resolveBlueprint } from './blueprint.js';
 import type { MountedPartSprite } from './compose.js';
 import type { Catalog, VehicleBlueprint, VehicleLoadout } from './types.js';
@@ -43,6 +48,14 @@ export function resolveCarSprites(cars: CarAtlasManifest, blueprint: VehicleBlue
     return { loadout: null, substituted };
   const paintId = has(cars.paints, blueprint.paintId) ? blueprint.paintId : FALLBACK_PAINT;
   return { loadout: { chassisId: blueprint.chassisId, engineId, tireKitId, paintId }, substituted };
+}
+
+/** The engine sheet a chassis draws: the tail version, or the piped-in version for a bay. */
+export function engineSheetFor(
+  chassis: ChassisSpriteManifest,
+  engine: EngineSpriteManifest,
+): SpriteSheetRef {
+  return chassis.engineInBay && engine.bay ? engine.bay : engine.sheet;
 }
 
 /** Chassis ids that can be shown and driven today, in catalog order. */

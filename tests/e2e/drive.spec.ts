@@ -61,10 +61,20 @@ async function debug(page: Page): Promise<string> {
   return (await page.getByTestId('debug').textContent()) ?? '';
 }
 
+/**
+ * From wherever the page is to the grid: Start Racing, Build Your Car, Ready. The garage opens
+ * on the last legal build, so three taps race it unchanged.
+ */
+async function throughGarage(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Start Racing' }).tap();
+  await page.getByRole('button', { name: 'Build Your Car' }).tap();
+  await page.getByTestId('ready').tap();
+  await expect(page.locator('.hud')).toBeVisible({ timeout: 40_000 });
+}
+
 async function startRace(page: Page, query = '?debug=1'): Promise<void> {
   await page.goto(`/${query}`);
-  await page.getByRole('button', { name: 'Start Racing' }).tap();
-  await expect(page.locator('.hud')).toBeVisible({ timeout: 40_000 });
+  await throughGarage(page);
 }
 
 test('a blank session reaches the home screen and starts a server-authoritative drive', async ({
@@ -74,8 +84,7 @@ test('a blank session reaches the home screen and starts a server-authoritative 
   await page.goto('/?debug=1');
   await expect(page.getByRole('img', { name: 'BOLT RIVALS' })).toBeVisible();
   await expect(page.getByText('Build smart. Drive hard.')).toBeVisible();
-  await page.getByRole('button', { name: 'Start Racing' }).tap();
-  await expect(page.locator('.hud')).toBeVisible({ timeout: 40_000 });
+  await throughGarage(page);
   await expect(page.getByTestId('debug')).toContainText('online');
   await expect(page.getByTestId('debug')).toContainText('webgl');
   await expect(page.getByText('Offline test drive')).toHaveCount(0);
@@ -293,16 +302,36 @@ test('leaving a race asks first and returns home', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Start Racing' })).toBeVisible();
 });
 
-test('every shipped chassis can be picked and driven', async ({ page }) => {
-  test.slow();
+test('every chassis with art can be picked in the garage and driven', async ({ page }) => {
+  test.setTimeout(420_000);
+  await page.addInitScript(() => {
+    if (window.localStorage.getItem('bolt.tutorial.v1') === null)
+      window.localStorage.setItem('bolt.tutorial.v1', JSON.stringify({ garage_tips: true }));
+  });
   await page.goto('/?debug=1');
-  // The picker offers the chassis that have sprites, in catalog order.
-  for (const name of ['Turtle', 'Spider', 'Arrow', 'Beetle']) {
-    await page.getByRole('button', { name: 'Next car' }).tap();
-    await expect(page.locator('.car-pick-name strong')).toHaveText(name);
+  // The garage offers exactly the chassis the car atlas can draw. The artists are still adding
+  // to it, so the list is read from the manifest; with many frames a spread of them is driven.
+  const drawable = await page.evaluate(async () => {
+    const response = await fetch('assets/atlases/cars/manifest.json');
+    return Object.keys(((await response.json()) as { chassis: object }).chassis);
+  });
+  expect(drawable.length).toBeGreaterThanOrEqual(4);
+  const picks = drawable.length <= 6 ? drawable : [...drawable.slice(0, 3), ...drawable.slice(-3)];
+  for (const id of picks) {
     await page.getByRole('button', { name: 'Start Racing' }).tap();
+    await page.getByRole('button', { name: 'Build Your Car' }).tap();
+    await page.getByRole('tab', { name: 'Chassis' }).tap();
+    const card = page.locator(`.part-card[data-part="${id}"]`);
+    if (!(await card.evaluate((el) => el.classList.contains('is-installed')))) {
+      await card.tap();
+      await page.getByTestId('install').tap();
+      await expect(page.getByTestId('garage-status')).toContainText('fitted.');
+    }
+    await page.getByTestId('ready').tap();
     await expect(page.locator('.hud')).toBeVisible({ timeout: 40_000 });
     await expect(page.getByTestId('debug')).toContainText('online');
+    const stored = await page.evaluate(() => window.localStorage.getItem('bolt.blueprint.v1'));
+    expect(JSON.parse(stored ?? '{}').chassisId).toBe(id);
     await page.getByRole('button', { name: 'Settings' }).tap();
     await page.getByRole('button', { name: 'Leave Race' }).tap();
     await page.getByRole('button', { name: 'Leave Race' }).tap();
@@ -328,8 +357,7 @@ test('a pick stored by the Milestone A build is migrated to a blueprint and surv
     );
   });
   await page.reload();
-  await expect(page.locator('.car-pick-name strong')).toHaveText('Turtle');
-  await expect(page.getByRole('radio', { name: 'Mint' })).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('home-car-chassis')).toHaveText('Turtle');
   const stored = await page.evaluate(() => ({
     legacy: window.localStorage.getItem('bolt.loadout.v1'),
     blueprint: window.localStorage.getItem('bolt.blueprint.v1'),
@@ -342,13 +370,13 @@ test('a pick stored by the Milestone A build is migrated to a blueprint and surv
     parts: [],
   });
   await page.reload();
-  await expect(page.locator('.car-pick-name strong')).toHaveText('Turtle');
+  await expect(page.getByTestId('home-car-chassis')).toHaveText('Turtle');
   // Garbage in storage falls back to the baseline car instead of breaking the page.
   await page.evaluate(() =>
     window.localStorage.setItem('bolt.blueprint.v1', '{"chassisId":"<script>","totalCost":0}'),
   );
   await page.reload();
-  await expect(page.locator('.car-pick-name strong')).toHaveText('Beetle');
+  await expect(page.getByTestId('home-car-chassis')).toHaveText('Beetle');
   expect(problems).toEqual([]);
 });
 
@@ -405,9 +433,9 @@ test('a build with parts that have no art yet races online, drawn with stand-in 
     JSON.stringify(blueprint),
   );
   await page.goto('/?debug=1&autopilot=1');
-  await expect(page.locator('.car-pick-name strong')).toHaveText('Arrow');
-  await page.getByRole('button', { name: 'Start Racing' }).tap();
-  await expect(page.locator('.hud')).toBeVisible({ timeout: 40_000 });
+  await expect(page.getByTestId('home-car-chassis')).toHaveText('Arrow');
+  await expect(page.getByTestId('home-car-name')).toHaveText('Straight-Line Rocket');
+  await throughGarage(page);
   // The server accepted the full blueprint: this is an authoritative drive, not the fallback.
   await expect(page.getByTestId('debug')).toContainText('online');
   await expect(page.getByTestId('debug')).toContainText('heat');

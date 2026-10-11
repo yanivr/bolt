@@ -42,7 +42,7 @@ function streetTire(rollPhase: number): Model {
 
 export const STREET_WHEEL_ART: WheelArt = {
   id: 'tires_street',
-  cell: 20,
+  cell: 24,
   rollFrames: 3,
   model: streetTire,
 };

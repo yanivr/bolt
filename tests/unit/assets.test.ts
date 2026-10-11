@@ -82,128 +82,7 @@ describe('PNG codec', () => {
  * to empty before launch. Nothing here is drawn with a made-up sprite: a chassis on this list
  * cannot be picked, and an engine or wheel kit on it is drawn with the default one.
  */
-export const SPRITES_PENDING: readonly string[] = [
-  // Chassis: 16 of 20.
-  'chassis_needle',
-  'chassis_crab',
-  'chassis_cobra',
-  'chassis_scorpion',
-  'chassis_buggy',
-  'chassis_chameleon',
-  'chassis_brick',
-  'chassis_trike',
-  'chassis_wagon',
-  'chassis_rammer',
-  'chassis_drifter',
-  'chassis_kangaroo',
-  'chassis_horseshoe',
-  'chassis_pickup',
-  'chassis_twins',
-  'chassis_platform',
-  // Engines: 19 of 20.
-  'engine_mini_electric',
-  'engine_v6',
-  'engine_v8',
-  'engine_v12',
-  'engine_small_turbo',
-  'engine_twin_turbo',
-  'engine_supercharger',
-  'engine_diesel',
-  'engine_electric_sport',
-  'engine_electric_eco',
-  'engine_hybrid',
-  'engine_rotary',
-  'engine_turbine',
-  'engine_rocket',
-  'engine_twin',
-  'engine_spring',
-  'engine_offroad',
-  'engine_resilient',
-  'engine_experimental',
-  // Wheel kits: 19 of 20.
-  'tires_slick',
-  'tires_rain',
-  'tires_sand',
-  'tires_mud',
-  'tires_snow',
-  'tires_ice',
-  'tires_soft',
-  'tires_hard',
-  'tires_drift',
-  'tires_armored',
-  'tires_solid',
-  'tires_balloon',
-  'tires_monster',
-  'tires_micro',
-  'tires_halftrack',
-  'tires_track',
-  'tires_magnetic',
-  'tires_adaptive',
-  'tires_blades',
-  // Weapons: 20 of 20.
-  'weapon_front_mg',
-  'weapon_rear_mg',
-  'weapon_turret',
-  'weapon_shotgun',
-  'weapon_railshot',
-  'weapon_rocket',
-  'weapon_homing',
-  'weapon_mine',
-  'weapon_oil',
-  'weapon_foam',
-  'weapon_emp',
-  'weapon_tesla',
-  'weapon_flame',
-  'weapon_frost',
-  'weapon_hammer',
-  'weapon_saw',
-  'weapon_harpoon',
-  'weapon_air',
-  'weapon_boomerang',
-  'weapon_mortar',
-  // Defenses: 20 of 20.
-  'defense_light_plate',
-  'defense_heavy_plate',
-  'defense_front_bumper',
-  'defense_rear_bumper',
-  'defense_side_panels',
-  'defense_wheel_cage',
-  'defense_engine_case',
-  'defense_ceramic',
-  'defense_breakaway',
-  'defense_composite',
-  'defense_energy_shield',
-  'defense_faraday',
-  'defense_heatguard',
-  'defense_antimissile',
-  'defense_minesweeper',
-  'defense_fireproof',
-  'defense_oilproof',
-  'defense_damper',
-  'defense_steer_assist',
-  'defense_reactive',
-  // Utilities: 20 of 20.
-  'utility_spare',
-  'utility_repair',
-  'utility_fan',
-  'utility_radiator',
-  'utility_battery',
-  'utility_generator',
-  'utility_capacitor',
-  'utility_nitro',
-  'utility_overdrive',
-  'utility_traction',
-  'utility_gyro',
-  'utility_radar',
-  'utility_minesensor',
-  'utility_decoy',
-  'utility_jump',
-  'utility_winch',
-  'utility_ballast',
-  'utility_spoiler',
-  'utility_targeting',
-  'utility_solar',
-];
+export const SPRITES_PENDING: readonly string[] = [];
 
 describe('car atlases match the catalog', () => {
   it('has a sprite sheet for every catalog part that is not on SPRITES_PENDING, and for none that is', () => {
@@ -241,7 +120,9 @@ describe('car atlases match the catalog', () => {
 
   it('offers only chassis with art in the picker, and draws stand-ins for drawing only', () => {
     const drawable = drawableChassisIds(cars, CATALOG);
-    expect(drawable).toEqual(Object.keys(CATALOG.chassis).filter((id) => !SPRITES_PENDING.includes(id)));
+    expect(drawable).toEqual(
+      Object.keys(CATALOG.chassis).filter((id) => !SPRITES_PENDING.includes(id)),
+    );
     expect(drawable).toContain('chassis_beetle');
     for (const id of drawable) {
       // The picker's car for each drawable chassis resolves to sheets that exist.
@@ -262,14 +143,17 @@ describe('car atlases match the catalog', () => {
     expect(buildHash(rocket)).toBe(before);
     if (SPRITES_PENDING.includes('chassis_arrow')) expect(shown.loadout).toBeNull();
     else {
-      const expectId = (own: string, fallback: string) => (SPRITES_PENDING.includes(own) ? fallback : own);
+      const expectId = (own: string, fallback: string) =>
+        SPRITES_PENDING.includes(own) ? fallback : own;
       expect(shown.loadout).toEqual({
         chassisId: 'chassis_arrow',
         engineId: expectId('engine_v8', FALLBACK_ENGINE_SPRITE),
         tireKitId: expectId('tires_slick', FALLBACK_TIRE_SPRITE),
         paintId: rocket.paintId,
       });
-      expect(shown.substituted).toEqual(['engine_v8', 'tires_slick'].filter((id) => SPRITES_PENDING.includes(id)));
+      expect(shown.substituted).toEqual(
+        ['engine_v8', 'tires_slick'].filter((id) => SPRITES_PENDING.includes(id)),
+      );
     }
     // A chassis without art has no stand-in: it cannot be drawn, so it cannot be picked.
     for (const id of SPRITES_PENDING.filter((p) => p.startsWith('chassis_'))) {
@@ -277,7 +161,10 @@ describe('car atlases match the catalog', () => {
       expect(drawable).not.toContain(id);
     }
     // An unknown paint falls back to the default paint, never to an undefined ramp.
-    expect(resolveCarSprites(cars, { ...baselineBlueprint(), paintId: 'paint_missing' }).loadout!.paintId).toBe('paint_signal');
+    expect(
+      resolveCarSprites(cars, { ...baselineBlueprint(), paintId: 'paint_missing' }).loadout!
+        .paintId,
+    ).toBe('paint_signal');
   });
 
   it.each(Object.values(cars.chassis))(
@@ -290,7 +177,9 @@ describe('car atlases match the catalog', () => {
         // Lamps can be hidden behind the bodywork at some headings in the tilted view.
         if (ref === entry.brakeLights || ref === entry.headlights) continue;
         for (let h = 0; h < CAR_HEADINGS; h++)
-          expect(frameIsEmpty(image, ref, h % ref.columns, Math.floor(h / ref.columns))).toBe(false);
+          expect(frameIsEmpty(image, ref, h % ref.columns, Math.floor(h / ref.columns))).toBe(
+            false,
+          );
       }
       const def = CHASSIS[entry.id]!;
       expect(entry.wheelAnchors.map((w) => [w.id, w.x, w.y, w.steers])).toEqual(
@@ -321,31 +210,32 @@ describe('car atlases match the catalog', () => {
 
   it('bakes bodies in the paint key and keeps that key out of every other layer', () => {
     const keyOf = (hex: string) => parseInt(hex.slice(1), 16);
-    for (const entry of Object.values(cars.chassis)) {
-      const key = new Set(entry.paintKey.map(keyOf));
-      const body = readPng(join(carsDir, entry.body.file));
+    const colorsOf = (file: string) => {
+      const image = readPng(join(carsDir, file));
       const seen = new Set<number>();
-      for (let i = 0; i < body.data.length; i += 4)
-        if (body.data[i + 3] !== 0)
-          seen.add((body.data[i]! << 16) | (body.data[i + 1]! << 8) | body.data[i + 2]!);
-      let used = 0;
-      for (const k of key) if (seen.has(k)) used++;
-      expect(used).toBeGreaterThanOrEqual(4);
+      for (let i = 0; i < image.data.length; i += 4)
+        if (image.data[i + 3] !== 0)
+          seen.add((image.data[i]! << 16) | (image.data[i + 1]! << 8) | image.data[i + 2]!);
+      return seen;
+    };
+    const others = new Map<string, Set<number>>();
+    for (const file of [
+      ...Object.values(cars.engines).flatMap((e) => [e.sheet.file, ...(e.bay ? [e.bay.file] : [])]),
+      ...Object.values(cars.wheels).map((w) => w.sheet.file),
+      ...Object.values(cars.parts ?? {}).map((p) => p.sheet.file),
+    ])
+      others.set(file, colorsOf(file));
+    for (const entry of Object.values(cars.chassis)) {
+      const key = entry.paintKey.map(keyOf);
+      const seen = colorsOf(entry.body.file);
+      expect(key.filter((k) => seen.has(k)).length, entry.id).toBeGreaterThanOrEqual(4);
       for (const paint of Object.values(cars.paints))
         expect(paint.ramp).toHaveLength(entry.paintKey.length);
-      const others = [
-        ...Object.values(cars.engines).map((e) => e.sheet.file),
-        ...Object.values(cars.wheels).map((w) => w.sheet.file),
-      ];
-      for (const file of others) {
-        const image = readPng(join(carsDir, file));
-        for (let i = 0; i < image.data.length; i += 4) {
-          if (image.data[i + 3] === 0) continue;
-          expect(
-            key.has((image.data[i]! << 16) | (image.data[i + 1]! << 8) | image.data[i + 2]!),
-          ).toBe(false);
-        }
-      }
+      for (const [file, colors] of others)
+        expect(
+          key.filter((k) => colors.has(k)),
+          `${file} reuses the paint key`,
+        ).toEqual([]);
     }
   });
 
@@ -364,16 +254,19 @@ describe('car atlases match the catalog', () => {
     }
   });
 
-  it('uses only fully opaque or fully clear pixels in body, wheel and engine art', () => {
+  it('uses only fully opaque or fully clear pixels in body, wheel, engine and part art', () => {
     const files = [
       ...Object.values(cars.chassis).map((c) => c.body.file),
       ...Object.values(cars.wheels).map((w) => w.sheet.file),
-      ...Object.values(cars.engines).map((e) => e.sheet.file),
+      ...Object.values(cars.engines).flatMap((e) => [e.sheet.file, ...(e.bay ? [e.bay.file] : [])]),
+      ...Object.values(cars.parts ?? {}).map((p) => p.sheet.file),
     ];
     for (const file of files) {
       const image = readPng(join(carsDir, file));
+      let soft = 0;
       for (let i = 3; i < image.data.length; i += 4)
-        expect(image.data[i] === 0 || image.data[i] === 255).toBe(true);
+        if (image.data[i] !== 0 && image.data[i] !== 255) soft++;
+      expect(soft, file).toBe(0);
     }
   });
 });

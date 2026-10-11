@@ -13,6 +13,7 @@ the specification is the requirement list; rows are added here as milestones lan
 | `pnpm test:e2e`                   | Playwright against the production build in a phone-sized touch viewport |
 | `pnpm art:check`                  | Car atlases match the pipeline byte for byte                            |
 | `npx tsx tests/visual/capture.ts` | Screenshots and a recording for visual review                           |
+| `npx tsx tests/visual/garage.ts <url> <dir> [sizes]` | Home, preview, garage states and blueprints at six viewport sizes |
 | `npx tsx tests/feel/report.ts`    | Handling tables for every chassis (yaw, slip, radius, direction steps)  |
 | `npx tsx tests/feel/pacingReport.ts` | Frame pacing of the shipped render pipeline at 60, 90 and 120 Hz     |
 | `npx tsx tests/feel/buildsReport.ts` | Race time, top speed, launch, heat and stability of every shipped build |
@@ -153,6 +154,40 @@ Before and after output from the October 10 rework is kept in `docs/evidence/fee
 
 Not covered yet: nothing fires, takes damage or repairs (Milestone C), so Defense, Firepower
 and Utility scores are checked for arithmetic and ordering, not against combat outcomes.
+
+## Automated coverage added in Milestone B (garage and flow)
+
+**Unit (`tests/unit/garageStore.test.ts`, 41 tests)** against the garage store on a controlled
+clock: install, replace and remove with exact credits; a mount tap never buys; wheel kits
+priced for the chassis; paint and name leave the hash alone; nudge, rotate and the two-button
+rule; over-budget, overweight, no-mount, one-per-car and unknown-part refusals leave the build
+untouched and carry the right issue; no sequence of presses passes 1,000 credits; undo, redo,
+the 20-step cap and reset; chassis swaps that carry everything, that refund what does not fit
+(one undo step, every credit accounted for) and that are refused; the timer locking the last
+legal snapshot, edits ignored after the lock, Ready gating, a server-driven deadline and
+lock, repair; My Blueprints round trip, corrupt and hostile storage, flagged stale builds,
+repair, the 30-car limit, duplicate, rename, delete; track facts and tips checked against
+the balance tables; copy helpers.
+
+**End to end (`tests/e2e/garage.spec.ts`, 25 tests)** on the production build: the first-run
+flow from a blank browser to a race in a car built in the garage; Use Starter Car and skipped
+tips; over-budget and overweight attempts; undo and redo by button and keyboard; chassis swap
+with refund notice; move, drag, rotate, fire buttons, replace and remove; markers following
+the rotate-view control; chassis without art (the manifest is filtered in the test, because
+the artists are still adding to it); the ten-second warning, the lock and the race; an
+illegal draft at zero racing the last legal car; the test clock ignored without the debug
+flag; flagged build, Ready gating and Repair Build; save, duplicate, rename and delete across
+reloads; corrupt storage; three taps and one tap to a race; Quick Build; Change My Build
+after a full race; a keyboard-only install, nudge and Ready; layout at 844 x 390, 667 x 375,
+932 x 430 and 1024 x 768 (no page scroll, every fixed control whole and inside the viewport,
+touch targets of 44 px or more, Ready and credits uncovered, no shift when messages appear);
+portrait; home, preview and blueprints at 667 x 375.
+
+`tests/e2e/drive.spec.ts` now reaches a race through the garage (Start Racing, Build Your
+Car, Ready) and picks chassis there.
+
+Not automated: screen-reader output, real touch drag on a phone, Reduced Motion (the styles
+are there; nothing asserts them), and whether a child finds the garage clear in 60 seconds.
 
 ## Cannot be verified from this repository
 

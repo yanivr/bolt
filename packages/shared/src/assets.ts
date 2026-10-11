@@ -114,6 +114,11 @@ export type ChassisSpriteManifest = {
   brakeLightAnchors: AnchorPoint[];
   /** Height of the bodywork under each accessory mount, in authored units. Missing means 10. */
   mountHeights?: Record<string, number>;
+  /**
+   * True when the engine sits inside the bodywork instead of at the tail. Such a chassis draws
+   * the engine's `bay` sheet, which has no low tailpipes; the chassis routes its own exhaust.
+   */
+  engineInBay?: boolean;
 };
 
 export type WheelSpriteManifest = {
@@ -127,6 +132,8 @@ export type EngineSpriteManifest = {
   id: string;
   /** One frame per heading, packed row by row. Drawn at the chassis engine anchor. */
   sheet: SpriteSheetRef;
+  /** The same engine without the pipes that hang behind a rear deck. */
+  bay?: SpriteSheetRef;
   exhaustStyle: 'puff' | 'flame' | 'none';
 };
 

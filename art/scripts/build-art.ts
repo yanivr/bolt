@@ -147,6 +147,7 @@ function bakeChassis(art: ChassisArt, wheelArt: WheelArt, baked: Baked): void {
     paintKey: [PAINT_OUTLINE_KEY, ...PAINT_KEY],
     wheelAnchors: def.wheelAnchors.map((w) => ({ id: w.id, x: w.x, y: w.y, steers: w.steers })),
     engineAnchor: art.engineAnchor,
+    ...(art.engineAnchor.y < ENGINE_BAY_Y ? { engineInBay: true } : {}),
     exhausts: art.exhausts,
     headlightAnchors: art.headlightAnchors,
     brakeLightAnchors: art.brakeLightAnchors,
@@ -187,6 +188,11 @@ function bakeWheels(art: WheelArt, baked: Baked): void {
   baked.manifest.wheels[art.id] = entry;
 }
 
+/** Height of the deck an engine rests on; solids wholly below it are tailpipes. */
+const ENGINE_DECK = 9;
+/** An engine anchor this far forward of the tail has bodywork behind it. */
+const ENGINE_BAY_Y = 15;
+
 function bakeEngine(art: EngineArt, baked: Baked): void {
   const frames: PixelBuffer[] = [];
   for (let h = 0; h < CAR_HEADINGS; h++) {
@@ -194,15 +200,25 @@ function bakeEngine(art: EngineArt, baked: Baked): void {
   }
   baked.frames.engines[art.id] = frames;
   baked.files.set(`${art.id}.png`, sheet(frames, CAR_SHEET_COLUMNS));
+  // Mid and front engine bays have bodywork behind the engine, so the low tailpipes that hang
+  // off a rear deck would be drawn across a windshield. The bay sheet leaves them out.
+  const enclosed = { ...art.model, solids: art.model.solids.filter((s) => s.z1 >= ENGINE_DECK) };
+  const bayFrames: PixelBuffer[] = [];
+  for (let h = 0; h < CAR_HEADINGS; h++) {
+    bayFrames.push(renderModel(enclosed, view((h * TAU) / CAR_HEADINGS, art.cell)).image);
+  }
+  baked.files.set(`${art.id}_bay.png`, sheet(bayFrames, CAR_SHEET_COLUMNS));
+  const ref = (file: string) => ({
+    file,
+    frameWidth: art.cell,
+    frameHeight: art.cell,
+    columns: CAR_SHEET_COLUMNS,
+    rows: CAR_HEADINGS / CAR_SHEET_COLUMNS,
+  });
   const entry: EngineSpriteManifest = {
     id: art.id,
-    sheet: {
-      file: `${art.id}.png`,
-      frameWidth: art.cell,
-      frameHeight: art.cell,
-      columns: CAR_SHEET_COLUMNS,
-      rows: CAR_HEADINGS / CAR_SHEET_COLUMNS,
-    },
+    sheet: ref(`${art.id}.png`),
+    bay: ref(`${art.id}_bay.png`),
     exhaustStyle: art.exhaustStyle,
   };
   baked.manifest.engines[art.id] = entry;
