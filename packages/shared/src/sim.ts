@@ -11,7 +11,7 @@ import {
 } from './physics.js';
 import type { CarSnapshot } from './protocol.js';
 import type { ProgressEvent, TrackRuntime } from './track.js';
-import { createProgress, updateProgress } from './track.js';
+import { createProgress, crossesGate, updateProgress } from './track.js';
 import type {
   MatchPhase,
   RaceEnvironment,
@@ -201,6 +201,24 @@ export function stepDriveSession(session: DriveSession, input: ControlInput): St
     raceTimeMs(session),
     SIM_DT,
   );
+  applyProgressEvent(session, event, result);
+  if (event === 'finish' || session.raceTicks * SIM_DT >= RACE_LIMIT_SECONDS) {
+    session.phase = 'FINISHED';
+    if (result.event !== 'finish') result.event = 'finish';
+  }
+  return result;
+}
+
+/**
+ * What a car that is no longer racing is given: off the throttle and on the brake, held just
+ * short of the pull that engages reverse. (At 0.75 a finished car stopped and then backed down
+ * the track for good, which a second car still racing would have met.)
+ */
+export const NEUTRAL_BRAKE: ControlInput = Object.freeze({ steer: 0, brake: 0.58, coast: false });
+export { NEUTRAL_INPUT };
+
+/** Lap timing for a progress event: the same for a step and for a late crossing. */
+function applyProgressEvent(session: DriveSession, event: ProgressEvent, result: StepResult): void {
   result.event = event;
   if (event === 'lap' || event === 'finish') {
     const lapMs = Math.round((session.raceTicks - session.lapStartTick) * SIM_DT * 1000);
@@ -216,17 +234,47 @@ export function stepDriveSession(session: DriveSession, input: ControlInput): St
     // First crossing of the start line: the opening lap is timed from here.
     session.lapStartTick = session.raceTicks;
   }
-  if (event === 'finish' || session.raceTicks * SIM_DT >= RACE_LIMIT_SECONDS) {
-    session.phase = 'FINISHED';
-    if (result.event !== 'finish') result.event = 'finish';
-  }
-  return result;
 }
 
 /**
- * What a car that is no longer racing is given: off the throttle and on the brake, held just
- * short of the pull that engages reverse. (At 0.75 a finished car stopped and then backed down
- * the track for good, which a second car still racing would have met.)
+ * A gate crossed this tick by something other than the car's own driving: the race moves cars
+ * after `stepDriveSession` (contact with the other car, a shove, the winch), and the next
+ * step's test starts from where that move left the car, so without this a car pushed across a
+ * gate was never credited for it and lost the whole lap (found by the bot tournament on Canyon
+ * Switch: a contact moved a car 0.1 px, across the line). Tests the move from (`fromX`,
+ * `fromY`), the position right after the step, to where the car is now, with the same rule as
+ * the step (a forward crossing of the expected gate). Nothing at all happens unless that move
+ * crosses the gate, so every race without such a push is unchanged.
  */
-export const NEUTRAL_BRAKE: ControlInput = Object.freeze({ steer: 0, brake: 0.58, coast: false });
-export { NEUTRAL_INPUT };
+export function creditMovedCrossing(
+  session: DriveSession,
+  fromX: number,
+  fromY: number,
+): StepResult {
+  const result: StepResult = { event: 'none', lapTimeMs: 0 };
+  const m = session.motion;
+  const progress = session.progress;
+  if (session.phase !== 'RACING' || progress.finishedAtMs !== null) return result;
+  if (m.x === fromX && m.y === fromY) return result;
+  const expected = session.track.checkpoints[progress.checkpointIndex]!;
+  let crosses = false;
+  for (const gate of expected.gates)
+    if (crossesGate(session.track, gate, fromX, fromY, m.x, m.y)) crosses = true;
+  if (!crosses) return result;
+  const event = updateProgress(
+    session.track,
+    progress,
+    fromX,
+    fromY,
+    m.x,
+    m.y,
+    m.headingRad,
+    session.telemetry.speed,
+    session.scratch.loc,
+    raceTimeMs(session),
+    0,
+  );
+  applyProgressEvent(session, event, result);
+  if (event === 'finish') session.phase = 'FINISHED';
+  return result;
+}

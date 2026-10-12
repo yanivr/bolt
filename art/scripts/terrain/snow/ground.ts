@@ -17,7 +17,14 @@ import { SNOW, SNOW_ROAD } from './palette.js';
 const SEED = 7701;
 const q = (v: number): number => v >> 1;
 
-function powder(x: number, y: number, d: number, windX: number, windY: number, fresh: number): Color {
+function powder(
+  x: number,
+  y: number,
+  d: number,
+  windX: number,
+  windY: number,
+  fresh: number,
+): Color {
   const big = fbm(x, y, 190, SEED);
   let c: Color = big < 0.4 ? SNOW.powderMid : big > 0.63 ? SNOW.powderHi : SNOW.powder;
   // Drifts: long, low ridges laid along the wind, a soft shadow on their lee side.
@@ -31,8 +38,13 @@ function powder(x: number, y: number, d: number, windX: number, windY: number, f
   else if (drift > 0.74) c = c === SNOW.powderHi ? SNOW.powder : SNOW.powderMid;
   // Wind ripples: thin broken lines across the wind, gone under fresh snow.
   if (fresh < 0.5) {
-    const rip = ((along / 6 + vnoise(along, across, 14, SEED + 2) * 1.5) % 1 + 1) % 1;
-    if (rip < 0.08 && vnoise(x, y, 60, SEED + 3) > 0.7 && vnoise(across, along / 8, 3, SEED + 7) > 0.5) c = c === SNOW.powderHi ? SNOW.powder : SNOW.powderMid;
+    const rip = (((along / 6 + vnoise(along, across, 14, SEED + 2) * 1.5) % 1) + 1) % 1;
+    if (
+      rip < 0.08 &&
+      vnoise(x, y, 60, SEED + 3) > 0.7 &&
+      vnoise(across, along / 8, 3, SEED + 7) > 0.5
+    )
+      c = c === SNOW.powderHi ? SNOW.powder : SNOW.powderMid;
   }
   const h = hash2(x, y, SEED + 4);
   if (h < 0.003) c = SNOW.sparkle;
@@ -56,8 +68,12 @@ export function paintSnowField(env: Env, fresh: number): void {
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
       if (maps.kind[i] !== K_OFF) continue;
-      const jx = Math.round((vnoise(x, y, 26, SEED + 81) - 0.5) * 11 + (vnoise(x, y, 6, SEED + 81 + 2) - 0.5) * 3);
-      const jy = Math.round((vnoise(x, y, 26, SEED + 82) - 0.5) * 11 + (vnoise(x, y, 6, SEED + 82 + 2) - 0.5) * 3);
+      const jx = Math.round(
+        (vnoise(x, y, 26, SEED + 81) - 0.5) * 11 + (vnoise(x, y, 6, SEED + 81 + 2) - 0.5) * 3,
+      );
+      const jy = Math.round(
+        (vnoise(x, y, 26, SEED + 82) - 0.5) * 11 + (vnoise(x, y, 6, SEED + 82 + 2) - 0.5) * 3,
+      );
       const j = Math.min(h - 1, Math.max(0, y + jy)) * w + Math.min(w - 1, Math.max(0, x + jx));
       const s = maps.kind[j] === K_OFF ? maps.surf[j]! : maps.surf[i]!;
       if (s === SURF.ice) put(world, i, pondIce(x, y));
@@ -95,6 +111,10 @@ export function scrapeIceRoad(env: Env): void {
       if (maps.kind[i] === K_PAVE) {
         if (k > -3 && hash2(x >> 1, y >> 1, SEED + 21) < 0.65) put(world, i, SNOW.iceSnow);
         else if (c === SNOW.iceLight) put(world, i, SNOW.ice);
+        // Scraped clear on the racing line: mostly the dark glassy tone, in broad fields, so the
+        // ice under the wheels reads apart from packed snow in falling snow too (its grade
+        // lifts and desaturates everything).
+        else if (c === SNOW.ice && fbm(x, y, 120, SEED + 24) < 0.62) put(world, i, SNOW.iceDark);
       } else if (k < 3 && hash2(x >> 1, y >> 1, SEED + 23) < 0.45) put(world, i, SNOW.iceStreak);
     }
 }
@@ -116,10 +136,12 @@ export function iceCracks(env: Env, cx: number, cy: number, seed: number, arms =
       if (px < 1 || py < 1 || px >= w - 1 || py >= maps.h - 1 || maps.surf[i] !== SURF.ice) return;
       put(world, i, SNOW.iceCrack);
       if (maps.surf[i - w] === SURF.ice) put(world, i - w, SNOW.iceStreak);
-      if (depth < 2 && hash2(px, py, seed + 1) < 0.05) draw(x, y, ang + (hash2(px, py, seed + 2) < 0.5 ? 0.9 : -0.9), len * 0.5, depth + 1);
+      if (depth < 2 && hash2(px, py, seed + 1) < 0.05)
+        draw(x, y, ang + (hash2(px, py, seed + 2) < 0.5 ? 0.9 : -0.9), len * 0.5, depth + 1);
     }
   };
-  for (let k = 0; k < arms; k++) draw(cx, cy, (k / arms) * Math.PI * 2 + hash2(k, 0, seed), 60 + hash2(k, 1, seed) * 90, 0);
+  for (let k = 0; k < arms; k++)
+    draw(cx, cy, (k / arms) * Math.PI * 2 + hash2(k, 0, seed), 60 + hash2(k, 1, seed) * 90, 0);
 }
 
 /** Skate marks: long looping pale curves on the frosted ice off the road. */

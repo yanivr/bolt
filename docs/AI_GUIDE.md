@@ -53,10 +53,14 @@ out on that path. `routePlan(track, params, env)` builds all of them for one car
 them by its parameters.
 
 - **The road, as the car sees it.** For each sample, a lateral scan in 8 px cells records
-  surface, hazard and wall or obstacle clearance. Clearance is the minimum over two samples
-  either side along the road, because the car is a capsule, not a point. A cell is drivable
-  when its clearance exceeds the collider radius plus 4 px; if none is, the widest gap minus
-  2 px is used. Margins: the collider radius plus 6 px, plus 5 more on walled tracks.
+  surface, hazard, wall or obstacle clearance and, on a walled track, the room inside the
+  union of corridors (the convex corner where a shortcut leaves the street, which the corridor
+  widths alone do not show). Clearance and room are the minimum over two samples either side
+  along the road, because the car is a capsule, not a point. A cell is drivable when its room
+  exceeds the collider radius plus 4 px and its clearance from a post, a wall or a barricade
+  the collider radius plus 14 px (a car at race pace is 8 to 15 px off its line now and then);
+  where no cell has that, the widest gap less 6 px, and failing that less 2 px. Margins from
+  the pavement's edge: the collider radius plus 6 px, plus 5 more on walled tracks.
 - **Good ground.** Of the drivable cells, the band whose grip is at least 85 percent of the
   best and rolling resistance within 20 of the best, for this car's tires. A Sand Paddle car's
   band on Dust Devil is different from a Slicks car's (tested).
@@ -76,8 +80,12 @@ them by its parameters.
 Over a horizon of the braking distance at the current speed times `horizonFactor`, plus
 `horizonExtra`, in 20 px steps: the cornering limit at each point times `cornerConfidence`,
 reached with braking at `brakeConfidence` of the car's deceleration on the ground under it.
-Grip is scaled by the car's effects (oil, frost, damaged wheels and steering). Off the line,
-the limit uses the curvature and ground where the car actually is. A timed hazard on the route
+Grip is scaled by the car's effects (oil, frost, damaged wheels and steering). Off the line
+(a pass, a defence, avoidance) the limits come down by up to 12 percent, and a car still off
+its lane (knocked aside, run wide, just switched to a shortcut's line) by up to 25 percent more
+in proportion to how far off it is; a narrow passage ahead (its line may wander less than
+16 px) is entered at no more than 110 px/s plus 4 per px of room until the car is lined up for
+it. A timed hazard on the route
 (rail crossing, vent) is read from its timetable (`scheduleState`) at the arrival time with
 0.6 s of margin; if it will be closed, the car holds before it. Engine heat (Racer and Ace
 only): within 3 of thermal protection it coasts on alternate ticks, on paved ground only,
@@ -85,28 +93,56 @@ because lifting on sand, mud or snow loses more than the heat costs.
 
 ### Steering and recovery (`Pilot.drive`)
 
-A Stanley-type tracker with yaw feedforward: the lane's heading and curvature from three
-points 6 + 0.12 v px ahead, cross-track gain 2.2, then the same heading gains the human input
-path uses (`directionToControl`). Pure pursuit was tried first and cut corners into walls.
+A Stanley-type tracker with yaw feedforward: the lane's heading from three points
+6 + 0.12 v px ahead, cross-track gain 2.2, then the same heading gains the human input path uses
+(`directionToControl`). The feedforward curvature is the stronger of the lane's there and
+0.16 s further on (the wheel filter and the yaw lag), so a right-angle alley mouth is turned
+into in time. Pure pursuit was tried first and cut corners into walls. The steering asks for
+the turn it wants after its own damage (`effects.steerScale` and `steerBias`, which a driver
+feels), or a battered car weaves. The brake follows the plan firmly: full at 14 px/s over the
+allowed speed (a 40 px/s band delivered about 60 percent of the braking the plan assumes and
+carried cars past the posts of Lantern Alley). Tactics move the lane at 2.6 px a tick, 1.1 in a
+bend, where a pass offset unwinding at the apex threw cars wide.
+
 Line error is an Ornstein-Uhlenbeck wander of `lineError` px with a time constant of
-`lineErrorSeconds`, scaled down where the road is narrow. Stuck (under 10 px/s for 1.2 s while
-racing and not holding at a crossing) or turned round: reverse for 26 to 40 ticks with
-opposite lock, then rejoin. A car knocked off its
-route relocates by search.
+`lineErrorSeconds`, scaled down where the road is narrow.
+
+Recovery. Stuck (under 10 px/s for 1.2 s while racing and not holding at a crossing) or turned
+round: reverse for 26 to 40 ticks with opposite lock, then rejoin. A second try from about the
+same place backs out further (up to 2.4 times), from the third the lock alternates, and the
+shortcut is given up if the car is not in it. More than 40 px outside a shortcut's corridor
+while on its route (the mouth missed), the shortcut is dropped at once; inside a shortcut its
+route does not take (pushed in), it is taken. Far from its lane (36 px) with a wall or an
+obstacle in the way back (a snow bank, a tree line), it runs along the road at no more than
+160 px/s until the way is clear instead of steering into it. A car knocked off its route
+relocates by search.
 
 ### Tactics (`tactics.ts`)
 
 - **Passing.** Within `passReach` px behind and closing by at least `passClosing` px/s, it
   commits to a side; with `cornerCraft`, the inside of the next corner. With no room it follows
   the rival's speed instead of running into it.
-- **Alongside.** Keeps apart, or, for an aggressive driver in a heavier car or one with
-  blades, leans in (a ram).
+- **Side by side.** Never steers across a car beside it or just ahead (from 26 px behind to
+  60 px ahead plus 0.6 s of closing), whatever the line, the defence or the weapons want. The
+  car whose lane crosses the other's gives way: it holds its own side and, level or behind,
+  lifts to cross behind it. The other keeps its lane and only moves over from an actual
+  overlap. Where holding a side would leave the band of clear ground (a wall, the corner of a
+  shortcut's mouth) it drops behind instead. This is the grid above all: the line from one slot
+  often runs across the other (Neon Cut; on Backstreet Blitz Laundry Lane forks 56 px past the
+  line, across the first slot). An aggressive driver in a heavier car or one with blades may
+  lean in alongside (a ram), but not in the first 4 s.
 - **Defending.** Pressure builds while followed closely; it moves to cover the inside by
   `defends` of the way. A narrow forward weapon can ask to line up (`alignWish`).
 - **Avoidance.** Revealed mines, strips, puddles and fire, and the landing spots of lobbed
   shots, are pushed off the lateral target. Unrevealed traps are not avoided (tested).
-- **Shortcuts.** Decided once a lap, 80 + 1.5 v px before the fork, and only by driving them.
-  Depth 1 (Rookie): takes it when it is shorter by length, on a coin. Depth 2 (Racer, Ace):
+- **Shortcuts.** Decided once an approach to the fork (not once a lap: a fork just past the
+  start line was decided too late to turn in), 80 + 2.2 v px before it, and only by driving
+  them. Not in the first 4 s with the other car beside it.
+  Depth 1 (Rookie): takes it when it is shorter by length, on a coin (0.55, or 0.28 when its
+  line needs over 80 percent of full lock), unless it is visibly worse ground: a quarter or
+  more of it more loose or slippery than the main road it skips (rolling resistance over dirt
+  plus 4, or grip under 0.6). That is what a novice sees from the fork: the bog of Marsh Track
+  and Logging Spur in heavy rain, not Dry Wash, which is sand like the road. Depth 2 (Racer, Ace):
   the gain in seconds for this car on its own lines (`ShortcutValue.gain`), minus a risk for
   narrow passages (tight squared, scaled by line error), plus the expected wait at a timed
   hazard on either route at the arrival time (`crossingWait`, over the arrival time plus or
@@ -136,13 +172,19 @@ a chance appears.
 ## Difficulty and style
 
 Difficulty changes only planning depth, acceptable line error and reaction delay
-(`AI_SKILLS`). Nothing else differs between levels: not the car, not grip, not ammunition.
+(`AI_SKILLS`), as Section 15.9 says. Planning depth includes the build (Section 3.1: Rookie
+"recognizable viable builds", Racer "track-aware loadouts"): a Rookie builds a frame of its
+strategy as it stands, on that frame's first engine and Street Tires, with no tuning for the
+ground or the weather (`rookieBuildOptions`); Racer and Ace build for the course. Nothing else
+differs between levels: not the car's coefficients, grip or ammunition, which are the
+validator's for whatever it built.
 
 | | Rookie | Racer (default) | Ace |
 | :-- | --: | --: | --: |
-| Share of the racing line followed (rest: centerline) | 0.45 | 0.85 | 1 |
+| Share of the racing line followed (rest: centerline); into a bend tighter than 1/160 px the real line, fully from 1/90 | 0.45 | 0.85 | 1 |
+| Build | a strategy frame as it stands, Street Tires | near-optimal for the course | same |
 | Speed horizon: braking distance x, plus px | 1.15, 30 | 1.35, 50 | 1.6, 70 |
-| Shortcut weighing | by length, on a coin | own pace, risk, timetables | same |
+| Shortcut weighing | by length, on a coin, not into visibly worse ground | own pace, risk, timetables | same |
 | Timed hazard foresight, s | 0.6 | 1.2 | 2 |
 | Lead on a moving target (share) | 0 | 0.7 | 1 |
 | Corner-aware passing and defence; heat and repair timing | no | yes | yes |
@@ -177,7 +219,9 @@ every frame x engine x kit, keeps the ones `resolveBuild` (the player's validato
 1,000 credits or less, sorts them by `estimateLapSeconds` on the course, and marks the ones
 within 2 percent of the fastest as near-optimal. `pickAiBuild(track, preset, seed)` picks the
 strategy by seed and then one near-optimal build by seed. Every course and strategy has at
-least one legal build (tested, over 1,000 builds).
+least one legal build (tested, over 1,000 builds). A Rookie's pick is a seeded choice among
+`rookieBuildOptions` instead: the same strategy for the same seed, each frame on its first
+engine and Street Tires, legal under the same validator (tested on every course).
 
 Fastest build per course and strategy, with the kits among its near-optimal builds and the
 estimated lap (seconds; in brackets, how many near-optimal builds there are). Kits are part ids
@@ -221,39 +265,106 @@ not a picker choice.
 - **Client.** The only client change is the smallest control: a Rookie, Racer, Ace radio row
   on the track preview screen (`data-testid="rival-difficulty"`), stored in the app store
   under `bolt.difficulty.v1` and sent with the join. No rendering or HUD code changed.
-- `PROTOCOL_VERSION` 7.
+- `PROTOCOL_VERSION` 8 (7 was the crawl floor and the difficulty in the join; 8 the deep-ground
+  floor on sand and mud, which a client predicts).
+- `createAiRace` passes the difficulty to `pickAiBuild`, so a Rookie rival builds a Rookie's car
+  on the server and in the offline link alike.
 - The sparring brain (`ai/sparring.ts`, `createSparringRace`) stays as the reference for the
   balance reports and as the "before" of the tournament.
 
 ## The tournament
 
 ```
-npx tsx tests/tournament/run.ts            # the full run, about 1,350 races
-npx tsx tests/tournament/run.ts --quick    # the same shape, about 240 races, a few minutes
-  [--out <file.md>] [--seed <n>] [--phase strategy|difficulty|sparring|system|tires]
+npx tsx tests/tournament/run.ts            # the gate run: 4,492 races, about half an hour here
+npx tsx tests/tournament/run.ts --quick    # the same shape, about 1,100 races
+  [--out <file.md>] [--json <file.json>] [--seed <n>] [--workers <n>] [--phase <phase>]
 ```
 
-It writes `docs/evidence/tournament/tournament.md` (or `tournament-quick.md`) and the raw
-records next to it as JSON, and exits non-zero if any race crashed, produced a non-finite
-state, ran out of time or left a car stuck for 8 s. Phases (`plan.ts`), on all 16 courses:
+Server-only: every race is the room's own race, headless (`createRace` with the room's options,
+`pickAiBuild`, `AiBrain`, `stepRaceWithBrains`, the function `DriveRoom` calls each tick); the
+roster races go through `createAiRace` itself, the function the room calls on a join, with an AI
+standing in for the player on the first slot. Races run on worker processes (one per core;
+child processes, because tsx maps `.js` imports to sources only in a process it starts), each
+with a 120 s wall-clock watchdog, and one race in 25 is run a second time on whichever worker
+is free and must give the identical record. The run writes the report (by default
+`docs/evidence/tournament/tournament.md`; the gate evidence is `README.md` there) and the records
+as JSON, and exits non-zero if any race crashed, hung, ran to the time limit with nobody home,
+left a car stuck or did not repeat. Stuck is still for 8 s, or under 150 px of course progress
+in 15 s, while racing, not waiting at a crossing, not knocked out and not wrecked (a car with
+its chassis gone limps by design).
+
+Phases (`plan.ts`), on all 16 courses:
 
 - **strategy**: every pair of the six strategies from both slots, Racer against Racer, one
   aggressive and one tactical driver. Strategy and tire win rates per course come from here.
 - **difficulty**: Ace against Rookie, Ace against Racer, Racer against Rookie, on the balanced
-  strategy, from both slots and both styles.
-- **sparring**: the brain alone, before and after. The same pairs of shipped builds on the same
+  strategy, from both slots and both styles (the driving alone: both build for the course).
+- **roster**: every starter and example build, driven by the AI at Racer, against the AI rival
+  exactly as the room builds it at Rookie, Racer and Ace, two seeds each. Win rates per build
+  and per difficulty.
+- **balance**: every starter and example build against every other from both slots, the AI at
+  Racer in both: the four balance targets of `docs/BALANCE_CHANGELOG.md` with the real AI.
+- **upgrade**: the upgrade pairs of `tests/balance/upgrade.ts`, six races each, on the courses
+  where the change is an upgrade.
+- **sparring**: the brain alone, before and after: the same pairs of shipped builds on the same
   seeds, once with the sparring brain in both cars and once with the AI.
 - **system**: the rival as a player meets it, before and after: the old room's shipped
   template by seed with the sparring brain, against the new course-built AI.
 - **tires**: the same Arrow and engine on the profile's first kit against Street, Slicks, Rain,
   Sand and Mud kits, from both slots. Only the tires differ.
 
-Plus a solo table of shortcut payoff: the balanced build and the Rookie starter, alone, with
-shortcuts never, always and as planned.
+Plus solo runs: the shortcut payoff (the balanced build and the Rookie starter, shortcuts never,
+always and as planned), every shipped build alone on every course, and the construction matrix
+(five frames from light to heavy on six wheel kits) for the surface effect.
 
-`tests/tournament/tournament.test.ts` is the Vitest subset (8 races on 4 courses: all finish,
-deterministic, mean brain cost under budget). `tests/tournament/lineview.ts` draws a course's
-AI lines to a PNG for review (`[MASK=<n>] npx tsx tests/tournament/lineview.ts <track> [preset]
-[template] [scale] [out.png]`).
+`tests/tournament/tournament.test.ts` is the Vitest subset (12 races on 4 courses, a strategy,
+a difficulty and a roster race on each: all finish, nobody stuck, deterministic, mean brain cost
+under budget). Review tools: `lineview.ts` draws a course's AI lines to a PNG
+(`[MASK=<n>] npx tsx tests/tournament/lineview.ts <track> [preset] [template] [scale] [out.png]
+[x,y,half]`), `trace.ts` follows one car alone, `traceMatch.ts` replays a planned match with a
+line per car (`seed=<n>` picks it), and `replay.ts` re-runs flagged matches by seed.
 
-MEASURED
+## Measured, and what it does not do well
+
+From the full tournament (`docs/evidence/tournament/README.md`: 4,492 races on all 16 courses,
+180 repeats identical, 752 solo runs, 736 s of wall time on two worker processes):
+
+- **Reliable.** No crash, hang or non-finite state; every shipped build alone finishes every
+  course in both weathers (176 of 176). 3 cars of 8,984 were stuck (0.03 percent), listed by
+  seed; one race of 4,492 ran to the time limit with nobody home (a wrecked car against an
+  overheating one, decided on progress as Section 3.4 says).
+- **Difficulty is visible.** Against the shipped builds the room's rival wins 43 percent at
+  Rookie, 89 at Racer and 92 at Ace. On the same balanced builds Ace beats Rookie 81 percent of
+  the time and Racer beats Rookie 78. Rookie laps 2.7 s slower, runs 19.7 px off its line
+  against 11.6 and 9.9, and hits a wall 1.56 times a race against 0.65.
+- **Builds follow the ground.** Sand Paddles win 78 to 100 percent of AI races on the sand
+  courses, Mud Claws 85 to 88 on Moss Run, Rain Runners 81 to 100 in the wet and in snowfall,
+  Slicks 68 to 89 on dry pavement, metal and frost.
+- **Shortcuts are taken when they pay.** Driven alone, forcing every shortcut is slower than
+  never on 13 of the 16 courses; the plan picks Laundry Lane on Backstreet Blitz in the dry
+  (79.5 s against 88.0 never and 83.3 always) and otherwise stays on the road.
+
+Weak points, frankly:
+
+- **Ace is barely better than Racer.** 55 percent head to head, and its laps of the balanced
+  builds are 0.27 s slower: it takes Laundry Lane and Bakers Row in about half its laps on
+  Backstreet Blitz against Racer's 6 to 26, and its deeper horizon brakes earlier. A player will
+  see a clear step from Rookie to Racer and hardly any from Racer to Ace.
+- **A Rookie still takes shortcuts that do not pay.** On a coin, by length: Dry Wash about half
+  its laps on Dust Devil (3 s a lap worse for its car; the wash is sand like the road, so the bog
+  check does not see it), Lantern Alley, Conveyor Gap and Laundry Lane a quarter to a half. That
+  is the novice's mistake by design, and part of why Rookie wins 43 percent and not more.
+- **Few passes.** 0.32 lead changes a race and the lap 1 leader wins 90 percent. The AI passes
+  when it is faster and commits to a side, but it does not out-brake a car of equal pace, and
+  the side-by-side rule makes the car whose line crosses give way.
+- **Three stuck cars remain**, all from the line meeting a solid at an angle the recovery takes
+  more than 15 s to undo: a Rookie at Lantern Alley's mouth in the rain, a Rookie against a
+  redwood on Timber Dash in heavy rain, and an Ace that ran wide outside Whiteout Pass's north
+  bank at the first corner and passed the start line beyond the gate's clipped end (track data,
+  `docs/DECISIONS.md`).
+- **Reaction delays and line error are the table's, not a player's.** No human has raced the
+  three levels; the numbers are Section 15.9's intent, tuned only against each other and the
+  shipped builds.
+- **Oil and air do little.** The Oil Slick deals no damage (its slip is not counted as damage
+  here) and the Air Cannon 2.2 a shot; the AI fires them when the follower is aligned, but how
+  much they cost the follower is not measured.

@@ -55,8 +55,8 @@ Module `art/scripts/terrain/industrial/` (style, road and hazards, structures, l
 
 | Weather | Ground | Overlays | Loops | Total | Bake |
 | :-- | --: | --: | --: | --: | --: |
-| `industrial_dry_night` | 20 chunks, 428 KB | 57, 12 KB | 17, 70 KB | 532 KB | 82 s |
-| `industrial_factory_rain` | 20 chunks, 454 KB | 57, 12 KB | 17, 70 KB | 558 KB | 85 s |
+| `industrial_dry_night` | 20 chunks, 430 KB | 57, 12 KB | 17, 70 KB | 534 KB | 82 s |
+| `industrial_factory_rain` | 20 chunks, 456 KB | 57, 12 KB | 17, 70 KB | 560 KB | 85 s |
 
 Checks 0 and 0 on both. Factory rain keeps both halls' floors dry.
 
@@ -69,7 +69,8 @@ Checks 0 and 0 on both. Factory rain keeps both halls' floors dry.
 - **Landmarks.** Press Hall and Smelter Hall (tall bays either side, trusses with mercury
   lamps over the road), the furnace whose mouth glows into Smelter Hall, two chimney stacks with
   beacons, the gantry crane over a container yard, the conveyor bridge over Conveyor Gap, the
-  water tower, the dock with a quay conveyor, lamps and a ship alongside.
+  water tower, the dock with a quay conveyor, lamps and a ship alongside (its holds loaded with
+  containers stacked one to three high: lit rims, corrugated tops, south faces).
 - **Loops.** Steam (2), vent rings (2), warning lamps (2), magnet marks (2), oil sheen (2),
   stack beacons (2), furnace flicker, welding sparks, quay conveyor, press rams (2), crane light.
 
@@ -81,5 +82,5 @@ Weak spots, frankly: the halls read as roads between tall buildings with trusses
 interiors; works buildings are city-layout rectangles and some sheds repeat; the plate floor's
 mercury pools are still a little spotty; the chimneys lean as far east as everything tall does,
 which on thin stacks looks like a tilt; the water is plain; the gantry crane is small at game
-scale; the steam and vent loops only match the hazard once the client drives them from the race
-clock (DECISIONS).
+scale. The vent loops are driven from the race clock since Milestone D's finish
+(`timetableFrame`), so a blast is drawn exactly while the vent is active.

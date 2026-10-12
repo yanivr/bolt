@@ -102,5 +102,5 @@ Weak spots, frankly: the city is busier than Neon Cut and some rooflines repeat 
 layout's rectangles); the gatehouse arch opening barely reads at game scale; the laundry over
 the lane reads as bunting; the cobbles are a busy texture over 40 percent of the lap; no tram
 moves (a moving tram over a 14 s loop does not fit a texture, and the barrier lies along the
-rails, so it would overlap a stopped car); the crossing loop only matches the barrier once the
-client drives it from the race clock (DECISIONS).
+rails, so it would overlap a stopped car). The crossing loop is driven from the race clock since
+Milestone D's finish (`timetableFrame`), so the boom is drawn down exactly when the barrier is solid.

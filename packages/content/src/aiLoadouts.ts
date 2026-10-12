@@ -1,4 +1,9 @@
-import type { BuildConditions, RaceEnvironment, VehicleBlueprint } from '@bolt/shared';
+import type {
+  AiDifficulty,
+  BuildConditions,
+  RaceEnvironment,
+  VehicleBlueprint,
+} from '@bolt/shared';
 import { buildTrack, estimateLapSeconds, hashString, mulberry32 } from '@bolt/shared';
 import { conditionsFor, environmentFor, resolveBuild } from './loadout.js';
 import type { PartSpec } from './templates.js';
@@ -443,14 +448,74 @@ export function pickStrategy(seed: number): AiStrategy {
   return AI_STRATEGIES[Math.floor(roll * AI_STRATEGIES.length)]!;
 }
 
-/** The AI's build for a course: a seeded choice among the near-optimal builds of a strategy. */
+/** The wheel kit of a Rookie's build: the generalist, whatever the ground. */
+export const ROOKIE_TIRES = 'tires_street';
+
+const ROOKIE_OPTIONS = new Map<string, AiBuildOption[]>();
+
+/**
+ * A Rookie's builds for a strategy (Section 3.1, "recognizable viable builds"): each frame of
+ * the strategy as it stands, on the first engine it lists and on Street Tires, whatever the
+ * course. The same catalog, budget and validator as anyone; what a Rookie does not do is tune
+ * the car to the ground and the weather, which is the planning depth Section 15.9 lets
+ * difficulty change. A course-built car beat the shipped starters nine races in ten.
+ */
+export function rookieBuildOptions(
+  trackId: string,
+  presetId: string,
+  strategy: AiStrategy,
+): AiBuildOption[] {
+  const key = `${trackId}/${presetId}/${strategy}`;
+  const cached = ROOKIE_OPTIONS.get(key);
+  if (cached) return cached;
+  const def = getTrack(trackId);
+  const conditions = conditionsFor(trackId, presetId) as BuildConditions | undefined;
+  const env = environmentFor(presetId) as RaceEnvironment | undefined;
+  if (!def || !conditions || !env) return [];
+  const track = buildTrack(def);
+  const options: AiBuildOption[] = [];
+  for (const frame of AI_STRATEGY_TABLE[strategy].frames) {
+    const engineId = frame.engines[0]!;
+    const blueprint = build(
+      `AI ${frame.name}`,
+      frame.chassisId,
+      engineId,
+      ROOKIE_TIRES,
+      frame.paintId,
+      [...frame.parts],
+    );
+    const resolved = resolveBuild(blueprint, conditions);
+    if (!resolved.ok) continue;
+    options.push({
+      strategy,
+      frame: frame.id,
+      engineId,
+      tireKitId: ROOKIE_TIRES,
+      blueprint: resolved.build.blueprint,
+      cost: resolved.totalCost,
+      lapSeconds: estimateLapSeconds(track, resolved.params, env),
+      nearOptimal: true,
+    });
+  }
+  ROOKIE_OPTIONS.set(key, options);
+  return options;
+}
+
+/**
+ * The AI's build for a course: a seeded choice among the near-optimal builds of a strategy
+ * (Racer: "track-aware loadouts"; Ace the same), or, for a Rookie, among the strategy's frames
+ * as they stand (`rookieBuildOptions`).
+ */
 export function pickAiBuild(
   trackId: string,
   presetId: string,
   seed: number,
   strategy: AiStrategy = pickStrategy(seed),
+  difficulty?: AiDifficulty,
 ): AiBuildPick | null {
-  const near = aiBuildOptions(trackId, presetId, strategy).filter((o) => o.nearOptimal);
+  let near = difficulty === 'rookie' ? rookieBuildOptions(trackId, presetId, strategy) : [];
+  if (near.length === 0)
+    near = aiBuildOptions(trackId, presetId, strategy).filter((o) => o.nearOptimal);
   if (near.length === 0) return null;
   const roll = mulberry32(seed ^ hashString(strategy) ^ 0xa54ff53a)();
   const pick = near[Math.floor(roll * near.length)]!;

@@ -4,6 +4,152 @@ Catalog and balance data use semantic versions (`CATALOG_VERSION` in
 `packages/content/src/catalog.ts`). Every change to a price, mass, coefficient or track is
 listed here with the measurement that motivated it.
 
+## The four tow targets with the real AI: no parameter changed (Milestone D, October 12, 2026)
+
+**The change.** None: no price, coefficient, tow or combat number changed, `CATALOG_VERSION`
+stays 0.7.0. This entry is the re-measurement the tow entry asked for ("it will only be a sharp
+one with drivers who make mistakes"), with the Milestone D AI in both cars on all 16 courses,
+and the one modest change that was a candidate, measured and not applied.
+
+**How it was measured.** The balance and upgrade phases of the tournament
+(`npx tsx tests/tournament/run.ts`, `docs/evidence/tournament/README.md`, "The four balance
+targets"): every starter and example build against every other from both slots, the AI at
+Racer in both cars, on each of the 16 courses (1,760 races), and the six upgrade pairs where the
+change is an upgrade (300 races). "Before" is the sparring brain as in the magazine entry above
+(Neon Cut clear night, four seeds) and, on all 16 courses, the same shipped pairs on the same
+seeds with the sparring brain in both cars (the sparring phase, 192 races each way).
+
+| Target | Measure | Sparring, Neon Cut (0.7.0 entry) | Sparring, all courses, same seeds | AI, Neon Cut clear | AI, all 16 courses | Aim |
+| :-- | :-- | --: | --: | --: | --: | :-- |
+| 1. Leading still pays | Races won by the car ahead after lap 1 | 94% | 98% | 98% | 95% | 60 to 75%, never under 60 |
+| 2. No build outside 30 to 70% | Builds outside, of 11 | 7 | | 7 | 8 | none |
+| 3. Combat happens | Seconds a race within 220 px | 15.4 | 15.8 | 12.7 | 20.5 | several times more |
+| | Seconds in weapon reach | | 31.7 | 25.7 | 39.0 | |
+| | Weapon activations a race | 4.7 | 6.1 | 3.9 | 5.3 | |
+| | Damage dealt a race | 61.6 | 79.8 | 50.1 | 73.2 | |
+| 4. Building well pays | Upgraded twin's wins | 100, 100, 100, 50, 100, 75% | | 78% of 36 | 89% of 300 | clearly over half |
+
+The six upgrade pairs over all courses with the AI: Rookie V6 99 percent of 96, Sprinter V8 88
+of 96, Packhorse V8 100 of 54, Sprinter Slicks 78 of 18, Tinker Slicks 67 of 18, Back-Alley Trap
+Slicks 50 of 18. Win rates of the shipped builds against each other, all courses: Iron Mule 1,
+Longlegs 23, Dust Spider 25, Packhorse 28, Rookie 34, Back-Alley Trap 51, Tinker 64, Rain Runner
+71, Sprinter 76, Tiny Trouble 83, Straight-Line Rocket 95 percent.
+
+**The candidate, measured and not applied: a 12 percent tow (from 8).** The same balance and
+upgrade phases with `TOW.maxBonus` 0.12 (`BOLT_TOW_BONUS=0.12`, probe only):
+
+| Measure | Tow 8% (shipped) | Tow 12% |
+| :-- | --: | --: |
+| Lap 1 leader wins | 95% | 95% |
+| Builds outside 30 to 70% | 8 | 8 |
+| Seconds within 220 px | 20.5 | 21.3 |
+| Damage a race | 73.2 | 75.9 |
+| Upgraded twin wins | 89% of 300 | 90% of 300 |
+| Cars stuck | 0 | 1 (a new Backstreet Blitz rain case) |
+
+**What the numbers say, plainly.**
+
+- *Leading pays, more than the aim.* 95 percent, and every course 90 to 99. With drivers who
+  make mistakes it fell from 98 to 95 on the same seeds; it is still a pace number, because the
+  matrix is wide (target 2) and the AI rarely out-brakes a car of equal pace (0.14 lead changes
+  a race in the balance phase, 9 percent of races with one). Half again as much tow does not
+  move it.
+- *The builds are as far apart as before, and that is the builds, not the race rules.* Eight of
+  eleven are outside 30 to 70 percent; the extremes are the same two (Iron Mule, the
+  low-acceleration example of Section 11.9, and Straight-Line Rocket). A tow cannot close
+  gaps of 12 to 30 percent on pace, as the tow entry found; the shipped examples are meant to
+  differ, and moving their parts is a content decision, not a balance knob.
+- *Combat happens somewhat more, not several times more.* On the same pairs and seeds the AI
+  spends 18.0 s a race within 220 px against the sparring brain's 15.8, and deals 93.9 damage
+  against 79.8; over the whole balance phase, 20.5 s. It is highest on the loose forest and
+  desert courses (Moss Run clear 27.0 s) and lowest on Neon Cut (12.7 and 13.0 s).
+- *Building well pays.* 89 percent over 300 races; every pair over half but the Back-Alley Trap
+  on Slicks (50 percent of 18; 50 to 75 percent in the sparring reports too). Not explained
+  here; a pair of 18 races on three dry courses is a small sample.
+- *Why no change.* The one modest knob (the tow) bought 0.8 s of company and nothing else, and
+  turned up a stuck car; the targets it misses are a pace spread of the shipped builds. Leading
+  stays rewarding and building well stays rewarded, which are the two guards.
+
+## 0.7.0, physics: the deep-ground floor, so no legal car is held on sand or mud (Milestone D, October 12, 2026)
+
+**The change.** No part's parameters changed and `CATALOG_VERSION` stays 0.7.0; protocol 7 to 8,
+because a client predicts the new floor.
+
+- **The problem it fixes.** Under the crawl floor (the entry below) a car whose drive is close
+  to the ground's resistance still settled inside the floor's fade, 30 to 70 px/s. Iron Mule
+  (Pickup, Four-Cylinder, Armored Tires, 812 kg; a shipped example) reached 48 px/s on sand and
+  44 on deep mud, and so could not finish Dust Devil or Canyon Switch in either weather inside
+  the 180 s limit, and finished the forest courses with 11 to 13 s to spare. A legal shipped
+  build that cannot finish a launch course is a fault in the game, not a balance nuance.
+- **The rule.** On sand and mud the same floor (the ground takes at most 70 percent of the car's
+  own drive at its speed) holds to a trudging pace instead of a crawl: in full below 120 px/s
+  on sand and 70 on mud, easing back to the whole resistance by 170 and 110
+  (`DEEP_GROUND_FLOOR` in `packages/shared/src/balance.ts`, `creepRelief` in `physics.ts`).
+  Dirt, snow, shoulders and open ground keep the crawl band. A car with drive to spare at
+  those speeds is never touched, so the floor decides only how slow a weak car can be made,
+  never how fast a strong one goes; the net push at every speed is non-decreasing in drive, so
+  a stronger car is never slower on the same ground (unit tested over a grid of drives and
+  speeds).
+- **Why a cap relative to drive and not another rule.** Sand's resistance is already
+  proportional to mass (a fixed deceleration is a force of mass times 42), so "proportional to
+  mass" changes nothing; a resistance growing with speed, or one capped at a share of drive at
+  every speed, also lowers the resistance strong cars meet near their top speed on sand (their
+  drive there is close to the resistance), which would have made sand nearly as fast as
+  asphalt and erased the surface effect. A cap below a trudging pace leaves every car's top
+  speed on sand alone above 170 px/s and keeps the wrong tires a real penalty. The other
+  candidate, re-equipping the template, was measured and rejected: on the Diesel, Iron Mule wins
+  more but loses what Section 11.9 makes it (the low-acceleration example; four
+  characterization tests in `tests/feel/builds.test.ts` and `tests/unit/stats.test.ts`).
+
+**Measured.** `npx tsx tests/balance/surfaceReport.ts` with and without the floor
+(`--deep-off`), the same AI code: before `docs/evidence/balance/surface-0.7.0-before-deep-floor.md`,
+after `docs/evidence/balance/surface-0.7.0-deep-floor.md`. Every starter and example build alone on
+each of the 16 courses, driven by the AI at Racer, three laps.
+
+| | Before | After |
+| :-- | --: | --: |
+| Solo runs finished, of 176 | 172 | 176 |
+| Iron Mule, Dust Devil clear / crosswind, s | DNF / DNF | 168.4 / 168.5 |
+| Iron Mule, Canyon Switch dry heat / sandstorm, s | DNF / DNF | 145.5 / 144.0 |
+| Iron Mule, Moss Run clear / rain, s | 169.0 / 168.7 | 146.5 / 146.2 |
+| Iron Mule, Timber Dash clear / heavy rain, s | 168.1 / 167.1 | 159.8 / 159.1 |
+| Rookie, Dust Devil clear, s | 145.6 | 139.6 |
+| Rain Runner, Dust Devil clear, s | 140.7 | 136.7 |
+| Back-Alley Trap, Dust Devil clear, s | 130.6 | 129.4 |
+| Every build on Neon Cut, Backstreet Blitz, Whiteout Pass and Steel Circuit | | identical |
+| Packhorse, Longlegs, Rocket, Dust Spider, Tiny Trouble on every course | | identical |
+| Sprinter (Dust Devil) and Tinker (Canyon Switch dry heat) | | within 0.5 s (113.8 against 113.8, 120.9 against 121.4); identical elsewhere |
+
+Straight line, px/s after 60 s flat out (5 and 10 s in the reports):
+
+| Build | Sand before | Sand after | Mud before | Mud after |
+| :-- | --: | --: | --: | --: |
+| Iron Mule | 48 | 133 | 44 | 81 |
+| Rookie | 125 | 149 | 60 | 92 |
+| Rain Runner | 123 | 149 | 63 | 93 |
+| Back-Alley Trap | 167 | 167 | 82 | 99 |
+| Sprinter | 200 | 200 | 134 | 134 |
+| Straight-Line Rocket | 214 | 214 | 166 | 166 |
+| Dust Spider (Sand Paddles) | 232 | 232 | 142 | 142 |
+| Tiny Trouble | 231 | 231 | 205 | 205 |
+
+What it does to surface choice: the builds the floor lifts are the weakest on loose ground, and
+they stay the slowest there (Iron Mule 133 px/s on sand against 149 to 232 for the rest). Sand
+Paddles remain clearly the best kit on sand (`tests/unit/crawl.test.ts`), and the construction
+matrix of the tournament (`docs/evidence/tournament/README.md`, "Surface effect") measures the
+same frames on six kits on every course.
+
+- `tests/unit/crawl.test.ts`: the bands per surface, monotonicity in drive, bit-identical
+  paved driving for every shipped build, bit-identical sand driving for the Rocket, Tiny Trouble
+  and Dust Spider, and no shipped build's sand top speed changed that was above the band (the
+  Sprinter reaches its unchanged top speed a little sooner: its drive between 160 and 170 px/s
+  is just under what the band leaves alone).
+- `tests/balance/tracks.test.ts`: every shipped build over 80 px/s after 10 s on Dust Devil sand
+  and over 120 px/s after 30 s on either desert course; over 75 px/s after 20 s in Moss Run mud.
+- For the owner: two builds are lifted that were not stalling, Rookie and Rain Runner (sand
+  125 and 123 px/s to 149, mud about 60 to 92), because their drive on loose ground is close to
+  its resistance too. Both stay well behind the builds made for sand.
+
 ## 0.7.0, physics: the loose-ground crawl floor, and two starters on the Trail Engine (Milestone D, October 12, 2026)
 
 **The change.** No part's parameters changed and `CATALOG_VERSION` stays 0.7.0; protocol 6 to 7.

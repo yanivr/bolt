@@ -349,13 +349,13 @@ function coverage(
 }
 
 describe('readability guard', () => {
-  const HEAVY = [
-    ['desert_02', 'desert_sandstorm'],
-    ['forest_02', 'forest_heavy_rain'],
-    ['snow_01', 'snow_snowfall'],
-    ['snow_01', 'snow_clear_frost'],
-    ['desert_01', 'desert_crosswind'],
-  ] as const;
+  // Every course whose weather lays anything over the picture: all but the three dry,
+  // windless ones (Neon Cut's clear night, Backstreet Blitz's golden hour, Steel Circuit's dry
+  // night), which draw only what the wheels throw up.
+  const QUIET = ['city_clear_night', 'city_clear_day', 'industrial_dry_night'];
+  const HEAVY = COURSES.filter(([, p]) => !QUIET.includes(p)).map(
+    ([def, p]) => [def.id, p] as const,
+  );
 
   it.each(HEAVY)(
     '%s %s: no haze or frost round the car, ahead of it or round the rival',

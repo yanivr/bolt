@@ -38,7 +38,8 @@ export const UPGRADE_PAIRS: UpgradePair[] = [
   },
   {
     id: 'packhorse_v8',
-    label: 'Packhorse, V6 to V8',
+    // The Packhorse has carried the Trail Engine since 0.7.0 (BALANCE_CHANGELOG, the crawl floor).
+    label: 'Packhorse, Trail Engine to V8',
     base: 'starter_packhorse',
     change: { engineId: 'engine_v8' },
   },

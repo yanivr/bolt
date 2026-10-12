@@ -15,6 +15,7 @@ import type {
   VehicleParams,
 } from '@bolt/shared';
 import {
+  DEEP_GROUND_FLOOR,
   LOOSE_CREEP,
   SURFACE_ROLLING_DECEL,
   buildTrack,
@@ -33,16 +34,23 @@ import { makeOpenField } from '../helpers/openField.js';
 import { makeProvingGround } from '../helpers/tracks.js';
 
 /**
- * The crawl floor on loose ground (docs/BALANCE_CHANGELOG.md, "The loose-ground crawl floor").
- * Rolling resistance on sand, dirt, mud, snow, a shoulder or open ground never takes more than
- * `LOOSE_CREEP.driveShare` of a creeping car's own drive, so nobody stalls; above `fadeTo` the
- * whole resistance applies as before, and a car with drive to spare is never touched.
+ * The crawl floor on loose ground (docs/BALANCE_CHANGELOG.md, "The loose-ground crawl floor",
+ * and 0.7.1, the deep-ground floor). Rolling resistance on sand, dirt, mud, snow, a shoulder or
+ * open ground never takes more than `LOOSE_CREEP.driveShare` of a slow car's own drive, so
+ * nobody stalls; on sand and mud the band reaches a trudging pace (`DEEP_GROUND_FLOOR`), on the
+ * rest a crawl. Above the band the whole resistance applies as before, and a car with drive to
+ * spare is never touched.
  */
 
 const DESERT = conditionsFor('desert_01', 'desert_clear') as BuildConditions;
 const DESERT_ENV = environmentFor('desert_clear') as RaceEnvironment;
 const saved = { ...LOOSE_CREEP };
-afterEach(() => Object.assign(LOOSE_CREEP, saved));
+const savedDeep = { ...DEEP_GROUND_FLOOR };
+function restore(): void {
+  Object.assign(LOOSE_CREEP, saved);
+  Object.assign(DEEP_GROUND_FLOOR, savedDeep);
+}
+afterEach(restore);
 
 function paramsOf(templateId: string): VehicleParams {
   return raceEntry(RIVAL_TEMPLATES.find((t) => t.id === templateId)!.blueprint, DESERT)!.params;
@@ -61,25 +69,29 @@ function straight(params: VehicleParams, surface: SurfaceId, seconds: number): n
   return speeds;
 }
 
-/** Turns the floor off: every speed is at or above `fadeTo`. */
+/** Turns the floor off: every speed is at or above every band's `fadeTo`. */
 function floorOff(): void {
   LOOSE_CREEP.fadeTo = -1;
+  for (const surface of Object.keys(DEEP_GROUND_FLOOR) as SurfaceId[])
+    DEEP_GROUND_FLOOR[surface] = { fullBelow: -2, fadeTo: -1 };
 }
 
 describe('the crawl floor', () => {
-  it('lets a car with less drive than the sand resists crawl, where it used to stand still', () => {
+  it('lets a car with less drive than the sand resists trudge, where it used to stand still', () => {
     // Iron Mule: Four-Cylinder and Armored Tires on a Pickup, 38 px/s2 of drive from rest
     // against 42 of sand.
     const mule = paramsOf('example_iron_mule');
     expect(driveForceAt(mule, 0) / mule.massKg).toBeLessThan(SURFACE_ROLLING_DECEL.sand);
     floorOff();
     expect(straight(mule, 'sand', 10).at(-1)).toBe(0);
-    Object.assign(LOOSE_CREEP, saved);
+    restore();
     const speeds = straight(mule, 'sand', 20);
     expect(speeds[29]!).toBeGreaterThan(5);
-    expect(speeds.at(-1)!).toBeGreaterThan(35);
-    // A crawl, not a cure: far slower than the same car on asphalt.
-    expect(speeds.at(-1)!).toBeLessThan(straight(mule, 'asphalt', 20).at(-1)! * 0.4);
+    expect(speeds.at(-1)!).toBeGreaterThan(110);
+    // Slow, not cured: about half the same car's speed on asphalt, and below the trudging band's
+    // top, which only a car with drive to spare passes.
+    expect(speeds.at(-1)!).toBeLessThan(straight(mule, 'asphalt', 20).at(-1)! * 0.6);
+    expect(speeds.at(-1)!).toBeLessThan(DEEP_GROUND_FLOOR.sand!.fadeTo);
   });
 
   it('keeps the net push at a creep at least the rest of the drive share', () => {
@@ -96,24 +108,51 @@ describe('the crawl floor', () => {
       expect(creepRelief(surface, false, 60, 10, 5)).toBe(0);
   });
 
-  it('applies the whole resistance above the creeping speed', () => {
-    expect(creepRelief('sand', false, 42, 10, LOOSE_CREEP.fadeTo)).toBe(0);
-    expect(creepRelief('sand', false, 42, 10, LOOSE_CREEP.fadeTo + 40)).toBe(0);
-    const half = (LOOSE_CREEP.fullBelow + LOOSE_CREEP.fadeTo) / 2;
-    const excess = 42 - LOOSE_CREEP.driveShare * 10;
-    expect(creepRelief('sand', false, 42, 10, half)).toBeCloseTo(excess / 2, 9);
-    expect(creepRelief('sand', false, 42, 10, LOOSE_CREEP.fullBelow - 1)).toBeCloseTo(excess, 9);
+  it('applies the whole resistance above the band: a trudge on sand and mud, a crawl elsewhere', () => {
+    const bands = [
+      ['sand', DEEP_GROUND_FLOOR.sand!],
+      ['mud', DEEP_GROUND_FLOOR.mud!],
+      ['snow', LOOSE_CREEP],
+      ['dirt', LOOSE_CREEP],
+    ] as const;
+    for (const [surface, band] of bands) {
+      expect(creepRelief(surface, false, 42, 10, band.fadeTo), surface).toBe(0);
+      expect(creepRelief(surface, false, 42, 10, band.fadeTo + 40), surface).toBe(0);
+      const half = (band.fullBelow + band.fadeTo) / 2;
+      const excess = 42 - LOOSE_CREEP.driveShare * 10;
+      expect(creepRelief(surface, false, 42, 10, half), surface).toBeCloseTo(excess / 2, 9);
+      expect(creepRelief(surface, false, 42, 10, band.fullBelow - 1), surface).toBeCloseTo(
+        excess,
+        9,
+      );
+    }
+    // A shoulder beside a paved road keeps the crawl band, whatever the surface.
+    expect(creepRelief('asphalt', true, 34, 10, LOOSE_CREEP.fadeTo)).toBe(0);
+    // Stronger is never slower: the net push at any speed does not fall as drive rises.
+    for (const surface of ['sand', 'mud'] as const)
+      for (let v = 0; v <= 200; v += 10) {
+        let last = -Infinity;
+        for (let drive = 0; drive <= 120; drive += 2) {
+          const net = drive - (42 - creepRelief(surface, false, 42, drive, v));
+          expect(net, `${surface} ${v} ${drive}`).toBeGreaterThanOrEqual(last - 1e-9);
+          last = net;
+        }
+      }
   });
 
   it('is bit-identical for every shipped build on paved surfaces, and for strong cars on sand', () => {
-    const strong = ['starter_sprinter', 'example_straight_line_rocket', 'example_tiny_trouble'];
+    // Drive to spare all the way through the deep-ground band (to 170 px/s on sand). The
+    // Sprinter is not on the list: between 160 and 170 px/s its drive falls under what the band
+    // leaves alone, so it reaches its top speed on sand a little sooner; the top speed itself is
+    // unchanged (next test).
+    const strong = ['example_straight_line_rocket', 'example_tiny_trouble', 'example_dust_spider'];
     for (const t of RIVAL_TEMPLATES) {
       const params = paramsOf(t.id);
       for (const surface of ['asphalt', 'cobble', 'metal', 'ice'] as const) {
         const on = straight(params, surface, 12);
         floorOff();
         const off = straight(params, surface, 12);
-        Object.assign(LOOSE_CREEP, saved);
+        restore();
         expect(on, `${t.id} on ${surface}`).toEqual(off);
       }
     }
@@ -121,8 +160,21 @@ describe('the crawl floor', () => {
       const on = straight(paramsOf(id), 'sand', 12);
       floorOff();
       const off = straight(paramsOf(id), 'sand', 12);
-      Object.assign(LOOSE_CREEP, saved);
+      restore();
       expect(on, id).toEqual(off);
+    }
+  });
+
+  it("changes no shipped build's top speed on sand that was above the band", () => {
+    for (const t of RIVAL_TEMPLATES) {
+      const params = paramsOf(t.id);
+      const on = straight(params, 'sand', 40).at(-1)!;
+      floorOff();
+      const off = straight(params, 'sand', 40).at(-1)!;
+      restore();
+      if (off >= DEEP_GROUND_FLOOR.sand!.fadeTo) expect(on, t.id).toBeCloseTo(off, 6);
+      // A car the band lifts is never lifted past the band's top.
+      else expect(on, t.id).toBeLessThan(DEEP_GROUND_FLOOR.sand!.fadeTo);
     }
   });
 

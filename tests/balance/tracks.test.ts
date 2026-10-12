@@ -13,8 +13,8 @@ import { courseId, runBotMatch } from './harness.js';
  * The balance harness on all eight tracks, as a smoke test (Milestone D phase 0). The full
  * report is `npx tsx tests/balance/tracksReport.ts` (docs/evidence/balance/tracks-0.7.0.md);
  * here four quick builds race each other on both weathers of every track and must finish in a
- * sane time. The second block holds a finding, not a target: which shipped builds cannot get
- * going on sand (docs/BALANCE_CHANGELOG.md 0.7.0). When the owner retunes sand, it changes.
+ * sane time. The second block holds the floors on loose ground: no shipped build is held to a
+ * crawl on sand or mud (docs/BALANCE_CHANGELOG.md 0.7.0 and 0.7.1).
  */
 
 const QUICK = [
@@ -64,20 +64,27 @@ function speedAfter(
   return v;
 }
 
-describe('nobody stalls on sand (the crawl floor, docs/BALANCE_CHANGELOG.md)', () => {
-  it('gets every shipped build moving on Dust Devil sand, the weakest at a crawl', () => {
-    // Before the crawl floor Iron Mule did not move at all on sand and Packhorse and Longlegs
-    // crept to 46 px/s; they now carry the Trail Engine (templates.ts).
+describe('nobody stalls on sand (the crawl floor and the deep-ground floor, docs/BALANCE_CHANGELOG.md)', () => {
+  it('gets every shipped build up to a trudge on Dust Devil sand, the weakest slowest', () => {
+    // Before the crawl floor Iron Mule did not move at all on sand, and under it alone it
+    // settled at 48 px/s; Packhorse and Longlegs carry the Trail Engine (templates.ts).
     const tenSeconds = RIVAL_TEMPLATES.map(
       (t) => [t.id, speedAfter(t.id, 'desert_01', 'desert_clear', 'sand', 10)] as const,
     );
-    for (const [id, v] of tenSeconds) expect(v, id).toBeGreaterThan(35);
-    const slow = tenSeconds.filter(([, v]) => v < 60).map(([id]) => id);
-    expect(slow).toEqual(['example_iron_mule']);
-    // The dry-heat course, where the heat protection used to bring the V6 cars to a stop.
-    for (const t of RIVAL_TEMPLATES)
+    for (const [id, v] of tenSeconds) expect(v, id).toBeGreaterThan(80);
+    const slowest = [...tenSeconds].sort((a, b) => a[1] - b[1])[0]![0];
+    expect(slowest).toBe('example_iron_mule');
+    // Thirty seconds in, nobody is below a trudging pace, in either desert weather.
+    for (const t of RIVAL_TEMPLATES) {
+      expect(speedAfter(t.id, 'desert_01', 'desert_clear', 'sand', 30), t.id).toBeGreaterThan(120);
       expect(speedAfter(t.id, 'desert_02', 'desert_dry_heat', 'sand', 40), t.id).toBeGreaterThan(
-        30,
+        120,
       );
+    }
+  });
+
+  it('gets every shipped build through deep mud at better than a crawl', () => {
+    for (const t of RIVAL_TEMPLATES)
+      expect(speedAfter(t.id, 'forest_01', 'forest_rain', 'mud', 20), t.id).toBeGreaterThan(75);
   });
 });

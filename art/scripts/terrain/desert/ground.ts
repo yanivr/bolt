@@ -29,7 +29,16 @@ export type RegionGrid = {
   sample(x: number, y: number, out: Region): Region;
 };
 
-const KEYS: Array<keyof Region> = ['dune', 'playa', 'rubble', 'brush', 'tone', 'terrace', 'streak', 'alt'];
+const KEYS: Array<keyof Region> = [
+  'dune',
+  'playa',
+  'rubble',
+  'brush',
+  'tone',
+  'terrace',
+  'streak',
+  'alt',
+];
 
 export function buildRegionGrid(spec: TerrainSpec, w: number, h: number): RegionGrid {
   const cols = Math.ceil(w / CELL) + 1;
@@ -72,7 +81,13 @@ export function buildRegionGrid(spec: TerrainSpec, w: number, h: number): Region
 }
 
 /** Relief gradient on a 4 px grid, for hill shading. */
-export type SlopeGrid = { cols: number; rows: number; gx: Float32Array; gy: Float32Array; hgt: Float32Array };
+export type SlopeGrid = {
+  cols: number;
+  rows: number;
+  gx: Float32Array;
+  gy: Float32Array;
+  hgt: Float32Array;
+};
 
 export function buildSlopeGrid(spec: TerrainSpec, w: number, h: number): SlopeGrid {
   const cols = Math.ceil(w / HCELL) + 2;
@@ -188,12 +203,15 @@ export function paintGround(
       let crest = false;
       let foot = false;
       let lee = false;
+      let ampHere = 0;
       if (dune > 0.03) {
         const breakup = smooth(0.18, 0.5, vnoise(x, y, 260, SEED + 3));
         const amp = spec.duneHeight * dune * breakup;
+        ampHere = amp;
         if (amp > 0.8) {
           const warp =
-            (vnoise(x, y, 430, SEED) - 0.5) * L * 0.9 + (vnoise(x, y, 120, SEED + 5) - 0.5) * L * 0.2;
+            (vnoise(x, y, 430, SEED) - 0.5) * L * 0.9 +
+            (vnoise(x, y, 120, SEED + 5) - 0.5) * L * 0.2;
           const u = x * pw.x + y * pw.y + warp + (1 - breakup) * L * 0.3;
           const f = u / L - Math.floor(u / L);
           const peak = 0.8;
@@ -221,7 +239,8 @@ export function paintGround(
           if (fq < 0.17) {
             const t = x * -rw.y + y * rw.x;
             const dash = t / 27 + hash2(Math.floor(q), 0, SEED + 11) * 7;
-            if (dash - Math.floor(dash) < 0.72) ripple = -0.62 * (0.4 + 0.6 * near) * (1 - playa * 2);
+            if (dash - Math.floor(dash) < 0.72)
+              ripple = -0.62 * (0.4 + 0.6 * near) * (1 - playa * 2);
           }
         }
       }
@@ -231,6 +250,9 @@ export function paintGround(
       if (g < 0.01) grain = -0.9;
       else if (g > 0.995) grain = 0.8;
       let v = 3 + reg.tone + b + ripple + grain;
+      // A slip face reads as one clear band of shade behind a bright crest line: the dune's
+      // shape has to carry at race speed, where single-step shading is lost.
+      if (lee && ampHere > 4) v -= 0.55;
       if (crest) v = Math.max(v, 4.6);
       if (foot) v = Math.min(v, 1.4);
       // Terraces: the lip of each contour ledge catches the light, its foot does not.
@@ -247,7 +269,8 @@ export function paintGround(
       // The second sand lies in broad patches with ragged, wind-combed edges.
       const useAlt =
         reg.alt > 0.02 &&
-        vnoise(x, y, 330, SEED + 31) + (vnoise(x, y, 37, SEED + 32) - 0.5) * 0.12 > 1.12 - reg.alt * 0.62;
+        vnoise(x, y, 330, SEED + 31) + (vnoise(x, y, 37, SEED + 32) - 0.5) * 0.12 >
+          1.12 - reg.alt * 0.62;
       const c = (playa > 0.5 ? silt : useAlt ? alt : ramp)[step]!;
       level[p] = step;
       const o = p * 4;

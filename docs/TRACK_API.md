@@ -28,7 +28,7 @@ branch's sampled centerline (`TRACK_SAMPLE_SPACING`, 10 px between samples).
 | `packages/content/src/weather.ts` | The weather presets |
 | `tests/tools/trackcheck.ts` | `npx tsx tests/tools/trackcheck.ts <id\|all> [--drive]`: every rule, and with `--drive` the simulator's rules |
 | `tests/tools/trackview.ts` | `npx tsx tests/tools/trackview.ts <id\|all> [scale] [outDir]`: the layout view as a PNG, with the default car's driven line and race time |
-| `art/scripts/terrain/` | The terrain baker: generic steps, `biome.ts` (the contract), one module per biome (`city/`) |
+| `art/scripts/terrain/` | The terrain baker: generic steps, `biome.ts` (the contract), one module per biome (`city/`, `desert/`, `forest/`, `snow/`, `industrial/`) |
 
 ## The format
 
@@ -195,6 +195,7 @@ checks every sharp bend is covered and every lead is 0.8 to 1.2 s at reference s
 `--drive` (and in the tests) it checks the same with the real default car, first weather.
 
 Neon Cut's baked art places its own chevron boards; its runtime signs are data for a rebake.
+The other seven bakes place their chevron boards from the runtime signs (`track.cornerSigns`).
 
 ### Anchors
 
@@ -307,7 +308,12 @@ and the previews. `biome.ts` is the contract:
   positions, for tinting cars as they pass), preview spots, and `checks` (both must be zero:
   drivable pixels hidden by raised geometry, frame-0 mismatches of ground loops).
 - **A module** (`BiomeModule`): `{ biome, paint, presets }`, registered in `BIOMES` in
-  `index.ts`. A module refuses a preset it does not paint rather than painting it wrongly.
+  `index.ts`. A module refuses a preset it does not paint rather than painting it wrongly. All
+  five biomes have one, and every launch course is baked: `city/` (Neon Cut; Backstreet Blitz
+  under its own style in `city/blitz/`), `industrial/` (Steel Circuit, on the city's oblique
+  machinery), `desert/` (Dust Devil, Canyon Switch), `forest/` (Moss Run, Timber Dash) and
+  `snow/` (Whiteout Pass, on the forest kit). `docs/ART_GUIDE.md` ("Terrain") has the practice of
+  each, `docs/art/tracks/<id>.md` the plan of each track.
 
 The corridor field is sampled at every pixel near the road; on an open track cells whose
 nearest corridor edge is surely more than `OPEN_FIELD_REACH` (480 px) away are left `FAR`, so a
@@ -315,10 +321,22 @@ large open map bakes in reasonable time. A painter that needs the surface or a h
 calls `groundAt` on the runtime, the same lookup the physics makes.
 
 Commands: `npx tsx art/scripts/bake-terrain.ts [--track id] [--preset id] [--out dir]
-[--no-preview]` bakes one course (into the game's maps folder by default, which also refreshes
-`assets/maps/index.json`); `pnpm art` bakes everything. The city module was refactored, not
+[--no-preview] [--check]` bakes one course (positionally too: `bake-terrain.ts <track>
+<preset>`), into the game's maps folder by default, which also refreshes `assets/maps/index.json`,
+the art-side manifest copy and `art/manifests/<track>_<preset>.checks.json` (the self-checks with
+the sha256 of the shipped folder they were made on). `--check` bakes into a temporary folder and
+fails unless the result is byte-identical to the shipped bake: every one of the sixteen is
+reproducible this way. `pnpm art` bakes everything. The city module was refactored, not
 rewritten: Neon Cut's bake is byte-identical to the committed one (sha256 of names and bytes
 `92dba1e3bd9432cb13f64de9a62d4fdc385103211da60dda2e95598bf2b93813`).
+
+### Download sizes
+
+Section 2: first-play mandatory assets under 8 MB transferred, extra biomes lazy-loaded. A race
+downloads one course's terrain (only that course's folder), so each course is held to 2.5 MB
+and a first race's images (that course, every car sheet and the four effect atlases, about 1.7
+MB) to 4.5 MB (`tests/unit/terrain_courses.test.ts`). Measured sizes per course are in
+`docs/evidence/tracks/README.md`; the largest is Timber Dash at about 2.3 MB (its canopy tiles).
 
 ### What the art must provide, per track and weather preset
 
@@ -329,9 +347,13 @@ Into `apps/web/public/assets/maps/<trackId>/<presetId>/`:
 - Ground chunks: 512 px indexed PNGs covering the camera bounds (the whole world today).
 - Overlays: foreground art drawn above the cars (gantries, bridges, canopies, ledges); mark
   `fadeNearPlayer` for anything a car can pass under (Section 9.1: foreground occlusion fades).
+  The client fades one while a car's body box touches its pixels (not its bounding box), so a
+  piece fades as a whole only when the car is really at it (`weather/overlayFade.ts`).
 - Animated loops: at least three ambient loops a track (Section 12.10), never over a warning
   telegraph (Section 13.5). The hazards need theirs: crossing lights and the tram, steam
-  hiss and blast frames on the vents' timetable, magnetic lane marks, oil sheen.
+  hiss and blast frames on the vents' timetable, magnetic lane marks, oil sheen. A loop whose
+  `kind` is `timetable:<hazardId>` is one period long and the client sets its frame from the race
+  clock (`timetableFrame`, `apps/web/src/game/weather/terrainArt.ts`); every other loop plays.
 - `minimap.png`: the course map, transparent, as `art/scripts/terrain/minimap.ts` draws it.
 - One bake per preset: the weather art is per preset (wet roads, snow cover, dust). Until a
   preset is baked, a development build draws another preset's bake of the same track and says
@@ -345,9 +367,9 @@ loops and two surface or obstacle behaviours a track.
 
 ## How the client uses it
 
-- `assets/maps/index.json` lists the baked courses. A production build offers only those (today:
-  Neon Cut, clear night); a development build or `?debug=1` offers all eight tracks and both of
-  their weathers (`apps/web/src/app/course.ts`).
+- `assets/maps/index.json` lists the baked courses. A production build offers only those (all
+  sixteen courses since Milestone D); a development build or `?debug=1` offers all eight tracks
+  and both of their weathers (`apps/web/src/app/course.ts`).
 - The Track Preview steps through the tracks at the top of the map and turns the weather badge
   into a choice of the track's two weathers when more than one course is offered; the map is
   the bake's or drawn from the layout, with a "Track art in progress" note on an unbaked one.
@@ -373,4 +395,7 @@ loops and two surface or obstacle behaviours a track.
    with `scale` (the shape stays, every length and radius moves together), the surface mix with
    bands, and corner signs come by themselves.
 5. Run the harness on it: `npx tsx tests/balance/tracksReport.ts`.
-6. Bake its terrain once a biome module paints it.
+6. Bake its terrain once a biome module paints it (`npx tsx art/scripts/bake-terrain.ts <id>
+   <preset>` for each of its weathers), review it (`art/scripts/preview-terrain-frames.ts`, then
+   `tests/visual/courses.ts` in the client), and add it to nothing else: the index, the
+   checks file and the tests pick it up.

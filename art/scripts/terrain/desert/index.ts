@@ -62,7 +62,14 @@ export function paintDesert(ctx: BakeContext): BiomeOutput {
   // Shadows: props first (into their own plane), then the masses' volume.
   for (const pl of dress.placements) {
     if (!pl.shadow) continue;
-    stage.spriteShadow(pl.sp.art, pl.gx - pl.sp.ax, pl.gy - pl.sp.ay, pl.gy, look.drop, pl.shadowFrom ?? 0);
+    stage.spriteShadow(
+      pl.sp.art,
+      pl.gx - pl.sp.ax,
+      pl.gy - pl.sp.ay,
+      pl.gy,
+      look.drop,
+      pl.shadowFrom ?? 0,
+    );
   }
   stage.resolveShadows(look.drop);
   const d = world.data;
@@ -89,7 +96,14 @@ export function paintDesert(ctx: BakeContext): BiomeOutput {
   });
   const ordered = dress.placements.slice().sort((a, b) => a.gy - b.gy || a.gx - b.gx);
   for (const pl of ordered)
-    stage.sprite(pl.sp.art, pl.gx - pl.sp.ax, pl.gy - pl.sp.ay, pl.gy, pl.kind, pl.forceFg ?? false);
+    stage.sprite(
+      pl.sp.art,
+      pl.gx - pl.sp.ax,
+      pl.gy - pl.sp.ay,
+      pl.gy,
+      pl.kind,
+      pl.forceFg ?? false,
+    );
   for (const draw of dress.draws) draw();
 
   // The guard, from the picture: no reachable pixel of the ground layer may have changed.
@@ -146,7 +160,7 @@ export function paintDesert(ctx: BakeContext): BiomeOutput {
   console.log(
     `  desert   ${((performance.now() - t0) / 1000).toFixed(1)} s; ${masks.reachCount} reachable px; ` +
       `raised art: ${inSolids} px in the ground layer (all over solid or unreachable ground), ` +
-      `${overlays.length} overlays; decor ${decor.scrub} scrub, ${decor.tufts} tufts, ${decor.pebbles} pebble clusters, ${decor.gullies} rills, ${decor.tracks} old tracks`,
+      `${overlays.length} overlays; decor ${decor.scrub} scrub, ${decor.tufts} tufts, ${decor.pebbles} pebble clusters, ${decor.gullies} rills, ${decor.washes} washes, ${decor.tracks} old tracks`,
   );
   console.log(
     `  props    ${Object.entries(dress.props)

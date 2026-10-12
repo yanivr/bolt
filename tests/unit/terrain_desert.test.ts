@@ -11,10 +11,18 @@ import {
 } from '@bolt/shared';
 import type { TerrainManifest, TrackRuntime } from '@bolt/shared';
 import { describe, expect, it } from 'vitest';
+import {
+  BODY_HALF,
+  BODY_UP,
+  FADE_MARGIN,
+  coverageFromAlpha,
+  underOverlay,
+} from '../../apps/web/src/game/weather/overlayFade.js';
 import { PixelBuffer, readPng } from '../../art/scripts/lib/pixels.js';
 import { Canvas } from '../../art/scripts/terrain/canvas.js';
 import type { Masks } from '../../art/scripts/terrain/desert/masks.js';
 import { lookFor } from '../../art/scripts/terrain/desert/palette.js';
+import { CANYON_LANE } from '../../art/scripts/terrain/desert/canyonSwitch.js';
 import { fitRise, raiseBoulder } from '../../art/scripts/terrain/desert/rocks.js';
 import { M_BOULDER, Stage } from '../../art/scripts/terrain/desert/stage.js';
 
@@ -67,14 +75,24 @@ function roadSamples(
   const loc = createLocation();
   const ground = createGround();
   const bare = buildTrack({ ...track.def, surfaceZones: [] });
-  const out = { asphalt: [] as number[], sand: [] as number[], drift: [] as number[], rgbA: [0, 0, 0], rgbS: [0, 0, 0] };
+  const out = {
+    asphalt: [] as number[],
+    sand: [] as number[],
+    drift: [] as number[],
+    rgbA: [0, 0, 0],
+    rgbS: [0, 0, 0],
+  };
   const surfaceAt = (x: number, y: number): string => {
     locate(track, x, y, loc);
     return groundAt(track, loc, x, y, 0, ground).surface;
   };
   for (const b of track.branches) {
     for (let s = 0; s < b.length; s += 9) {
-      if (b.index === 0 && Math.abs(((s - track.startS + b.length * 1.5) % b.length) - b.length / 2) < 80) continue;
+      if (
+        b.index === 0 &&
+        Math.abs(((s - track.startS + b.length * 1.5) % b.length) - b.length / 2) < 80
+      )
+        continue;
       const p = sampleBranch(b, s);
       for (const f of [-0.62, -0.35, -0.12, 0.12, 0.35, 0.62]) {
         const lat = f * p.halfWidth;
@@ -182,29 +200,51 @@ describe.each(COURSES)('desert terrain %s / %s', (trackId, presetId) => {
   });
 
   it('fades an overlay from the road only where it stands over the road or its verge', () => {
+    // By the client's own rule (the car's body box against the overlay's pixels,
+    // `overlayFade.ts`): a piece of canyon wall, mesa or rock that does not stand over the road
+    // or its shoulder is never faded by a car driving the lane (the middle 70 percent of the
+    // road), so driving the canyon leaves the walls whole; a car hugging the edge fades only
+    // pieces of at most 32 px beside it. Signs, rails, poles, towers and props stand at the
+    // verge by design and fade as a car passes.
     const track = buildTrack(def);
     const loc = createLocation();
     const onCorridor = (x: number, y: number): boolean => {
       locate(track, x + 0.5, y + 0.5, loc);
       return loc.edge <= 0;
     };
-    const onPavement = (x: number, y: number): boolean => {
+    const roadShare = (x: number, y: number): number => {
       locate(track, x + 0.5, y + 0.5, loc);
-      return Math.abs(loc.lateral) <= loc.halfWidth && loc.edge <= 0;
+      return loc.edge <= 0 ? Math.abs(loc.lateral) / loc.halfWidth : Infinity;
     };
-    let misses = 0;
+    const LAND = new Set(['desert_cliff', 'desert_mesa', 'desert_rock']);
+    const reach = BODY_HALF + FADE_MARGIN;
+    const up = BODY_UP + FADE_MARGIN;
+    const fromLane: string[] = [];
+    const large: string[] = [];
     for (const o of m.overlays) {
+      if (!LAND.has(o.kind)) continue;
       const img = readPng(join(dir, o.file));
       let over = false;
       for (let y = 0; y < o.h && !over; y++)
-        for (let x = 0; x < o.w && !over; x++) if (img.alphaAt(x, y) > 0 && onCorridor(o.x + x, o.y + y)) over = true;
+        for (let x = 0; x < o.w && !over; x++)
+          if (img.alphaAt(x, y) > 0 && onCorridor(o.x + x, o.y + y)) over = true;
       if (over) continue;
-      // The client fades an overlay while the car is within 26 px of its box.
-      for (let y = o.y - 26; y <= o.y + o.h + 26; y += 3)
-        for (let x = o.x - 26; x <= o.x + o.w + 26; x += 3) if (onPavement(x, y)) misses++;
+      const coverage = coverageFromAlpha((x, y) => img.alphaAt(x, y), o.w, o.h);
+      let lane = 0;
+      let edge = 0;
+      for (let y = o.y - reach; y <= o.y + o.h + up; y += 3)
+        for (let x = o.x - reach; x <= o.x + o.w + reach; x += 3) {
+          if (!underOverlay(o, { present: true, x, y }, coverage)) continue;
+          const share = roadShare(x, y);
+          if (share <= CANYON_LANE) lane++;
+          else if (share <= 1) edge++;
+        }
+      if (lane > 0) fromLane.push(`${o.id} (${lane})`);
+      if (lane + edge > 0 && Math.max(o.w, o.h) > 32) large.push(`${o.id} ${o.w}x${o.h}`);
     }
-    expect(misses).toBe(0);
-  }, 60_000);
+    expect(fromLane).toEqual([]);
+    expect(large).toEqual([]);
+  }, 120_000);
 
   it('stays inside its download budget', () => {
     let bytes = 0;
@@ -226,7 +266,8 @@ describe.each(COURSES)('desert terrain %s / %s', (trackId, presetId) => {
     for (const o of m.overlays) {
       const img = readPng(join(dir, o.file));
       for (let y = 0; y < o.h; y++)
-        for (let x = 0; x < o.w; x++) if (img.alphaAt(x, y) > 0) overlayMask[(o.y + y) * m.worldWidth + o.x + x] = 1;
+        for (let x = 0; x < o.w; x++)
+          if (img.alphaAt(x, y) > 0) overlayMask[(o.y + y) * m.worldWidth + o.x + x] = 1;
     }
     const track = buildTrack(def);
     const s = roadSamples(track, world, overlayMask);
@@ -302,7 +343,8 @@ describe('desert stage', () => {
         expect(stage.fg.alpha(x, y)).toBe(0);
       }
     expect(inside).toBeGreaterThan(60);
-    for (let p = 0; p < masks.w * masks.h; p++) if (stage.mat[p] === M_BOULDER) expect(masks.solid[p]).toBe(2);
+    for (let p = 0; p < masks.w * masks.h; p++)
+      if (stage.mat[p] === M_BOULDER) expect(masks.solid[p]).toBe(2);
   });
 
   it('never lets a fitted column lean over reachable ground', () => {
@@ -310,7 +352,8 @@ describe('desert stage', () => {
     for (let y = 22; y <= 38; y++)
       for (let x = 12; x <= 28; x++) {
         const r = fitRise(masks, x, y, 40);
-        for (let v = 1; v <= r; v++) expect(masks.reach[(y - v) * masks.w + x + Math.floor(v / 3)]).toBe(0);
+        for (let v = 1; v <= r; v++)
+          expect(masks.reach[(y - v) * masks.w + x + Math.floor(v / 3)]).toBe(0);
       }
     // Behind the boundary band nothing is reachable: a column at the band can rise to the top.
     expect(fitRise(masks, 10, 5, 40)).toBe(5);
@@ -330,7 +373,8 @@ describe.runIf(process.env.BOLT_TERRAIN_REBAKE === '1')('desert re-bake', () => 
         expect(report.checks.coveredDrivable).toBe(0);
         expect(report.checks.animatedMismatch).toBe(0);
         const dir = join(MAPS, trackId, presetId);
-        for (const name of readdirSync(dir)) expect(readFileSync(join(out, name)).equals(readFileSync(join(dir, name)))).toBe(true);
+        for (const name of readdirSync(dir))
+          expect(readFileSync(join(out, name)).equals(readFileSync(join(dir, name)))).toBe(true);
       } finally {
         rmSync(out, { recursive: true, force: true });
       }
@@ -338,4 +382,3 @@ describe.runIf(process.env.BOLT_TERRAIN_REBAKE === '1')('desert re-bake', () => 
     900_000,
   );
 });
-

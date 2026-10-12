@@ -1,3 +1,8 @@
+import {
+  BODY_HALF,
+  BODY_UP,
+  FADE_MARGIN,
+} from '../../../../apps/web/src/game/weather/overlayFade.js';
 import type { OverlayArt } from '../biome.js';
 import { Canvas } from '../canvas.js';
 import type { Color } from '../canvas.js';
@@ -31,7 +36,18 @@ export const M_RIDGE = 4;
 export const M_PILLAR = 5;
 
 /** Overlay kinds, by code, for naming the foreground pieces. */
-export const FG_KINDS = ['ground', 'rock', 'cliff', 'mesa', 'prop', 'sign', 'arch', 'tower'];
+export const FG_KINDS = [
+  'ground',
+  'rock',
+  'cliff',
+  'mesa',
+  'prop',
+  'sign',
+  'arch',
+  'tower',
+  'rail',
+  'banner',
+];
 export const FG_ROCK = 1;
 export const FG_CLIFF = 2;
 export const FG_MESA = 3;
@@ -39,6 +55,22 @@ export const FG_PROP = 4;
 export const FG_SIGN = 5;
 export const FG_ARCH = 6;
 export const FG_TOWER = 7;
+export const FG_RAIL = 8;
+export const FG_BANNER = 9;
+/** Height-field materials of the structures (`structures.ts`), named here to keep the kinds apart. */
+const MAT_BANNER = 6;
+const MAT_RAIL = 7;
+
+/**
+ * How far a car's fade test reaches from its centre (`apps/web/src/game/weather/overlayFade.ts`:
+ * the body box plus its margin): sideways, up the screen and down it. A piece with pixels this
+ * close to the pavement fades when a car passes it.
+ */
+export const FADE_REACH = {
+  side: BODY_HALF + FADE_MARGIN,
+  up: BODY_UP + FADE_MARGIN,
+  down: BODY_HALF + FADE_MARGIN,
+};
 
 export type HitInfo = {
   /** Ground pixel of the surface point and its rise above the ground. */
@@ -201,7 +233,8 @@ export class Stage {
         if (a === 0) continue;
         const c = (art.data[i]! << 16) | (art.data[i + 1]! << 8) | art.data[i + 2]!;
         // A sprite carries its own depth when it has a key plane (rounded solids).
-        const k = art.keys && art.keys[yy * art.w + xx] !== KEY_NONE ? art.keys[yy * art.w + xx]! : baseY;
+        const k =
+          art.keys && art.keys[yy * art.w + xx] !== KEY_NONE ? art.keys[yy * art.w + xx]! : baseY;
         if (forceFg) this.putFg(x + xx, y + yy, c, k, kind, a);
         else this.put(x + xx, y + yy, c, k, kind, a);
       }
@@ -343,7 +376,20 @@ export class Stage {
               hit.shaded = this.shade.length > 0 && this.shade[g]! > r;
               const c = paint(this.mat[g]!, hit, this);
               const m = this.mat[g]!;
-              const kind = m === M_CLIFF || m === M_RIDGE ? FG_CLIFF : m === M_MESA ? FG_MESA : FG_ROCK;
+              // A mass spanning open air (an arch, the canyon's overhang) is drawn to be driven
+              // under; it is named apart from the walls it springs from.
+              const kind =
+                m === M_CLIFF && this.floor[g]! > 0
+                  ? FG_ARCH
+                  : m === M_CLIFF || m === M_RIDGE
+                    ? FG_CLIFF
+                    : m === M_MESA
+                      ? FG_MESA
+                      : m === MAT_RAIL
+                        ? FG_RAIL
+                        : m === MAT_BANNER
+                          ? FG_BANNER
+                          : FG_ROCK;
               this.put(sx, sy, c, gy, kind);
               break;
             }
@@ -399,15 +445,20 @@ export class Stage {
             }
           }
       }
-      // Tile the piece: split anything too large, and anything whose fade box (its opaque
-      // bounds grown by the client's 26 px) would reach the road without the piece itself
-      // standing over the road, so driving past a cliff never fades it.
+      // Tile the piece: split anything too large, and anything that a car on the road would
+      // fade (its opaque bounds within the client's fade reach of the pavement) without the
+      // piece itself standing over the road, so driving past a cliff fades only the pieces
+      // right beside the car, never a whole wall.
       const emit = (cx0: number, cy0: number, cx1: number, cy1: number): void => {
         let bx0 = Infinity;
         let by0 = Infinity;
         let bx1 = -Infinity;
         let by1 = -Infinity;
         let overRoad = false;
+        // Whether a car anywhere on the pavement would fade this piece: some pixel of it lies
+        // within the client's fade reach of the road (tested per pixel, not on the box).
+        let reached = false;
+        const R = FADE_REACH;
         const px0 = cx0 * C;
         const py0 = cy0 * C;
         const px1 = Math.min(w, (cx1 + 1) * C);
@@ -421,12 +472,18 @@ export class Stage {
             bx1 = Math.max(bx1, X);
             by1 = Math.max(by1, Y);
             if (this.masks.kind[Y * w + X] !== 0) overRoad = true;
+            // Grown by one coverage cell: the client reads the pixels on an 8 px grid.
+            if (
+              !reached &&
+              this.roadIn(X - R.side - 8, Y - R.down - 8, X + R.side + 9, Y + R.up + 9)
+            )
+              reached = true;
           }
         if (bx1 < bx0) return;
         const cw = cx1 - cx0 + 1;
         const ch = cy1 - cy0 + 1;
         const big = (bx1 - bx0 + 1 > maxSide || by1 - by0 + 1 > maxSide) && (cw > 1 || ch > 1);
-        const nearRoad = !overRoad && this.roadIn(bx0 - 26, by0 - 26, bx1 + 27, by1 + 27) && (cw > 2 || ch > 2);
+        const nearRoad = !overRoad && reached && (cw > 2 || ch > 2);
         if (big || nearRoad) {
           if (cw >= ch) {
             const mid = cx0 + (cw >> 1) - 1;
@@ -447,7 +504,12 @@ export class Stage {
             const i4 = (Y * w + X) * 4;
             const a = fg.data[i4 + 3]!;
             if (a === 0) continue;
-            cv.setA(X - px0, Y - py0, (fg.data[i4]! << 16) | (fg.data[i4 + 1]! << 8) | fg.data[i4 + 2]!, a);
+            cv.setA(
+              X - px0,
+              Y - py0,
+              (fg.data[i4]! << 16) | (fg.data[i4 + 1]! << 8) | fg.data[i4 + 2]!,
+              a,
+            );
             const k = this.fgKind[Y * w + X]!;
             kinds.set(k, (kinds.get(k) ?? 0) + 1);
           }

@@ -35,8 +35,11 @@ road edge on screen and never hides the road. The 62 pines and firs stand on the
 | Warming hut | The ski lodge's anchor is open drivable ground with no collider, so the pass's warm-windowed log hut stands where the data is solid: set into the north bank, with a smoking chimney. |
 | Frozen pond | The ice zone, with cracks, skate marks, glare and blowing snow. |
 | Radio relay | A red and white lattice mast with dishes and a light at its anchor (thin furniture). |
-| Chairlift | Four pylons (thin furniture) and the haul rope with chairs over the infield, above the cars. |
-| Ice cave | Not drawn: its anchor is open ground with no collider and a cave cannot be thin furniture. |
+| Chairlift | Four pylons (thin furniture) evenly along the `chairlift` anchor's line, and the haul rope with chairs over the infield, above the cars. |
+
+The data once named an ice cave at an anchor on open ground with no collider; a cave cannot be
+thin furniture, so it was never drawn. Since Milestone D's finish the fifth landmark is the
+chairlift, which is drawn (`landmarks` and the `chairlift` anchor in `tracks/snow01.ts`).
 
 ## Loops
 

@@ -10,7 +10,13 @@ import type { Env } from '../forest/env.js';
 import { finish } from '../forest/finish.js';
 import { plantUnreachable } from '../forest/forestKit.js';
 import { plantStats, plantTree, seedOf, standSprite } from '../forest/place.js';
-import { nameBoard, paintStart, placeCornerSigns, placeShortcutSign, rockSprite } from '../forest/props.js';
+import {
+  nameBoard,
+  paintStart,
+  placeCornerSigns,
+  placeShortcutSign,
+  rockSprite,
+} from '../forest/props.js';
 import { SURF, paintCorridor } from '../forest/road.js';
 import { liftPylon, markerPole, relayMast, snowGun, warmingHut } from '../forest/structures.js';
 import { weatherLook } from '../forest/weather.js';
@@ -37,7 +43,8 @@ function bankDepth(env: Env): { ids: Set<number>; depth: Float32Array } {
     if (wl.kind === 'snowbank') ids.add(k + 1);
   });
   const outside = new Uint8Array(w * h);
-  for (let i = 0; i < w * h; i++) outside[i] = maps.reach.solid[i] && ids.has(maps.reach.solidId[i]!) ? 0 : 1;
+  for (let i = 0; i < w * h; i++)
+    outside[i] = maps.reach.solid[i] && ids.has(maps.reach.solidId[i]!) ? 0 : 1;
   return { ids, depth: distanceField(outside, w, h, 64) };
 }
 
@@ -48,12 +55,22 @@ function bankDepth(env: Env): { ids: Set<number>; depth: Float32Array } {
  * road to its north stands no taller than its own width, its crest meeting the road edge on
  * screen, as the city's near-side barriers do, so it never hides the road.
  */
-function raiseBanks(env: Env, fresh: number, notch: { x: number; y: number; w: number; h: number } | null): { ids: Set<number>; depth: Float32Array } {
+function raiseBanks(
+  env: Env,
+  fresh: number,
+  notch: { x: number; y: number; w: number; h: number } | null,
+): { ids: Set<number>; depth: Float32Array } {
   const { maps, ctx } = env;
   const { w } = maps;
   const bd = bankDepth(env);
   const { depth, ids } = bd;
-  const tones: Color[] = [SNOW.powderDeep, SNOW.powderShade, SNOW.powderMid, SNOW.powder, SNOW.powderHi];
+  const tones: Color[] = [
+    SNOW.powderDeep,
+    SNOW.powderShade,
+    SNOW.powderMid,
+    SNOW.powder,
+    SNOW.powderHi,
+  ];
   const tall = new Set<number>();
   ctx.def.walls.forEach((wl, k) => {
     if (!ids.has(k + 1)) return;
@@ -93,7 +110,8 @@ function raiseBanks(env: Env, fresh: number, notch: { x: number; y: number; w: n
       if (!maps.reach.solid[i] || tall.has(maps.reach.solidId[i]!)) return 0;
       return heightAt(x, y, 17);
     },
-    top: (x, y) => topColor(x, y, heightAt(x, y - 1, 17), heightAt(x - 1, y, 17), heightAt(x, y, 17)),
+    top: (x, y) =>
+      topColor(x, y, heightAt(x, y - 1, 17), heightAt(x - 1, y, 17), heightAt(x, y, 17)),
     side: (x, y, v) => faceColor(x, y, v, 17),
   });
   // Tall banks: drawn as standing pieces.
@@ -122,12 +140,20 @@ function raiseBanks(env: Env, fresh: number, notch: { x: number; y: number; w: n
         for (let x = px; x < px + pw; x++) {
           const i = y * w + x;
           if (!maps.reach.solid[i] || maps.reach.solidId[i] !== id) continue;
-          if (notch && x >= notch.x - 2 && x < notch.x + notch.w + 2 && y >= notch.y - 3 && y < notch.y + notch.h + 3) continue;
+          if (
+            notch &&
+            x >= notch.x - 2 &&
+            x < notch.x + notch.w + 2 &&
+            y >= notch.y - 3 &&
+            y < notch.y + notch.h + 3
+          )
+            continue;
           const h = heightAt(x, y, MAX);
           // Its shadow on the snow behind it, toward the south-east.
           for (let j = 1; j < h * env.shadowK * 0.9; j++) {
             const q = (y + j) * w + x + j;
-            if (q < maps.w * maps.h && !maps.reach.solid[q] && env.shadow[q]! < 2) env.shadow[q] = 2;
+            if (q < maps.w * maps.h && !maps.reach.solid[q] && env.shadow[q]! < 2)
+              env.shadow[q] = 2;
           }
           const hs = y + 1 <= y1 && maps.reach.solidId[i + w] === id ? heightAt(x, y + 1, MAX) : 0;
           const top = topColor(x, y, heightAt(x, y - 1, MAX), heightAt(x - 1, y, MAX), h);
@@ -152,7 +178,12 @@ function vnoise2(x: number, y: number): number {
 }
 
 /** The point on a bank's crest nearest p. */
-function crestNear(env: Env, bd: { depth: Float32Array }, p: TrackPoint, reach = 70): TrackPoint | null {
+function crestNear(
+  env: Env,
+  bd: { depth: Float32Array },
+  p: TrackPoint,
+  reach = 70,
+): TrackPoint | null {
   const { w, h } = env.maps;
   let best: TrackPoint | null = null;
   let bv = 0;
@@ -175,7 +206,11 @@ export function paintSnow(ctx: BakeContext): BiomeOutput {
   const env = createEnv(ctx, look.shadowK);
   const { maps, world } = env;
   paintSnowField(env, fresh);
-  paintCorridor(env, SNOW_ROAD, (i) => maps.hazard[i]! > 0 && ctx.def.hazards[maps.hazard[i]! - 1]!.kind === 'deep_mud');
+  paintCorridor(
+    env,
+    SNOW_ROAD,
+    (i) => maps.hazard[i]! > 0 && ctx.def.hazards[maps.hazard[i]! - 1]!.kind === 'deep_mud',
+  );
   scrapeIceRoad(env);
   paintStart(env);
   const cracks = anchor(env, 'pond_cracks');
@@ -192,7 +227,8 @@ export function paintSnow(ctx: BakeContext): BiomeOutput {
       if (maps.kind[i] !== 2 || maps.surf[i] === SURF.ice) continue;
       const x = i % maps.w;
       const y = (i / maps.w) | 0;
-      if (hash2(x >> 1, y >> 1, 81) < 0.55) world.set(x, y, hash2(x, y, 82) < 0.5 ? SNOW.powder : SNOW.powderHi);
+      if (hash2(x >> 1, y >> 1, 81) < 0.55)
+        world.set(x, y, hash2(x, y, 82) < 0.5 ? SNOW.powder : SNOW.powderHi);
     }
 
   const t0 = performance.now();
@@ -205,7 +241,9 @@ export function paintSnow(ctx: BakeContext): BiomeOutput {
     if (c) {
       const site = { x: Math.round(c.x - 23), y: Math.round(c.y - 7), w: 46, h: 14 };
       let fits = true;
-      for (let y = site.y; y < site.y + site.h; y++) for (let x = site.x; x < site.x + site.w; x++) if (pre.depth[y * maps.w + x]! <= 0.5) fits = false;
+      for (let y = site.y; y < site.y + site.h; y++)
+        for (let x = site.x; x < site.x + site.w; x++)
+          if (pre.depth[y * maps.w + x]! <= 0.5) fits = false;
       if (fits) hutSite = site;
     }
   }
@@ -215,11 +253,20 @@ export function paintSnow(ctx: BakeContext): BiomeOutput {
   for (const o of ctx.def.obstacles) {
     const seed = seedOf(o.id, o.x, o.y);
     if (o.kind === 'tree') {
-      plantTree(env, { species: hash2(seed, 1, 3) < 0.6 ? 'fir' : 'pine', seed, radius: o.radius, snow: load }, o.x, o.y);
+      plantTree(
+        env,
+        { species: hash2(seed, 1, 3) < 0.6 ? 'fir' : 'pine', seed, radius: o.radius, snow: load },
+        o.x,
+        o.y,
+      );
       trees++;
-    } else if (o.kind === 'rock') standSprite(env, rockSprite(o.radius, seed, o.y, load), o.x, o.y, 'rock');
+    } else if (o.kind === 'rock')
+      standSprite(env, rockSprite(o.radius, seed, o.y, load), o.x, o.y, 'rock');
   }
-  const woods = plantUnreachable(env, ['fir', 'pine', 'fir'], 58, 8101, { minRoadDist: 200, extra: { snow: load } });
+  const woods = plantUnreachable(env, ['fir', 'pine', 'fir'], 58, 8101, {
+    minRoadDist: 200,
+    extra: { snow: load },
+  });
   env.log.push(`trees    ${trees} pines and firs, ${woods} in the unreachable margin`);
 
   // On the north bank: snow guns at the anchors' stations, and the warming hut.
@@ -229,34 +276,62 @@ export function paintSnow(ctx: BakeContext): BiomeOutput {
     for (const p of ga.points) {
       const c = crestNear(env, bd, p);
       if (!c) continue;
-      standSprite(env, snowGun(36, Math.PI / 2, c.y), c.x, c.y, 'snow_gun', { id: `snow_gun_${guns.length}`, kind: 'snow_gun', fade: true });
+      standSprite(env, snowGun(36, Math.PI / 2, c.y), c.x, c.y, 'snow_gun', {
+        id: `snow_gun_${guns.length}`,
+        kind: 'snow_gun',
+        fade: true,
+      });
       guns.push(c);
     }
   let hut: TrackPoint | null = null;
   if (hutSite) {
-    standSprite(env, warmingHut(hutSite.w, hutSite.h, hutSite.y), hutSite.x, hutSite.y, 'hut', { id: 'warming_hut', kind: 'hut', fade: true });
+    standSprite(env, warmingHut(hutSite.w, hutSite.h, hutSite.y), hutSite.x, hutSite.y, 'hut', {
+      id: 'warming_hut',
+      kind: 'hut',
+      fade: true,
+    });
     env.scene.solid(hutSite.x, hutSite.y, hutSite.w, hutSite.h, 20);
     hut = { x: hutSite.x + hutSite.w - 7, y: hutSite.y + 4 };
   }
-  env.log.push(`hut      ${hutSite ? `on bank_n at ${hutSite.x},${hutSite.y}` : 'did not fit on bank_n'}`);
+  env.log.push(
+    `hut      ${hutSite ? `on bank_n at ${hutSite.x},${hutSite.y}` : 'did not fit on bank_n'}`,
+  );
   // Plow poles on the south bank, next to their anchors.
   const pm = anchor(env, 'plow_markers');
   if (pm)
     for (const [k, p] of pm.points.entries()) {
       const c = crestNear(env, bd, p, 50);
       if (!c) continue;
-      standSprite(env, markerPole(28, c.y), c.x, c.y, 'pole', { id: `plow_pole_${k}`, kind: 'pole', fade: true });
+      standSprite(env, markerPole(28, c.y), c.x, c.y, 'pole', {
+        id: `plow_pole_${k}`,
+        kind: 'pole',
+        fade: true,
+      });
     }
   // The radio relay (thin furniture) and a chairlift line across the infield.
   const rr = anchor(env, 'radio_relay')?.points[0];
-  if (rr) standSprite(env, relayMast(110, Math.round(rr.y)), Math.round(rr.x), Math.round(rr.y), 'mast', { id: 'radio_relay', kind: 'mast', fade: true });
-  const lodge = anchor(env, 'ski_lodge')?.points[0];
+  if (rr)
+    standSprite(env, relayMast(110, Math.round(rr.y)), Math.round(rr.x), Math.round(rr.y), 'mast', {
+      id: 'radio_relay',
+      kind: 'mast',
+      fade: true,
+    });
+  // The chairlift: four pylons evenly along its anchor's line (bottom station to top).
+  const lift = anchor(env, 'chairlift')?.points;
   const pylons: TrackPoint[] = [];
-  if (lodge) {
+  if (lift && lift.length >= 2) {
+    const [a, b] = [lift[0]!, lift[lift.length - 1]!];
     for (let k = 0; k < 4; k++) {
-      const p = { x: Math.round(lodge.x + 120 + k * 210), y: Math.round(lodge.y - 40 - k * 120) };
+      const p = {
+        x: Math.round(a.x + ((b.x - a.x) * k) / 3),
+        y: Math.round(a.y + ((b.y - a.y) * k) / 3),
+      };
       if (maps.kind[p.y * maps.w + p.x] !== 0 || maps.roadDist[p.y * maps.w + p.x]! < 30) continue;
-      standSprite(env, liftPylon(84, p.y), p.x, p.y, 'pylon', { id: `lift_pylon_${k}`, kind: 'pylon', fade: true });
+      standSprite(env, liftPylon(84, p.y), p.x, p.y, 'pylon', {
+        id: `lift_pylon_${k}`,
+        kind: 'pylon',
+        fade: true,
+      });
       pylons.push(p);
     }
     liftCable(env, pylons, 84);
@@ -268,14 +343,25 @@ export function paintSnow(ctx: BakeContext): BiomeOutput {
     const s0 = ctx.track.main;
     void s0;
     const p = cracks?.points[0];
-    if (p) env.scene.addSplit({ art: sign, x: Math.round(p.x) - 30, y: Math.round(p.y) - 120, baseY: Math.round(p.y) - 100 }, { id: 'sign_pond_wind', kind: 'sign', fade: true });
+    if (p)
+      env.scene.addSplit(
+        {
+          art: sign,
+          x: Math.round(p.x) - 30,
+          y: Math.round(p.y) - 120,
+          baseY: Math.round(p.y) - 100,
+        },
+        { id: 'sign_pond_wind', kind: 'sign', fade: true },
+      );
   }
   env.log.push(`signs    ${placeCornerSigns(env)} corner boards`);
   for (const br of ctx.track.branches.slice(1)) {
     const sc = ctx.def.shortcuts.find((s) => s.id === br.id);
     placeShortcutSign(env, br, (sc?.signName ?? br.id).toUpperCase());
   }
-  env.log.push(`scene    ${plantStats()}; built in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+  env.log.push(
+    `scene    ${plantStats()}; built in ${((performance.now() - t0) / 1000).toFixed(1)} s`,
+  );
   env.previewCars.push(
     { name: 'sprint_lane', x: 1100, y: 470 },
     { name: 'switchbacks', x: 2350, y: 1100 },
@@ -286,9 +372,15 @@ export function paintSnow(ctx: BakeContext): BiomeOutput {
 
   const loops = (): AnimatedArt[] => {
     const out: AnimatedArt[] = [];
-    if (hut) out.push(smokeLoop('hut_smoke', hut.x, hut.y - 28, 8201, ctx.preset.windX, 0xe8ecf2, 0xa8b0c0));
+    if (hut)
+      out.push(
+        smokeLoop('hut_smoke', hut.x, hut.y - 28, 8201, ctx.preset.windX, 0xe8ecf2, 0xa8b0c0),
+      );
     guns.forEach((g, k) => out.push(gunLights(`snow_gun_light_${k}`, g, k)));
-    if (pond) out.push(blowingSnow('pond_blowing_snow', pond.x, pond.y, ctx.preset.windX, ctx.preset.windY, 8301));
+    if (pond)
+      out.push(
+        blowingSnow('pond_blowing_snow', pond.x, pond.y, ctx.preset.windX, ctx.preset.windY, 8301),
+      );
     if (pond) {
       const x0 = Math.round(pond.x - 200);
       const y0 = Math.round(pond.y - 70);
@@ -354,7 +446,13 @@ function liftCable(env: Env, pylons: readonly TrackPoint[], height: number): voi
           cv.set(x + 2, y + 8, 0x3a3e48);
         }
       }
-      env.scene.add({ art: cv, x: x0, y: y0, baseY: Math.max(a.y, b.y), overlay: { id: `lift_cable_${k}_${side < 0 ? 'w' : 'e'}`, kind: 'cable', fade: true } });
+      env.scene.add({
+        art: cv,
+        x: x0,
+        y: y0,
+        baseY: Math.max(a.y, b.y),
+        overlay: { id: `lift_cable_${k}_${side < 0 ? 'w' : 'e'}`, kind: 'cable', fade: true },
+      });
     }
   }
 }
@@ -375,11 +473,27 @@ function gunLights(id: string, g: TrackPoint, k: number): AnimatedArt {
   }
   // The lamp on the gun's post, 26 + 11 units up.
   const rise = Math.round(47 * 0.62);
-  return { id, kind: 'snow_gun_light', frames, x: g.x - 2 + Math.floor(rise / 3), y: g.y - rise - 3, fps: 3, above: true, blend: 'normal' };
+  return {
+    id,
+    kind: 'snow_gun_light',
+    frames,
+    x: g.x - 2 + Math.floor(rise / 3),
+    y: g.y - rise - 3,
+    fps: 3,
+    above: true,
+    blend: 'normal',
+  };
 }
 
 /** Streaks of snow blowing across the pond: the visible wind. */
-function blowingSnow(id: string, cx: number, cy: number, wx: number, wy: number, seed: number): AnimatedArt {
+function blowingSnow(
+  id: string,
+  cx: number,
+  cy: number,
+  wx: number,
+  wy: number,
+  seed: number,
+): AnimatedArt {
   const W = 360;
   const H = 150;
   const F = 10;
@@ -396,8 +510,8 @@ function blowingSnow(id: string, cx: number, cy: number, wx: number, wy: number,
     const cv = new Canvas(W, H);
     for (const s of streaks) {
       const t = (f / F) * W;
-      const x0 = ((s.x + t * ux) % W + W) % W;
-      const y0 = ((s.y + t * uy * 0.6) % H + H) % H;
+      const x0 = (((s.x + t * ux) % W) + W) % W;
+      const y0 = (((s.y + t * uy * 0.6) % H) + H) % H;
       for (let k = 0; k < s.len; k++) {
         const x = Math.round(x0 + ux * k);
         const y = Math.round(y0 + uy * k * 0.6);
@@ -407,7 +521,16 @@ function blowingSnow(id: string, cx: number, cy: number, wx: number, wy: number,
     }
     frames.push(cv);
   }
-  return { id, kind: 'blowing_snow', frames, x: Math.round(cx - W / 2), y: Math.round(cy - H / 2), fps: 10, above: true, blend: 'normal' };
+  return {
+    id,
+    kind: 'blowing_snow',
+    frames,
+    x: Math.round(cx - W / 2),
+    y: Math.round(cy - H / 2),
+    fps: 10,
+    above: true,
+    blend: 'normal',
+  };
 }
 
 /** A puff of snow sliding off a bough and falling. */
@@ -428,7 +551,16 @@ function branchSnow(id: string, x: number, y: number, seed: number): AnimatedArt
     }
     frames.push(cv);
   }
-  return { id, kind: 'branch_snow', frames, x: Math.round(x - W / 2), y: Math.round(y - H / 2), fps: 8, above: true, blend: 'normal' };
+  return {
+    id,
+    kind: 'branch_snow',
+    frames,
+    x: Math.round(x - W / 2),
+    y: Math.round(y - H / 2),
+    fps: 8,
+    above: true,
+    blend: 'normal',
+  };
 }
 
 export const SNOW_BIOME: BiomeModule = {

@@ -31,8 +31,11 @@ and 16 rocks. The rule is the same as Dust Devil's: if it looks solid it is soli
 - **North canyon walls** (`north_wall_a`, `north_wall_b`) face south, toward the camera: they
   are tall (120 to 165 world px), banded in strata at fixed heights, fissured, streaked with
   desert varnish from the rim. Their foot is in the ground layer on their own capsule; their
-  face above the upland behind them is an overlay, cut into pieces whose fade boxes never
-  reach the road, so driving the canyon never fades the cliff.
+  face above the upland behind them is an overlay, cut so that driving the canyon's lane (the
+  middle 70 percent of the road) never fades it: where a column would lean out over open ground
+  within the client's fade reach of the lane (the wall's ends) it stops short and the wall
+  tapers; pieces a car at the very edge of the road can fade are cut to 32 px, so only the face
+  beside the car fades (`tests/unit/terrain_desert.test.ts`, the client's own fade function).
 - **South walls** (`south_wall_a`, `_ledge`, `_b`) are the canyon's near rim: they face away
   from the camera, so they are drawn only as high as their own rock allows (a rugged ridge),
   and never over the road.
@@ -44,7 +47,7 @@ and 16 rocks. The rule is the same as Dust Devil's: if it looks solid it is soli
 ## Round the lap, from the start
 
 1. **The plateau straight** (asphalt, westbound, the start): checkered start line, painted grid
-   boxes, the **start banner**. Plateau rocks on the north side (one carries a coral **wreck**),
+   boxes, the **start banner**, a power line on wooden poles along the north side. Plateau rocks on the north side (one carries a coral **wreck**),
    orange and red **flags** along the south edge, the **radio mast** (a guyed lattice mast in
    red and white bands, blinking lamps) to the south. The west half lies under blown sand
    (`plateau_drift`), across the whole road.
@@ -57,7 +60,8 @@ and 16 rocks. The rule is the same as Dust Devil's: if it looks solid it is soli
    chevrons painted on the cliff face at the corner.
 4. **The switchback** (asphalt with a sand hairpin, north up the east slope): the **guard rail**
    (galvanized beam on posts, red reflectors) on the drop side; beyond it the land falls into a
-   darker gully; the **watchtower** (a lookout cabin on stilts) inside the bend; a wind sock on
+   darker gully: a lit lip, the steep upper bank in deep shade, gullies and scree down the lower
+   bank, a pale foot; the **watchtower** (a lookout cabin on stilts) inside the bend; a wind sock on
    the crest's crosswind zone.
 5. Back up onto the plateau. The **ore hopper** (rusted, on a timber trestle) stands in the
    infield.
@@ -73,6 +77,13 @@ chevroned corner, signed) and visibly risky (narrow, rocks, the rim).
 
 Plateau radio mast, canyon arch, switchback watchtower, rusted ore hopper, painted cliff; mesas
 close the map behind the rim, tallest in the north beyond the plateau.
+
+## Open ground
+
+Both desert tracks share the open-ground dressing (ART_GUIDE, "The desert biome"): dry washes
+from the track's seed (nine here) with gravelly beds and lit and shaded banks, creosote and sage
+stands, pebble fields, old tire tracks, rills down the descent and the switchback slope. The
+plateau north of the straight is still the emptiest stretch of the lap.
 
 ## Animations (all loops)
 

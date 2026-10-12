@@ -14,6 +14,7 @@ import {
   HEAT_WARNING,
   IDLE_THROTTLE,
   KINETIC_GRIP_FACTOR,
+  DEEP_GROUND_FLOOR,
   LOOSE_CREEP,
   MAX_COMBINED_GRIP,
   PARTIAL_LOAD_THROTTLE,
@@ -337,8 +338,9 @@ export function rollingDecel(
 }
 
 /**
- * How much of the ground's resistance the crawl floor (`LOOSE_CREEP`) takes away this step:
- * zero unless the ground is loose, a shoulder or off-road, the car is creeping, and the
+ * How much of the ground's resistance the crawl floor (`LOOSE_CREEP`, held to a trudging pace
+ * on deep ground by `DEEP_GROUND_FLOOR`) takes away this step:
+ * zero unless the ground is loose, a shoulder or off-road, the car is below the band, and the
  * resistance `ground` exceeds `driveShare` of `fullDrive` (the car's own full-throttle drive
  * at this speed, after heat, damage and traction). Subtracted from the total, so whenever it is
  * zero the step is bit-identical to one without the floor.
@@ -350,12 +352,15 @@ export function creepRelief(
   fullDrive: number,
   forwardSpeed: number,
 ): number {
-  if (!onShoulder && !isLoose(surface)) return 0;
+  const loose = isLoose(surface);
+  if (!onShoulder && !loose) return 0;
   const excess = ground - LOOSE_CREEP.driveShare * Math.max(0, fullDrive);
   if (!(excess > 0)) return 0;
+  // Deep ground (sand, mud) holds the floor to a trudging pace; the rest to a crawl.
+  const band = (loose ? DEEP_GROUND_FLOOR[surface] : undefined) ?? LOOSE_CREEP;
   const v = Math.abs(forwardSpeed);
-  if (v >= LOOSE_CREEP.fadeTo) return 0;
-  return excess * (1 - smoothstep(LOOSE_CREEP.fullBelow, LOOSE_CREEP.fadeTo, v));
+  if (v >= band.fadeTo) return 0;
+  return excess * (1 - smoothstep(band.fullBelow, band.fadeTo, v));
 }
 
 /** Wheel force available at a given forward speed with full throttle. */

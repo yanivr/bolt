@@ -257,6 +257,24 @@ export const LOOSE_CREEP = {
   fadeTo: 70,
 };
 
+/**
+ * Deep ground: the same floor, held to a trudging pace instead of a crawl. Sand and mud are
+ * whole stretches of a course, not a strip beside the road, and their resistance (42 and 55
+ * px/s2) is close to the whole drive of a heavy car with a small engine, so under the crawl
+ * floor alone such a car settled at 45 to 50 px/s and could not finish a desert course (Iron
+ * Mule, a shipped example). Below `fullBelow` the ground takes at most `LOOSE_CREEP.driveShare`
+ * of the car's own drive at that speed, easing back to the whole resistance by `fadeTo`; a car
+ * with drive to spare is never touched, so this decides only how slow a weak car can be made,
+ * never how fast a strong one goes. Net push is non-decreasing in drive at every speed, so a
+ * stronger car is never slower on the same ground. Other surfaces and shoulders use the crawl
+ * band of `LOOSE_CREEP`. docs/BALANCE_CHANGELOG.md, 0.7.1.
+ */
+export const DEEP_GROUND_FLOOR: Partial<Record<SurfaceId, { fullBelow: number; fadeTo: number }>> =
+  {
+    sand: { fullBelow: 120, fadeTo: 170 },
+    mud: { fullBelow: 70, fadeTo: 110 },
+  };
+
 export const WALL_RESTITUTION = 0.18;
 /** Closing speeds below this are grazes and cost nothing beyond friction. */
 export const WALL_FORGIVE_SPEED = 26;
@@ -720,9 +738,10 @@ export const DIRECTION_REVERSE_SPEED = 30;
 
 /**
  * 7: the loose-ground crawl floor changed the physics a client predicts, and the join may name
- * the AI's difficulty (Milestone D).
+ * the AI's difficulty (Milestone D). 8: the deep-ground floor on sand and mud
+ * (`DEEP_GROUND_FLOOR`) changed it again.
  */
-export const PROTOCOL_VERSION = 7;
+export const PROTOCOL_VERSION = 8;
 export const MAX_QUEUED_INPUTS = 8;
 export const MAX_INPUTS_PER_PACKET = 6;
 export const REMOTE_INTERP_DELAY_MS = 120;

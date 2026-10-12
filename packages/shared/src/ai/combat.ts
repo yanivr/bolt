@@ -37,6 +37,9 @@ const DEG = Math.PI / 180;
 
 type Slot = { delay: number; skipUntil: number; held: boolean };
 
+/** Speed a burst of nitro or a booster adds, px/s, about (for the room it needs ahead). */
+const NITRO_GAIN = 60;
+
 export class Combat {
   private readonly slots: Slot[] = [
     { delay: -1, skipUntil: 0, held: false },
@@ -407,9 +410,18 @@ export class Combat {
         case 'boost': {
           if (car.statusTicks[STATUS_INDEX.boost]! > 0) break;
           const heatRoom = m.coreHeat + spec.heat < session.params.heat.performanceThreshold - 6;
-          // On a straight: the plan allows a good deal more speed for the next second or more.
+          // On a straight long enough for the burst and for braking from the speed it gives
+          // (with only a second and a half of road checked, a Rocket lit its nitro into Whiteout
+          // Pass's first corner at 293 px/s and slid off the plowed lane).
           const room = pilot.allowed - speed;
-          const straight = this.straightAhead(Math.max(220, speed * 1.4));
+          const boosted = speed + NITRO_GAIN;
+          const decel = Math.max(
+            60,
+            session.params.brakeDecel * Math.max(0.3, session.telemetry.grip) * 0.6,
+          );
+          const straight = this.straightAhead(
+            Math.max(220, speed * 1.6 + (boosted * boosted) / (2 * decel)),
+          );
           // Spent where it changes something: closing on the car ahead, holding off the one
           // behind, or (with charges to spare) wherever the road lets it run.
           const rel = this.tactics!.rel;

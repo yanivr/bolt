@@ -581,3 +581,132 @@ describe('the AI loadout table', () => {
 });
 
 void STATUS_INDEX;
+
+describe('the AI driver: racing beside another car', () => {
+  /** A player on full throttle, straight ahead, against the AI built as the room builds it. */
+  function grid(trackId: string, presetId: string, seed: number, rivalTemplateId?: string) {
+    const { track, env, conditions } = course(trackId, presetId);
+    const player = raceEntry(getTemplate('baseline')!.blueprint, conditions)!;
+    const ai = createAiRace(track, presetId, env, conditions, player, seed, {
+      ...(rivalTemplateId ? { rivalTemplateId } : {}),
+    })!;
+    return ai;
+  }
+
+  it('never steers across a car beside it off the grid: the player driving straight is not touched', () => {
+    // Found by tests/integration/driveRoom.test.ts: the AI's line from the second slot of Neon
+    // Cut runs across the first, and it used to cut across the player's nose on the way.
+    const straight: ControlInput = { steer: 0, brake: 0, coast: false, fire: 0, use: 0, target: 0 };
+    for (const [trackId, presetId] of [
+      [NEON, NEON_CLEAR],
+      ['city_02', 'city_rain_day'],
+      ['industrial_01', 'industrial_dry_night'],
+    ] as const)
+      for (const seed of [1077141809, 11, 12, 13]) {
+        const ai = grid(trackId, presetId, seed, 'baseline');
+        let worstSlip = 0;
+        let contact = 0;
+        for (let t = 0; t < 30 * 8; t++) {
+          stepRaceWithBrains(ai.race, [straight], ai.brains);
+          if (ai.race.raceTicks > 30 * 2.5) break;
+          const m = ai.race.cars[0]!.session.motion;
+          const lateral =
+            m.velocityX * Math.cos(m.headingRad) + m.velocityY * Math.sin(m.headingRad);
+          worstSlip = Math.max(worstSlip, Math.abs(lateral));
+          contact += ai.race.events.filter((e) => e.type === 'hit').length;
+        }
+        expect(contact, `${trackId} seed ${seed}`).toBe(0);
+        expect(worstSlip, `${trackId} seed ${seed}`).toBeLessThan(1);
+      }
+  });
+});
+
+describe('the AI driver: shortcut decisions and getting unstuck', () => {
+  it('decides a shortcut on every approach, even one that forks just after the start line', () => {
+    // Laundry Lane leaves Backstreet Blitz's boulevard 56 px past the line. Decided once a lap,
+    // it was decided only when the lap count ticked over, too late to turn in: the car missed
+    // the mouth and pinned itself against the boulevard wall. Forced on, every lap goes through.
+    const { track, env, conditions } = course('city_02', 'city_rain_day');
+    const entry = raceEntry(getTemplate('example_iron_mule')!.blueprint, conditions)!;
+    const race = createRace(track, env, [entry], {
+      seed: 3,
+      conditions,
+      catalog: CATALOG,
+      tow: false,
+    });
+    const brain = new AiBrain({
+      seed: 3,
+      difficulty: 'racer',
+      style: 'tactical',
+      shortcuts: 'always',
+    });
+    const laps: number[] = [];
+    let through = 0;
+    for (let i = 0; i < 30 * 180 && race.phase !== 'FINISHED'; i++) {
+      stepRaceWithBrains(race, [], [brain]);
+      if (brain.routeMask & 1) through |= 1 << race.cars[0]!.session.progress.lap;
+      for (const e of race.events) if (e.type === 'lap') laps.push(e.lapTimeMs / 1000);
+    }
+    expect(race.result?.cars[0]?.finished).toBe(true);
+    // Laps 1, 2 and 3 all on the Laundry Lane route.
+    expect(through & 0b1110).toBe(0b1110);
+    expect(brain.parts!.pilot.recoveries).toBe(0);
+  });
+
+  it('backs out of a wall it has driven into and gets going again', () => {
+    const { track, env, conditions } = course('city_02', 'city_clear_day');
+    const entry = raceEntry(getTemplate('starter_rookie')!.blueprint, conditions)!;
+    const race = createRace(track, env, [entry], {
+      seed: 4,
+      conditions,
+      catalog: CATALOG,
+      tow: false,
+    });
+    const brain = new AiBrain({
+      seed: 4,
+      difficulty: 'racer',
+      style: 'tactical',
+      shortcuts: 'never',
+    });
+    while (race.phase !== 'RACING') stepRaceWithBrains(race, [], [brain]);
+    // Nose into the outside wall of the first straight, stopped.
+    const car = race.cars[0]!;
+    const { s } = straightOf(track);
+    place(car, track, s + 200, track.main.halfWidth[0]! - 4, 0);
+    car.session.motion.headingRad += Math.PI / 2;
+    const start = car.session.progress.courseProgress;
+    let recoveries = 0;
+    for (let i = 0; i < 30 * 12; i++) {
+      stepRaceWithBrains(race, [], [brain]);
+      recoveries = brain.parts!.pilot.recoveries;
+    }
+    expect(recoveries).toBeGreaterThanOrEqual(1);
+    expect(car.session.progress.courseProgress - start).toBeGreaterThan(400);
+  });
+});
+
+describe('the AI loadout table: difficulty', () => {
+  it('builds a Rookie a recognizable viable car (a strategy frame as it stands, on Street Tires), and Racer and Ace a car for the course', () => {
+    for (const def of Object.values(TRACKS))
+      for (const presetId of def.weatherPresetIds)
+        for (const seed of [1, 2, 3, 4, 5, 6]) {
+          const rookie = pickAiBuild(def.id, presetId, seed, undefined, 'rookie')!;
+          const racer = pickAiBuild(def.id, presetId, seed, undefined, 'racer')!;
+          expect(rookie.tireKitId, `${def.id}/${presetId}`).toBe('tires_street');
+          const conditions = conditionsFor(def.id, presetId) as BuildConditions;
+          expect(resolveBuild(rookie.blueprint, conditions).ok).toBe(true);
+          expect(racer.nearOptimal).toBe(true);
+          // Same strategy for the same seed: only the depth of the build differs.
+          expect(rookie.strategy).toBe(racer.strategy);
+        }
+    // On sand and in the rain the course-built car is quicker than the Rookie's.
+    for (const [trackId, presetId] of [
+      ['desert_01', 'desert_clear'],
+      ['city_02', 'city_rain_day'],
+    ] as const) {
+      const r = pickAiBuild(trackId, presetId, 7, 'balanced', 'rookie')!;
+      const a = pickAiBuild(trackId, presetId, 7, 'balanced', 'ace')!;
+      expect(a.lapSeconds, trackId).toBeLessThan(r.lapSeconds);
+    }
+  });
+});

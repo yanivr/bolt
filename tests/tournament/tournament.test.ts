@@ -5,9 +5,10 @@ import { COURSES, plannedMatches } from './plan.js';
 
 /**
  * A small deterministic subset of the bot tournament (`npx tsx tests/tournament/run.ts`), in
- * CI time: one strategy matchup, one difficulty matchup and one before/after pair on four
- * courses that cover the four kinds of ground (city, sand, mud, snow). Every race must finish
- * with nobody stuck, and a race run twice must be the same race.
+ * CI time: one strategy matchup, one difficulty matchup and one roster race (a shipped build
+ * against the AI exactly as the room sets it up, `createAiRace`) on four courses that cover
+ * the four kinds of ground (city, sand, mud, snow). Every race must finish with nobody stuck,
+ * and a race run twice must be the same race.
  */
 
 const SAMPLE = [
@@ -22,7 +23,7 @@ function subset(): PlannedMatch[] {
   const out: PlannedMatch[] = [];
   for (const key of SAMPLE) {
     const here = all.filter((m) => `${m.trackId}/${m.presetId}` === key);
-    for (const phase of ['strategy', 'difficulty'] as const) {
+    for (const phase of ['strategy', 'difficulty', 'roster'] as const) {
       const m = here.find((x) => x.phase === phase);
       if (m) out.push(m);
     }
@@ -36,7 +37,8 @@ describe('the bot tournament, a CI subset', () => {
 
   it('covers the courses it says it does', () => {
     expect(COURSES).toHaveLength(16);
-    expect(matches.length).toBe(SAMPLE.length * 2);
+    expect(matches.length).toBe(SAMPLE.length * 3);
+    expect(matches.filter((m) => m.room).length).toBe(SAMPLE.length);
   });
 
   it.each(

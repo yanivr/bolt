@@ -42,7 +42,14 @@ import type {
   StatusSnapshot,
 } from './protocol.js';
 import { STATUS_FAMILIES } from './protocol.js';
-import { NEUTRAL_BRAKE, createDriveSession, sessionSnapshot, stepDriveSession } from './sim.js';
+import type { StepResult } from './sim.js';
+import {
+  NEUTRAL_BRAKE,
+  createDriveSession,
+  creditMovedCrossing,
+  sessionSnapshot,
+  stepDriveSession,
+} from './sim.js';
 import type { TrackRuntime } from './track.js';
 import { stepTow, towShareOf } from './tow.js';
 import { createLocation } from './track.js';
@@ -347,33 +354,12 @@ export function stepRace(race: RaceSession, inputs: ReadonlyArray<ControlInput |
     session.effects.towNext = car.tow.towNext;
     const wasRacing = session.phase === 'RACING';
     const result = stepDriveSession(session, car.ko ? BRAKE : (inputs[car.index] ?? BRAKE));
+    car.gateX = m.x;
+    car.gateY = m.y;
     stepWinch(car);
     if (!wasRacing) continue;
 
-    if (result.event === 'checkpoint') {
-      const count = race.track.checkpoints.length;
-      emit(race, {
-        type: 'checkpoint',
-        car: car.index,
-        index: (session.progress.checkpointIndex + count - 1) % count,
-      });
-    } else {
-      if (result.lapTimeMs > 0)
-        emit(race, {
-          type: 'lap',
-          car: car.index,
-          lap:
-            session.progress.finishedAtMs !== null ? race.track.def.laps : session.progress.lap - 1,
-          lapTimeMs: result.lapTimeMs,
-        });
-      if (result.event === 'finish')
-        emit(race, {
-          type: 'finish',
-          car: car.index,
-          raceTimeMs: raceTimeOf(race),
-          finished: session.progress.finishedAtMs !== null,
-        });
-    }
+    emitProgress(race, car, result);
     const impact = session.telemetry.wallImpactSpeed;
     if (
       impact > WALL_FORGIVE_SPEED &&
@@ -395,6 +381,12 @@ export function stepRace(race: RaceSession, inputs: ReadonlyArray<ControlInput |
 
   // --- 8. Statuses, repairs, shields, tethers ---------------------------------------------------
   stepSystems(race);
+
+  // --- 8b. A gate crossed by a push rather than by driving ------------------------------------
+  for (const car of cars) {
+    const late = creditMovedCrossing(car.session, car.gateX, car.gateY);
+    if (late.event !== 'none') emitProgress(race, car, late);
+  }
 
   // --- 9. Progress, finishes, KO and the clock ---------------------------------------------------
   let finished = 0;
@@ -448,6 +440,35 @@ export function stepRace(race: RaceSession, inputs: ReadonlyArray<ControlInput |
     endRace(race, 'finish', -2);
   else if (race.raceTicks * SIM_DT >= RACE_LIMIT_SECONDS || (running === 0 && finished === 0))
     endRace(race, finished > 0 ? 'finish' : 'timeout', -2);
+}
+
+/** The events of a checkpoint, lap or finish one car's progress produced this tick. */
+function emitProgress(race: RaceSession, car: CombatCar, result: StepResult): void {
+  const session = car.session;
+  if (result.event === 'checkpoint') {
+    const count = race.track.checkpoints.length;
+    emit(race, {
+      type: 'checkpoint',
+      car: car.index,
+      index: (session.progress.checkpointIndex + count - 1) % count,
+    });
+  } else {
+    if (result.lapTimeMs > 0)
+      emit(race, {
+        type: 'lap',
+        car: car.index,
+        lap:
+          session.progress.finishedAtMs !== null ? race.track.def.laps : session.progress.lap - 1,
+        lapTimeMs: result.lapTimeMs,
+      });
+    if (result.event === 'finish')
+      emit(race, {
+        type: 'finish',
+        car: car.index,
+        raceTimeMs: raceTimeOf(race),
+        finished: session.progress.finishedAtMs !== null,
+      });
+  }
 }
 
 /**

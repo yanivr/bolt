@@ -326,7 +326,8 @@ are static (wet ground, puddles, drifts); everything here moves.
 | `apps/web/src/game/weather/pool.ts` | `WeatherPool` (particles with a life) and `DrawList` (what is drawn this frame) |
 | `apps/web/src/game/weather/stage.ts` | `WeatherStage`: every emitter, reflections, haze, frost, lightning. No Phaser |
 | `apps/web/src/game/weather/readability.ts` | `ProtectedZone`: where nothing may cover the picture |
-| `apps/web/src/game/weather/overlayFade.ts` | Foreground fade for every overlay the bakes mark `fadeNearPlayer` |
+| `apps/web/src/game/weather/overlayFade.ts` | Foreground fade for every overlay the bakes mark `fadeNearPlayer`, by the overlay's pixels |
+| `apps/web/src/game/weather/terrainArt.ts` | Reading an overlay's coverage from its texture; timetable loops' frame from the race clock |
 | `apps/web/src/game/weather/lights.ts` | The combat stage's flashes, as lights to reflect |
 | `apps/web/src/game/weather/view.ts` | `WeatherView`: the only Phaser in it, one Blitter per layer and one Graphics |
 | `apps/web/src/game/weather/motion.ts` | Reduced Motion (the system preference; `?debug=1&motion=reduce` forces it) |
@@ -449,7 +450,10 @@ sandstorm, heavy rain, snowfall, clear frost and crosswind.
 Foreground art: every overlay a bake marks `fadeNearPlayer`, whatever its kind (the forest
 canopies and cliff ledges included), fades to 28 percent while the local car's body is under
 it and to 50 percent while the rival's is, so the rival stays readable too. The test is the
-car's body plus a margin, taller upward because the sprites are tilted.
+car's body plus a margin, taller upward because the sprites are tilted, against the overlay's
+own pixels on an 8 px grid (read once from its texture, the first time a car comes near), not
+its bounding box: on the box alone, pieces of canyon wall and tree crowns beside the road
+blinked translucent while the car drove past their empty corners.
 
 ### Quality tiers and settings
 

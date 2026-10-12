@@ -12,7 +12,7 @@ import {
   surfaceGrip,
 } from '../physics.js';
 import type { TrackBranch, TrackRuntime } from '../track.js';
-import { obstacleDepth, wallDepth } from '../track.js';
+import { createLocation, locate, obstacleDepth, wallDepth } from '../track.js';
 import type { RaceEnvironment, SurfaceId, VehicleParams } from '../types.js';
 import { SURFACE_IDS } from '../types.js';
 
@@ -33,6 +33,8 @@ import { SURFACE_IDS } from '../types.js';
 const CELL = 8;
 /** Room the line keeps between the car's body and the edge of the pavement, px. */
 const EDGE_MARGIN = 6;
+/** Room the line keeps between the car's body and a post, a wall or a barricade, px. */
+const SOLID_MARGIN = 14;
 
 type LateralScan = {
   /** Cells per side. Cell k (0..2K) sits at lateral (k - K) * CELL. */
@@ -43,6 +45,13 @@ type LateralScan = {
   hazard: Uint8Array;
   /** Per sample and cell: distance to the nearest wall or obstacle, px, at most 255. */
   clearance: Uint8Array;
+  /**
+   * Per sample and cell: distance inside the drivable union of corridors on a walled track
+   * (255 on an open one). Within a branch's own width this only differs from that width where
+   * two corridors meet: the convex corner where a shortcut leaves the street, which a car's
+   * body clips on the way in (found by the bot tournament at Conveyor Gap and Lantern Alley).
+   */
+  room: Uint8Array;
 };
 
 const SCANS = new WeakMap<TrackRuntime, LateralScan[]>();
@@ -60,6 +69,8 @@ function lateralScans(track: TrackRuntime): LateralScan[] {
     const surface = new Uint8Array(branch.count * cells);
     const hazard = new Uint8Array(branch.count * cells);
     const clearance = new Uint8Array(branch.count * cells);
+    const room = new Uint8Array(branch.count * cells).fill(255);
+    const loc = createLocation();
     for (let i = 0; i < branch.count; i++) {
       const nx = -branch.ty[i]!;
       const ny = branch.tx[i]!;
@@ -78,24 +89,31 @@ function lateralScans(track: TrackRuntime): LateralScan[] {
         hazard[i * cells + k] = zoneHazardAt(track, x, y) + 1;
         const solid = Math.max(wallDepth(track, x, y, 0), obstacleDepth(track, x, y, 0));
         clearance[i * cells + k] = clamp(Math.round(-solid), 0, 255);
+        if (track.walled) {
+          locate(track, x, y, loc);
+          room[i * cells + k] = clamp(Math.round(-loc.edge), 0, 255);
+        }
       }
     }
     // A car is a capsule, not a point: its body circles sit up to a car length fore and aft of
     // its centre. A cell's clearance is the least of its own and its neighbours' two samples
     // either way along the road.
-    const along = new Uint8Array(clearance.length);
-    for (let i = 0; i < branch.count; i++)
-      for (let k = 0; k < cells; k++) {
-        let least = 255;
-        for (let o = -2; o <= 2; o++) {
-          let j = i + o;
-          if (branch.closed) j = (j + branch.count) % branch.count;
-          else if (j < 0 || j >= branch.count) continue;
-          least = Math.min(least, clearance[j * cells + k]!);
+    const alongMin = (values: Uint8Array): Uint8Array => {
+      const along = new Uint8Array(values.length);
+      for (let i = 0; i < branch.count; i++)
+        for (let k = 0; k < cells; k++) {
+          let least = 255;
+          for (let o = -2; o <= 2; o++) {
+            let j = i + o;
+            if (branch.closed) j = (j + branch.count) % branch.count;
+            else if (j < 0 || j >= branch.count) continue;
+            least = Math.min(least, values[j * cells + k]!);
+          }
+          along[i * cells + k] = least;
         }
-        along[i * cells + k] = least;
-      }
-    return { half, surface, hazard, clearance: along };
+      return along;
+    };
+    return { half, surface, hazard, clearance: alongMin(clearance), room: alongMin(room) };
   });
   SCANS.set(track, scans);
   return scans;
@@ -501,14 +519,22 @@ function buildRoute(
       if (scan.surface[row + k]! === 0 || Math.abs(lat) > hw + CELL / 2) continue;
       widestGap = Math.max(widestGap, scan.clearance[row + k]!);
     }
-    let need = params.colliderRadius + 4;
+    // Room the line keeps from a post or a wall where the road allows: a car at race pace is
+    // 8 to 15 px off its line now and then (measured), and a bollard at 200 px/s is a wreck.
+    let need = params.colliderRadius + SOLID_MARGIN;
+    if (widestGap < need) need = Math.max(params.colliderRadius + 4, widestGap - 6);
     if (widestGap < need) need = Math.max(params.colliderRadius * 0.5, widestGap - 2);
     // How much room the car's body has in the widest gap here, px (0 is touching).
     slack[i] = Math.max(0, widestGap - params.colliderRadius);
     for (let k = 0; k < cells; k++) {
       const lat = (k - scan.half) * CELL;
       const code = scan.surface[row + k]!;
-      if (code === 0 || Math.abs(lat) > hw + CELL / 2 || scan.clearance[row + k]! < need) {
+      if (
+        code === 0 ||
+        Math.abs(lat) > hw + CELL / 2 ||
+        scan.clearance[row + k]! < need ||
+        scan.room[row + k]! < params.colliderRadius + 4
+      ) {
         quality[k] = -1;
         continue;
       }

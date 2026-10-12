@@ -72,6 +72,14 @@ Twin mesas (tall buttes closing the two northern corners, on the unreachable lan
 boundary), wind pump (windmill and tank), bleached billboard, rock arch, dust devil flats (a
 pale silt playa in the infield with two dust devils turning on it).
 
+## Open ground
+
+Dry washes from the track's seed (eight) wander down the fall of the land with gravelly beds and
+lit and shaded banks, stopping short of the road's verge (never pale and smooth, so they cannot
+be read as the graded road); creosote and sage grow in stands of up to five clumps, thicker along
+the washes; dune slip faces lie a full step darker than their crest lines. The infield and the
+flats remain open plain by design: only listed solids may stand up there.
+
 ## Wind and hazards
 
 Crosswind zones: the southern arc and the northern rise carry the two wind socks (anchors),

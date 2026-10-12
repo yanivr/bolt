@@ -1,6 +1,15 @@
 import type { AiStrategy } from '@bolt/content';
-import { AI_STRATEGIES, PROFILE_TIRES, RIVAL_TEMPLATES, TRACKS, profileOf } from '@bolt/content';
+import {
+  AI_STRATEGIES,
+  PROFILE_TIRES,
+  RIVAL_TEMPLATES,
+  TRACKS,
+  getTemplate,
+  profileOf,
+} from '@bolt/content';
 import type { AiDifficulty, AiStyle } from '@bolt/shared';
+import { AI_DIFFICULTIES } from '@bolt/shared';
+import { UPGRADE_PAIRS } from '../balance/upgrade.js';
 import type { MatchSpec } from './harness.js';
 
 /**
@@ -18,6 +27,17 @@ import type { MatchSpec } from './harness.js';
  *   a shipped build picked by seed with the sparring brain; the new one builds for the course
  *   and drives with the AI. Both cars, same seeds.
  *
+ * - `roster`: every starter and example build (the cars a player starts from), driven by the AI
+ *   at Racer, against the AI rival exactly as the room builds it (`createAiRace`: strategy,
+ *   build and style by seed) at each of the three difficulties, the shipped build on the
+ *   player's slot. Win rates per
+ *   build and per difficulty, and how the shipped builds fare course by course, come from here.
+ * - `balance`: the balance harness's matrix with the real AI in both cars (Racer, styles by
+ *   seed): every starter and example build against every other, from both grid slots. The
+ *   four balance targets (docs/BALANCE_CHANGELOG.md, the tow) are measured here, per course.
+ * - `upgrade`: the upgrade test with the real AI: each shipped build of tests/balance/upgrade.ts
+ *   against its twin with one upgrade, from both slots, on the courses where the change is an
+ *   upgrade (Slicks on dry pavement; the V8 for the Trail Engine off loose ground).
  * - `tires`: the surface experiment. The same frame and engine (the balanced strategy's Arrow)
  *   on the wheel kit the course's profile ranks first against three others, from both slots.
  *   Nothing but the tires differs, so the win rate and the margin are what the kit is worth here.
@@ -25,7 +45,8 @@ import type { MatchSpec } from './harness.js';
  * Quick mode keeps the shape and cuts the counts so it runs in a couple of minutes.
  */
 
-export type Phase = 'strategy' | 'difficulty' | 'sparring' | 'system' | 'tires';
+export type Phase =
+  'strategy' | 'difficulty' | 'roster' | 'balance' | 'upgrade' | 'sparring' | 'system' | 'tires';
 export type PlannedMatch = MatchSpec & { phase: Phase; pair: string };
 
 export const COURSES: Array<{ trackId: string; presetId: string }> = Object.values(TRACKS).flatMap(
@@ -101,6 +122,70 @@ export function plannedMatches(quick: boolean, baseSeed = 7001): PlannedMatch[] 
             ],
           });
         }
+    // --- The roster: every shipped build against the AI at each difficulty ------------------
+    const rosterSeeds = quick ? 1 : 2;
+    for (const [ti, t] of RIVAL_TEMPLATES.entries())
+      for (const d of AI_DIFFICULTIES)
+        for (let k = 0; k < rosterSeeds; k++) {
+          // As the room races it: the player's car on the first slot, the AI on the second.
+          const shipped = {
+            templateId: t.id,
+            difficulty: 'racer' as const,
+            style: (k + ti) % 2 === 0 ? ('tactical' as const) : ('aggressive' as const),
+          };
+          out.push({
+            ...course,
+            phase: 'roster',
+            pair: `${t.id}-${d}`,
+            seed: seed++,
+            room: true,
+            cars: [shipped, { difficulty: d }],
+          });
+        }
+    // --- Balance: every shipped build against every other, the AI driving both -----------------
+    for (let a = 0; a < RIVAL_TEMPLATES.length; a++)
+      for (let b = a + 1; b < RIVAL_TEMPLATES.length; b++) {
+        if (quick && (a + b + ci) % 6 !== 0) continue;
+        for (let slot = 0; slot < 2; slot++) {
+          const first = RIVAL_TEMPLATES[slot === 0 ? a : b]!.id;
+          const second = RIVAL_TEMPLATES[slot === 0 ? b : a]!.id;
+          out.push({
+            ...course,
+            phase: 'balance',
+            pair: `${RIVAL_TEMPLATES[a]!.id}-${RIVAL_TEMPLATES[b]!.id}`,
+            seed: seed++,
+            cars: [
+              { templateId: first, difficulty: 'racer' },
+              { templateId: second, difficulty: 'racer' },
+            ],
+          });
+        }
+      }
+    // --- Upgrade: a shipped build against itself with one upgrade -----------------------------
+    // Only where it is an upgrade: Slicks on dry pavement, the V8 for the Trail Engine off loose
+    // ground; a bigger engine for a smaller one everywhere.
+    const profile_ = profileOf(course.trackId, course.presetId);
+    const dryPaved = profile_ === 'dry_road' || profile_ === 'metal';
+    const loose = profile_ === 'sand' || profile_ === 'mud' || profile_ === 'dirt';
+    const applies = (pair: (typeof UPGRADE_PAIRS)[number]) =>
+      pair.change.tireKitId === 'tires_slick'
+        ? dryPaved
+        : getTemplate(pair.base)?.blueprint.engineId === 'engine_offroad'
+          ? !loose
+          : true;
+    const upgrades = UPGRADE_PAIRS.filter(applies);
+    for (const pair of quick ? upgrades.slice(ci % 3, (ci % 3) + 2) : upgrades)
+      for (let k = 0; k < (quick ? 2 : 6); k++) {
+        const stock = { templateId: pair.base, difficulty: 'racer' as const };
+        const better = { templateId: pair.base, upgrade: pair.id, difficulty: 'racer' as const };
+        out.push({
+          ...course,
+          phase: 'upgrade',
+          pair: pair.id,
+          seed: seed++,
+          cars: k % 2 === 0 ? [stock, better] : [better, stock],
+        });
+      }
     // --- Before and after: the sparring brain and the AI on the same builds and seeds ---------
     const shipped = quick ? SPARRING_PAIRS.slice(ci % 3, (ci % 3) + 2) : SPARRING_PAIRS;
     for (const [a, b] of shipped)
@@ -123,7 +208,7 @@ export function plannedMatches(quick: boolean, baseSeed = 7001): PlannedMatch[] 
     // --- Tires: the same car on different kits ------------------------------------------------
     const profile = profileOf(course.trackId, course.presetId);
     const best = PROFILE_TIRES[profile][0]!;
-    const rivals = TIRE_DUEL_KITS.filter((k) => k !== best).slice(0, quick ? 1 : 3);
+    const rivals = TIRE_DUEL_KITS.filter((k) => k !== best).slice(0, quick ? 1 : 4);
     for (const other of rivals)
       for (let slot = 0; slot < 2; slot++) {
         const engineId = course.trackId.startsWith('desert') ? 'engine_offroad' : 'engine_v8';
@@ -180,5 +265,5 @@ export function plannedMatches(quick: boolean, baseSeed = 7001): PlannedMatch[] 
       });
     }
   }
-  return out;
+  return out.map((m, index) => ({ ...m, index }));
 }

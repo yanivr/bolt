@@ -1,4 +1,4 @@
-import { SIM_DT } from '../balance.js';
+import { SIM_DT, SURFACE_ROLLING_DECEL } from '../balance.js';
 import { STATUS_INDEX } from '../combat/types.js';
 import { scheduleState } from '../hazards.js';
 import { clamp, lerp } from '../math.js';
@@ -22,6 +22,69 @@ export type Relation = { along: number; lateral: number; near: boolean };
 type Seen = { x: number; y: number; vx: number; vy: number; heading: number; speed: number };
 
 const HISTORY = 24;
+/** Seconds a deep planner counts against a shortcut whose line needs nearly full lock. */
+const HAIRPIN_RISK = 0.35;
+const TIGHTEST = new WeakMap<object, number[]>();
+
+/** The tightest line curvature on shortcut `k` of the pilot's plan, 1/px (cached per plan). */
+function tightestOf(pilot: Pilot, k: number): number {
+  let row = TIGHTEST.get(pilot.plan);
+  if (!row) {
+    row = [];
+    TIGHTEST.set(pilot.plan, row);
+  }
+  let v = row[k];
+  if (v === undefined) {
+    v = 0;
+    const r = pilot.plan.routes[1 << (k - 1)];
+    if (r)
+      for (let i = 0; i < r.count; i++)
+        if (r.src[i] === k) v = Math.max(v, Math.abs(r.curvature[i]!));
+    row[k] = v;
+  }
+  return v;
+}
+
+/** How much more of a shortcut than of the road it skips must be poor ground to be a bog. */
+const VISIBLY_WORSE = 0.25;
+const MAIN_POOR = new WeakMap<object, number[]>();
+
+/**
+ * The share of poor ground (more rolling resistance than dirt, or grip under 0.6, for this car)
+ * on the main line between where shortcut `k` leaves and rejoins it: what the shortcut is
+ * compared with. Cached per plan.
+ */
+function mainPoorShare(pilot: Pilot, track: TrackRuntime, k: number): number {
+  let row = MAIN_POOR.get(pilot.plan);
+  if (!row) {
+    row = [];
+    MAIN_POOR.set(pilot.plan, row);
+  }
+  let v = row[k];
+  if (v === undefined) {
+    const base = pilot.plan.routes[0]!;
+    const branch = track.branches[k]!;
+    const lap = track.main.length;
+    const span = (((branch.rejoinS - branch.leaveS) % lap) + lap) % lap;
+    const step = lap / track.main.count;
+    let poor = 0;
+    let count = 0;
+    for (let d = 0; d <= span; d += step) {
+      const main = Math.floor((((branch.leaveS + d) % lap) / step) % track.main.count);
+      const i = base.mainIndex[main]!;
+      count++;
+      if (base.roll[i]! > SURFACE_ROLLING_DECEL.dirt + 4 || base.grip[i]! < 0.6) poor++;
+    }
+    v = poor / Math.max(1, count);
+    row[k] = v;
+  }
+  return v;
+}
+
+/** The other car counts as level with this one up to this far ahead, px. */
+const LEVEL_AHEAD = 22;
+/** Seconds after GO in which nobody leans on the other car: the scramble off the grid. */
+const MERGE_SECONDS = 4;
 
 export class Tactics {
   /** Ring buffer of what the rival looked like, newest last. */
@@ -47,6 +110,7 @@ export class Tactics {
   private readonly scratch: Relation = { along: 0, lateral: 0, near: false };
   /** Ticks the rival has been close behind, for defending. */
   private pressure = 0;
+  private readonly band = { lo: 0, hi: 0 };
 
   constructor(
     private readonly pilot: Pilot,
@@ -132,15 +196,19 @@ export class Tactics {
     const speed = Math.hypot(m.velocityX, m.velocityY);
     const skill = this.persona.skill;
     const style = this.persona.style;
-    const lap = car.session.progress.lap;
     pilot.speedWish = Infinity;
     const lineHere = pilot.lineOffset(pilot.s);
     const edgeHere = pilot.edgeAt(pilot.s);
     let wish = 0;
     let priority = 0;
+    let beside = false;
+    let besideAhead = 0;
+    let besideLat = 0;
+    let besideGap = 0;
+    let besideSpeed = 0;
 
-    // --- Shortcuts: decided once a lap, a second and a half before the mouth -------------
-    if (obs.racing) this.decideShortcuts(track, obs, speed, lap, rng);
+    // --- Shortcuts: decided once an approach, a second and a half before the mouth --------
+    if (obs.racing) this.decideShortcuts(track, obs, speed, rng);
 
     // --- The rival -------------------------------------------------------------------------
     const rival = obs.rival;
@@ -172,15 +240,18 @@ export class Tactics {
             }
           }
         } else if (ahead >= -26 && ahead <= 8) {
-          // Alongside: keep a car's width, or lean on it.
+          // Alongside: keep a car's width, or lean on it. Not in the scramble off the grid,
+          // where nobody has chosen a fight yet.
           const ram =
             style.leans &&
+            obs.self.session.raceTicks * SIM_DT > MERGE_SECONDS &&
             (params.massKg > rival.params.massKg * 1.1 || car.bladeDamage > 0) &&
             Math.abs(lateralGap) < gap * 1.6;
           const side = Math.sign(lateralGap) || 1;
-          if (ram) wish = rel.lateral - side * gap * 0.55 - lineHere;
-          else if (Math.abs(lateralGap) < gap) wish = rel.lateral - side * gap * 1.1 - lineHere;
-          priority = 2;
+          if (ram) {
+            wish = rel.lateral - side * gap * 0.55 - lineHere;
+            priority = 2;
+          }
         } else if (ahead < -8 && ahead > -150 && style.defends > 0) {
           // Followed closely: cover the line it would pass on, once, without weaving.
           const behindClosing = -closing;
@@ -197,6 +268,21 @@ export class Tactics {
             priority = 1;
           }
         }
+        // Close enough to touch: the side-by-side rule below applies after the weapons have
+        // had their say.
+        // Straight ahead on the same line is a car to follow, not one to dodge.
+        const inLine = ahead > 8 && Math.abs(lateralGap) < gap * 0.6;
+        if (!inLine && ahead > -26 && ahead < 60 + Math.max(0, closing) * 0.6) {
+          beside = true;
+          besideAhead = ahead;
+          besideLat = rel.lateral;
+          besideGap = gap;
+          besideSpeed = rivalAlong;
+        } else if (priority < 2 && ahead > 8 && ahead < 50 && closing > 0) {
+          // Right behind it: do not run into its back while waiting for room.
+          const ram = style.leans && params.massKg > rival.params.massKg * 1.15;
+          if (!ram) pilot.speedWish = Math.min(pilot.speedWish, Math.max(40, rivalAlong + 4));
+        }
       }
     }
     if (this.passHold > 0) this.passHold--;
@@ -208,6 +294,45 @@ export class Tactics {
       priority = 1;
     }
     this.alignWish = Number.NaN;
+
+    // --- Side by side ----------------------------------------------------------------------
+    // Never steer across a car that is beside it or just ahead, whatever the line, the defence
+    // or the weapons want. The car whose lane crosses the other's is the one that gives way: it
+    // holds its own side and, level or behind, lifts so as to cross behind. The other keeps its
+    // lane and only moves over from an actual overlap. This is the grid (the slots are side by
+    // side and the line from one often runs across the other; on Backstreet Blitz the second
+    // slot turns across the first into Laundry Lane at once) and every side-by-side moment
+    // after it. A pass already chose a side with room, and a ram is meant.
+    if (beside && priority < 2) {
+      const mine = pilot.lateral - besideLat;
+      const side = -(Math.sign(mine) || 1);
+      const lane = lineHere + wish;
+      const laneSide = Math.sign(lane - besideLat);
+      const apart = besideLat - side * besideGap * 1.1;
+      // Room on this side for a car's width: keeping apart must not mean the wall. The band of
+      // clear ground, not the pavement's edge: it leaves out the corner where a shortcut leaves.
+      const band = pilot.bandAt(pilot.s + 20, this.band);
+      const room = apart >= band.lo - 2 && apart <= band.hi + 2;
+      if (laneSide === side || (besideAhead <= 8 && Math.abs(lane - besideLat) < besideGap * 0.5)) {
+        // Its lane is across the other car: stay on this side of it, and give way. Lifting is
+        // for while the two are level and the other is ahead; once it is clear ahead it opens
+        // the way by itself (lifting all the while cost two evenly matched cars a quarter of
+        // their pace).
+        if (room) wish = apart - lineHere;
+        priority = 2;
+        // Only the car behind lifts. Both lifting to the other's speed less a margin spiralled
+        // two evenly matched cars down to a crawl together (Dust Devil, lap 3).
+        if ((besideAhead > 0 && besideAhead < LEVEL_AHEAD) || !room)
+          pilot.speedWish = Math.min(pilot.speedWish, Math.max(25, besideSpeed - (room ? 12 : 30)));
+      } else if (besideAhead <= 8 && Math.abs(mine) < besideGap) {
+        // Overlapping alongside: back to a car's width apart, or, squeezed against the edge,
+        // drop behind (found on Backstreet Blitz: a car cutting across to Laundry Lane pressed
+        // the other into the alley mouth).
+        if (room) wish = apart - lineHere;
+        else pilot.speedWish = Math.min(pilot.speedWish, Math.max(25, besideSpeed - 30));
+        priority = 2;
+      }
+    }
 
     // --- Traps it can see, and shells coming down --------------------------------------------
     const avoid = this.avoidance(obs, speed, lineHere + wish, edgeHere);
@@ -243,34 +368,59 @@ export class Tactics {
     track: TrackRuntime,
     obs: Observation,
     speed: number,
-    lap: number,
     rng: () => number,
   ): void {
     const pilot = this.pilot;
     const skill = this.persona.skill;
     for (const value of pilot.plan.shortcuts) {
       const k = value.branch;
-      if (pilot.decided[k] === lap) continue;
       const fork = pilot.route.forkS[k]!;
       if (fork < 0) continue;
+      // Once per approach to the fork, not once per lap: a fork just past the start line (Laundry
+      // Lane leaves the boulevard 56 px after it) would otherwise be decided only when the lap
+      // count ticks over, too late to brake for the mouth.
       const ahead = pilot.ahead(fork);
-      if (ahead > 80 + speed * 1.5 || ahead < 12) continue;
-      pilot.decided[k] = lap;
+      const reach = 80 + speed * 2.2;
+      if (ahead > reach + 150) {
+        pilot.decided[k] = 0;
+        continue;
+      }
+      if (pilot.decided[k] === 1 || ahead > reach || ahead < 12) continue;
+      pilot.decided[k] = 1;
       let take = false;
+      // A passage that asks for nearly full lock (Lantern Alley's right-angle mouth) is a risk
+      // to any driver; a shallow planner goes for it half as often, a deep one counts it.
+      const hairpin = tightestOf(pilot, k) > obs.self.session.params.maxSteerCurvature * 0.8;
       if (skill.shortcutDepth === 1) {
-        // A shallow planner sees a shorter road and sometimes goes for it.
-        take = value.naiveGain > 0.25 && rng() < 0.55;
+        // A shallow planner sees a shorter road and sometimes goes for it, unless it can see
+        // the road is a bog: much more of the shortcut is poor ground than of the road it skips
+        // (Moss Run's Marsh Track, 30 s a race slower, used to take three Rookie laps in five).
+        const bog = value.poorShare > mainPoorShare(pilot, track, k) + VISIBLY_WORSE;
+        take = !bog && value.naiveGain > 0.25 && rng() < (hairpin ? 0.28 : 0.55);
       } else if (skill.shortcutDepth === 2) {
         // Risk: a way barely wider than the car punishes line error, and a touch on a pillar or
         // a barricade costs more than the shortcut saves (measured: Conveyor Gap).
         const width = value.narrowest - 2 * obs.self.session.params.colliderRadius;
         const tight = Math.max(0, 1 - width / 40);
         const risk = tight * tight * (0.5 + skill.lineError * 0.1);
-        let gain = value.gain - risk + this.crossingWait(track, obs, k, speed);
+        let gain =
+          value.gain -
+          risk -
+          (hairpin ? HAIRPIN_RISK : 0) +
+          this.crossingWait(track, obs, k, speed);
         // Racing the other car through it: a different road is a way past, or a way to hold on.
         if (this.rel.near && Math.abs(this.rel.along) < 90) gain += 0.08;
         take = gain > this.persona.style.shortcutGain;
       }
+      // Off the grid side by side, nobody dives across the other car for a shortcut (Laundry
+      // Lane forks 56 px past Backstreet Blitz's start line, across the first slot).
+      if (
+        take &&
+        obs.self.session.raceTicks * SIM_DT < MERGE_SECONDS &&
+        this.rel.near &&
+        Math.abs(this.rel.along) < 60
+      )
+        take = false;
       if (this.shortcutPolicy === 'always') take = true;
       else if (this.shortcutPolicy === 'never') take = false;
       const bit = 1 << (k - 1);

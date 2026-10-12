@@ -1,8 +1,8 @@
 {
-  "sha256": "152f093554d342e8e754743772dbeab25f121df216c1da0aa7dd0182182e7b9a",
+  "sha256": "4fc2c8e2a5df1b49131d92a853f0ddf6f28eea557d641bccf0ec01976d72df94",
   "checks": {
     "coveredDrivable": 0,
     "animatedMismatch": 0
   },
-  "bytes": 570929
+  "bytes": 573427
 }

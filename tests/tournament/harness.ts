@@ -6,6 +6,7 @@ import {
   CATALOG,
   build,
   conditionsFor,
+  createAiRace,
   environmentFor,
   getTemplate,
   getTrack,
@@ -33,6 +34,7 @@ import {
   locate,
   stepRaceWithBrains,
 } from '@bolt/shared';
+import { UPGRADE_PAIRS, upgradedOf } from '../balance/upgrade.js';
 
 /**
  * The bot tournament harness (Section 10.2, the Milestone D gate). A match is set up exactly as
@@ -52,14 +54,24 @@ export type CarSpec = {
   strategy?: AiStrategy;
   templateId?: string;
   difficulty: AiDifficulty;
-  style: AiStyle;
+  /** Aggressive or tactical; picked by seed when absent, as the room does. */
+  style?: AiStyle;
   /** Drive this car with the sparring brain instead (the before/after comparison). */
   sparring?: boolean;
+  /** With `templateId`: the upgraded twin of an upgrade-test pair (tests/balance/upgrade.ts). */
+  upgrade?: string;
   /** A fixed frame of a strategy with a chosen engine and wheel kit (the tire duels). */
   build?: { frame: string; engineId: string; tireKitId: string };
 };
 
 export type MatchSpec = {
+  /** Position in the plan, for tools. */
+  index?: number;
+  /**
+   * Set up as the room does (`createAiRace`): the first car stands in for the player, the
+   * second is the AI rival the room would build for this course, seed and difficulty.
+   */
+  room?: boolean;
   trackId: string;
   presetId: string;
   seed: number;
@@ -68,6 +80,13 @@ export type MatchSpec = {
 };
 
 export const STUCK_SECONDS = 8;
+/**
+ * A car that gains less than `NO_PROGRESS_PX` of course progress in this long while racing (not
+ * waiting at a crossing, not knocked out) is stuck too, even if it never sits still: backing
+ * and filling against a wall is the usual way (found on Backstreet Blitz).
+ */
+export const NO_PROGRESS_SECONDS = 15;
+export const NO_PROGRESS_PX = 150;
 
 export type CarRecord = {
   id: string;
@@ -95,12 +114,25 @@ export type CarRecord = {
   lapShortcuts: number[];
   /** Longest time sitting still while racing, seconds. */
   longestStill: number;
+  /** Longest time without `NO_PROGRESS_PX` of course progress while racing, seconds. */
+  longestNoProgress: number;
+  /** Recoveries the AI ran (backing out), when the car is AI-driven. */
+  recoveries: number;
   wallHits: number;
   /** Mean and worst cost of the brain's `control`, ms. */
   brainMeanMs: number;
   brainWorstMs: number;
   /** Mean lateral distance from the car's own planned racing line, px (AI cars). */
   lineError: number;
+  /** Seconds this car had any tow, and its mean tow while it had it (share of top speed). */
+  towSeconds: number;
+  towMean: number;
+  /** Seconds the rival was within the reach of at least one of this car's weapons. */
+  inRangeSeconds: number;
+  /** Why it did not finish, when it did not: knocked out, stuck, time limit, finish window. */
+  dnf: 'ko' | 'wrecked' | 'stuck' | 'time limit' | 'finish window' | 'crash' | null;
+  /** Mean speed over the race while racing, px/s. */
+  meanSpeed: number;
 };
 
 export type MatchRecord = {
@@ -114,10 +146,15 @@ export type MatchRecord = {
   lap1Leader: number;
   /** Seconds both cars spent within 220 px of each other. */
   closeSeconds: number;
-  /** Problems: timeout, a stuck car, a non-finite state. */
+  /** Problems: a crash, a stuck car, a non-finite state, no end at all. */
   problems: string[];
+  /** Ran to the 180 s limit with nobody home (decided on progress). */
+  timedOut: boolean;
   ticks: number;
 };
+
+/** Seed salt of the AI standing in for the player in a room-built race. */
+const PLAYER_BRAIN_SALT = 0x7f4a7c15;
 
 const trackCache = new Map<string, TrackRuntime>();
 export function trackOf(trackId: string): TrackRuntime {
@@ -170,7 +207,12 @@ function buildCar(
     };
   }
   if (spec.templateId) {
-    const t = getTemplate(spec.templateId);
+    let t = getTemplate(spec.templateId);
+    if (t && spec.upgrade) {
+      const pair = UPGRADE_PAIRS.find((p) => p.id === spec.upgrade);
+      if (!pair || pair.base !== t.id) throw new Error(`no upgrade ${spec.upgrade} of ${t.id}`);
+      t = upgradedOf(pair);
+    }
     if (!t) throw new Error(`no template ${spec.templateId}`);
     const entry = raceEntry(t.blueprint, conditions);
     if (!entry) throw new Error(`${t.id} is not legal`);
@@ -201,12 +243,60 @@ function buildCar(
   };
 }
 
+/** The race entry for one car spec on a course (tools). */
+export function entryFor(
+  spec: CarSpec,
+  trackId: string,
+  presetId: string,
+  seed: number,
+  conditions: BuildConditions,
+): RaceEntry {
+  return buildCar(spec, { trackId, presetId, seed, cars: [spec, spec] }, 0, conditions).entry;
+}
+
 export type Match = { race: RaceSession; brains: RaceBrain[]; built: [Built, Built] };
 
 export function createMatch(spec: MatchSpec): Match {
   const track = trackOf(spec.trackId);
   const env = environmentFor(spec.presetId) as RaceEnvironment;
   const conditions = conditionsFor(spec.trackId, spec.presetId) as BuildConditions;
+  if (spec.room) {
+    // Exactly the race the room sets up for a player (`createAiRace`, the same seed, build pick,
+    // brain seed and difficulty), with an AI standing in for the player on the first slot.
+    const player = buildCar(spec.cars[0], spec, 0, conditions);
+    const ai = createAiRace(track, spec.presetId, env, conditions, player.entry, spec.seed, {
+      difficulty: spec.cars[1].difficulty,
+    });
+    if (!ai || !ai.pick) throw new Error(`no AI race on ${spec.trackId}/${spec.presetId}`);
+    const stand = new AiBrain({
+      seed: (spec.seed ^ PLAYER_BRAIN_SALT) >>> 0,
+      difficulty: spec.cars[0].difficulty,
+      ...(spec.cars[0].style ? { style: spec.cars[0].style } : {}),
+    });
+    stand.prepare(ai.race, 0);
+    const pick = ai.pick;
+    return {
+      race: ai.race,
+      brains: [stand, ai.brain],
+      built: [
+        player,
+        {
+          entry: {
+            build: ai.race.cars[1]!.build,
+            params: ai.race.cars[1]!.baseParams,
+            buildHash: ai.race.cars[1]!.buildHash,
+          },
+          record: {
+            id: `${pick.frame}/${pick.engineId}/${pick.tireKitId}`,
+            strategy: pick.strategy,
+            frame: pick.frame,
+            tireKitId: pick.tireKitId,
+            engineId: pick.engineId,
+          },
+        },
+      ],
+    };
+  }
   const built = [
     buildCar(spec.cars[0], spec, 0, conditions),
     buildCar(spec.cars[1], spec, 1, conditions),
@@ -220,7 +310,11 @@ export function createMatch(spec: MatchSpec): Match {
   const brains = spec.cars.map((car, i) => {
     const seed = (spec.seed ^ AI_BRAIN_SEED_SALT ^ (i * 0x9e3779b9)) >>> 0;
     if (car.sparring) return createSparringBrain(seed);
-    const brain = new AiBrain({ seed, difficulty: car.difficulty, style: car.style });
+    const brain = new AiBrain({
+      seed,
+      difficulty: car.difficulty,
+      ...(car.style ? { style: car.style } : {}),
+    });
     brain.prepare(race, i);
     return brain;
   });
@@ -241,6 +335,18 @@ export function runMatch(spec: MatchSpec): MatchRecord {
   const n = race.cars.length;
   const still = [0, 0];
   const longest = [0, 0];
+  const markProgress = [0, 0];
+  const markTime = [0, 0];
+  const noProgress = [0, 0];
+  const towTicks = [0, 0];
+  const towSum = [0, 0];
+  const inRange = [0, 0];
+  const speedSum = [0, 0];
+  const speedTicks = [0, 0];
+  // The longest reach of each car's weapons (traps and contact parts count at their own reach).
+  const reach = race.cars.map((car) =>
+    Math.max(0, ...car.specs.filter((sp) => sp.category === 'weapon').map((sp) => sp.range || 0)),
+  );
   const hot = [0, 0];
   const protection = [0, 0];
   const walls = [0, 0];
@@ -283,11 +389,36 @@ export function runMatch(spec: MatchSpec): MatchRecord {
         const m = car.session.motion;
         if (!Number.isFinite(m.x) || !Number.isFinite(m.y) || !Number.isFinite(m.velocityX))
           throw new Error(`car ${i} has a non-finite state at tick ${race.tick}`);
-        if (car.session.phase !== 'RACING' || car.ko) continue;
-        const speed = Math.hypot(m.velocityX, m.velocityY);
         const brain = brains[i];
         const holding = brain instanceof AiBrain ? brain.holding : false;
-        if (speed < 8 && !holding) {
+        const now = race.raceTicks * SIM_DT;
+        const progress = car.session.progress.courseProgress;
+        // A wrecked car (chassis gone, still driving on what is left) limps by design.
+        const wreck = car.chassis <= 0;
+        if (
+          car.session.phase !== 'RACING' ||
+          car.ko ||
+          wreck ||
+          holding ||
+          progress > markProgress[i]! + NO_PROGRESS_PX
+        ) {
+          markProgress[i] = Math.max(markProgress[i]!, progress);
+          markTime[i] = now;
+        } else noProgress[i] = Math.max(noProgress[i]!, now - markTime[i]!);
+        if (car.session.phase !== 'RACING' || car.ko) continue;
+        const speed = Math.hypot(m.velocityX, m.velocityY);
+        speedSum[i]! += speed;
+        speedTicks[i]!++;
+        if (car.tow.tow > 0) {
+          towTicks[i]!++;
+          towSum[i]! += car.tow.tow;
+        }
+        const other = race.cars[1 - i];
+        if (other && other.session.phase === 'RACING' && reach[i]! > 0) {
+          const om = other.session.motion;
+          if (Math.hypot(om.x - m.x, om.y - m.y) <= reach[i]!) inRange[i]! += SIM_DT;
+        }
+        if (speed < 8 && !holding && car.chassis > 0) {
           still[i]! += SIM_DT;
           longest[i] = Math.max(longest[i]!, still[i]!);
         } else still[i] = 0;
@@ -334,10 +465,15 @@ export function runMatch(spec: MatchSpec): MatchRecord {
   }
   const result = race.result;
   if (!result) problems.push(`never ended in ${TICK_LIMIT} ticks`);
-  if (result?.reason === 'timeout') problems.push('ran to the time limit');
-  for (let i = 0; i < n; i++)
+  // At 180 s the race is decided on course progress (Section 3.4): a legal end, reported by the
+  // report as an anomaly to look at, not a failure of the harness.
+  const timedOut = result?.reason === 'timeout';
+  for (let i = 0; i < n; i++) {
     if (longest[i]! > STUCK_SECONDS)
       problems.push(`car ${i} sat still for ${longest[i]!.toFixed(1)} s`);
+    if (noProgress[i]! > NO_PROGRESS_SECONDS)
+      problems.push(`car ${i} made no progress for ${noProgress[i]!.toFixed(1)} s`);
+  }
   const record = (i: number): CarRecord => {
     const car = race.cars[i]!;
     const summary = result?.cars[i];
@@ -345,13 +481,17 @@ export function runMatch(spec: MatchSpec): MatchRecord {
     let uses = 0;
     for (const s of car.specs)
       if (s.category === 'weapon') uses += car.stats.usesByPart[s.part] ?? 0;
+    const b = brains[i];
     return {
       ...built[i]!.record,
       difficulty: spec_.difficulty,
-      style: spec_.style,
+      style: b instanceof AiBrain ? b.style : (spec_.style ?? 'tactical'),
       sparring: spec_.sparring === true,
       finished: summary?.finished ?? false,
-      finishSeconds: summary?.finishTimeMs === undefined || summary.finishTimeMs === null ? null : summary.finishTimeMs / 1000,
+      finishSeconds:
+        summary?.finishTimeMs === undefined || summary.finishTimeMs === null
+          ? null
+          : summary.finishTimeMs / 1000,
       damageDealt: summary?.damageDealt ?? 0,
       damageTaken: summary?.damageTaken ?? 0,
       weaponUses: uses,
@@ -369,10 +509,30 @@ export function runMatch(spec: MatchSpec): MatchRecord {
       lapTimes: lapTimes[i]!,
       lapShortcuts: lapShortcuts[i]!,
       longestStill: longest[i]!,
+      longestNoProgress: noProgress[i]!,
+      recoveries: (() => {
+        const b = brains[i];
+        return b instanceof AiBrain ? (b.parts?.pilot.recoveries ?? 0) : 0;
+      })(),
       wallHits: walls[i]!,
       brainMeanMs: brainMs[i]! / Math.max(1, brainCalls[i]!),
       brainWorstMs: brainWorst[i]!,
       lineError: lineCount[i]! > 0 ? lineSum[i]! / lineCount[i]! : Number.NaN,
+      towSeconds: towTicks[i]! * SIM_DT,
+      towMean: towTicks[i]! > 0 ? towSum[i]! / towTicks[i]! : 0,
+      inRangeSeconds: inRange[i]!,
+      dnf: summary?.finished
+        ? null
+        : car.ko
+          ? 'ko'
+          : car.chassis <= 0
+            ? 'wrecked'
+            : longest[i]! > STUCK_SECONDS || noProgress[i]! > NO_PROGRESS_SECONDS
+              ? 'stuck'
+              : result?.reason === 'timeout' || !result
+                ? 'time limit'
+                : 'finish window',
+      meanSpeed: speedTicks[i]! > 0 ? speedSum[i]! / speedTicks[i]! : 0,
     };
   };
   return {
@@ -386,6 +546,7 @@ export function runMatch(spec: MatchSpec): MatchRecord {
     lap1Leader,
     closeSeconds: close,
     problems,
+    timedOut,
     ticks,
   };
 }
@@ -398,7 +559,7 @@ function failed(spec: MatchSpec, error: unknown): MatchRecord {
     tireKitId: '?',
     engineId: '?',
     difficulty: spec.cars[i]!.difficulty,
-    style: spec.cars[i]!.style,
+    style: spec.cars[i]!.style ?? 'tactical',
     sparring: spec.cars[i]!.sparring === true,
     finished: false,
     finishSeconds: null,
@@ -413,10 +574,17 @@ function failed(spec: MatchSpec, error: unknown): MatchRecord {
     lapTimes: [],
     lapShortcuts: [],
     longestStill: 0,
+    longestNoProgress: 0,
+    recoveries: 0,
     wallHits: 0,
     brainMeanMs: 0,
     brainWorstMs: 0,
     lineError: Number.NaN,
+    towSeconds: 0,
+    towMean: 0,
+    inRangeSeconds: 0,
+    dnf: 'crash',
+    meanSpeed: 0,
   });
   const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
   return {
@@ -430,6 +598,7 @@ function failed(spec: MatchSpec, error: unknown): MatchRecord {
     lap1Leader: -1,
     closeSeconds: 0,
     problems: [`crashed: ${message.split('\n')[0]}`],
+    timedOut: false,
     ticks: 0,
   };
 }
@@ -455,7 +624,12 @@ export function runSolo(
     catalog: CATALOG,
     tow: false,
   });
-  const brain = new AiBrain({ seed, difficulty: car.difficulty, style: car.style, shortcuts });
+  const brain = new AiBrain({
+    seed,
+    difficulty: car.difficulty,
+    ...(car.style ? { style: car.style } : {}),
+    shortcuts,
+  });
   let walls = 0;
   let mask = 0;
   for (let i = 0; i < TICK_LIMIT && race.phase !== 'FINISHED'; i++) {

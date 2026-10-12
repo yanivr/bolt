@@ -8,6 +8,7 @@ import type {
   RaceEvent,
   RaceSnapshot,
   ResolvedBuild,
+  TerrainAnimatedProp,
   TerrainOverlay,
   VehicleLoadout,
   VehicleParams,
@@ -62,6 +63,8 @@ import { WeatherAtlas } from '../weather/atlas.js';
 import { collectCombatLights } from '../weather/lights.js';
 import { reducedMotionPreferred } from '../weather/motion.js';
 import { easeOverlay, overlayTarget } from '../weather/overlayFade.js';
+import type { OverlayCoverage } from '../weather/overlayFade.js';
+import { coverageOfTexture, isTimetableLoop, timetableFrame } from '../weather/terrainArt.js';
 import { LightList, WeatherStage } from '../weather/stage.js';
 import { WX_MANIFEST, WX_TEXTURE, WeatherView } from '../weather/view.js';
 import { carTextureKeys, rivalSheets } from './rivalSheets.js';
@@ -113,7 +116,18 @@ export class RaceScene extends Phaser.Scene {
   private body = new BodyMotion();
   private car!: CarView;
   private effects!: Effects;
-  private overlays: Array<{ def: TerrainOverlay; image: Phaser.GameObjects.Image }> = [];
+  private overlays: Array<{
+    def: TerrainOverlay;
+    image: Phaser.GameObjects.Image;
+    /** Where its pixels are, read from the texture the first time a car comes near. */
+    coverage?: OverlayCoverage | null;
+  }> = [];
+  /** Terrain loops that follow a hazard's timetable: their frame comes from the race clock. */
+  private timetableLoops: Array<{
+    sprite: Phaser.GameObjects.Sprite;
+    anim: TerrainAnimatedProp;
+    frame: number;
+  }> = [];
   /** Timed hazards over the layout view: drawn by the scene while there is no art for them. */
   private layoutHazards: Phaser.GameObjects.Graphics | null = null;
   private outbox: InputSample[] = [];
@@ -286,7 +300,12 @@ export class RaceScene extends Phaser.Scene {
         .setOrigin(0, 0)
         .setDepth(anim.above ? 60 : 8);
       if (anim.blend === 'add') sprite.setBlendMode(Phaser.BlendModes.ADD);
-      sprite.play(key);
+      // A crossing's boom or a vent's blast is drawn from the race clock, so the picture is
+      // down exactly when the physics is (ART_GUIDE, "Timetable loops"); ambient loops play.
+      if (isTimetableLoop(anim)) {
+        sprite.setFrame(0);
+        this.timetableLoops.push({ sprite, anim, frame: 0 });
+      } else sprite.play(key);
     }
 
     const cone = () =>
@@ -646,6 +665,13 @@ export class RaceScene extends Phaser.Scene {
     this.cameras.main.setScroll(view.scrollX, view.scrollY);
     this.effects.update(dt);
     if (this.layoutHazards) this.drawLayoutHazards(session);
+    for (const loop of this.timetableLoops) {
+      const frame = timetableFrame(loop.anim, session.raceTicks * SIM_DT);
+      if (frame !== loop.frame) {
+        loop.frame = frame;
+        loop.sprite.setFrame(frame);
+      }
+    }
 
     // --- Car pose ------------------------------------------------------------------------------
     const speed = t.speed;
@@ -720,9 +746,15 @@ export class RaceScene extends Phaser.Scene {
     this.fadeRival.present = rivalCar.present;
     this.fadeRival.x = rivalCar.x;
     this.fadeRival.y = rivalCar.y;
-    for (const { def, image } of this.overlays) {
+    for (const entry of this.overlays) {
+      const { def, image } = entry;
       if (!def.fadeNearPlayer) continue;
-      const target = overlayTarget(def, this.fadeOwn, this.fadeRival);
+      const target = overlayTarget(def, this.fadeOwn, this.fadeRival, () => {
+        // Read once; a texture that cannot be read stays null (the box is used instead).
+        if (entry.coverage === undefined)
+          entry.coverage = coverageOfTexture(this, `over:${def.id}`);
+        return entry.coverage;
+      });
       const next = easeOverlay(image.alpha, target, dt);
       if (next !== image.alpha) image.setAlpha(next);
     }

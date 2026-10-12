@@ -244,6 +244,8 @@ export function createCombatCar(
     repairTarget: 0,
     prevX: session.motion.x,
     prevY: session.motion.y,
+    gateX: session.motion.x,
+    gateY: session.motion.y,
     lastHitBy: -1,
     trackRange: RIVAL_TRACK_RANGE,
     revealRange: HAZARD_REVEAL_RANGE,

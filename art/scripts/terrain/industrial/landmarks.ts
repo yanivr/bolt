@@ -416,13 +416,24 @@ export function paintDock(
         lx > hw * 0.18 &&
         lx < hw * 0.82
       ) {
-        const hatch = Math.floor((wy - shipY0) / 70) % LIVERIES.length;
-        c =
-          (wy - shipY0) % 70 === 9 || (wy - shipY0) % 70 === 59
-            ? deckLine
-            : (lx + wy) % 5 === 0
-              ? darker(LIVERIES[hatch]!, 0.3)
-              : darker(LIVERIES[hatch]!, 0.15);
+        // The hold's load: rows of containers along the ship, stacked one to three high, each
+        // a box seen from above: a lit north-west rim, corrugated top, its south face below
+        // it (taller for a taller stack) and a dark gap to the next.
+        const hy = (wy - shipY0) % 70;
+        const bay = Math.floor((wy - shipY0) / 70);
+        const cx = lx - Math.ceil(hw * 0.18);
+        const col0 = Math.floor(cx / 10);
+        const u = cx % 10;
+        const row = hy < 34 ? 0 : 1;
+        const v = row === 0 ? hy - 9 : hy - 34;
+        const stack = 1 + Math.floor(hash2(bay * 7 + row, col0, 4021) * 3);
+        const face = 2 + stack;
+        const livery = LIVERIES[Math.floor(hash2(bay * 13 + row, col0, 4022) * LIVERIES.length)]!;
+        if (u === 9 || v < 0 || v >= 24) c = deckLine;
+        else if (v >= 24 - face) c = v === 23 ? PAL.ink : darker(livery, 0.42);
+        else if (u === 0 || v === 0) c = lighter(livery, 0.18);
+        else if (u === 8) c = darker(livery, 0.28);
+        else c = u % 2 === 0 ? darker(livery, 0.1) : livery;
       } else if (lx % 16 === 0) c = deckLine;
       ship.set(lx, sy(wy), c);
     }

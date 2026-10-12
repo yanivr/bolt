@@ -12,7 +12,7 @@ import { angleDelta, clamp, headingFromVector, lerp } from '../math.js';
 import type { ControlInput } from '../physics.js';
 import { steerYawGain } from '../physics.js';
 import type { TrackLocation, TrackRuntime } from '../track.js';
-import { createLocation, locate } from '../track.js';
+import { createLocation, locate, obstacleDepth, wallDepth } from '../track.js';
 import type { AiPersona } from './profile.js';
 import type { RouteLine, RoutePlan } from './route.js';
 import { sampleIndex } from './route.js';
@@ -38,8 +38,34 @@ import { sampleIndex } from './route.js';
 const DEG = Math.PI / 180;
 /** How hard the tracker turns toward the lane per px of cross-track error, per second. */
 const CROSS_GAIN = 2.2;
-/** Px per tick the commanded lane may move across the road. */
+/** Px per tick the commanded lane may move across the road; in a bend, `LANE_RATE_BEND`. */
 const LANE_RATE = 2.6;
+const LANE_RATE_BEND = 1.1;
+/** Curvature from which a lane change counts as being in a bend, 1/px. */
+const BEND_CURVATURE = 1 / 450;
+/** A passage whose line may wander less than this either side, px, is narrow. */
+const NARROW_EDGE = 16;
+/** Speed a car not yet lined up enters a narrow passage at, px/s, plus 4 per px of room. */
+const NARROW_LINE_UP_SPEED = 110;
+/** Line curvature, 1/px, from which even a shallow planner follows the real line, fully by
+ * `TIGHT_FULL`, looking `TIGHT_LOOKAHEAD` px ahead. Full lock is about 1/52 px. */
+const TIGHT_FROM = 1 / 160;
+const TIGHT_FULL = 1 / 90;
+const TIGHT_LOOKAHEAD = 140;
+/** Seconds from a steering command to the yaw it asks for: the wheel filter and the yaw lag. */
+const STEER_LAG = 0.16;
+/** Share of full-lock curvature beyond which a bend is taken at `FULL_LOCK_SPEED` px/s. */
+export const LOCK_SHARE = 0.7;
+const FULL_LOCK_SPEED = 70;
+/** Px outside its street, and inside a shortcut's corridor, at which a car is in the shortcut. */
+const IN_SHORTCUT = 12;
+/** Px outside a shortcut's corridor at which a car on its route has missed the mouth. */
+const MISSED_MOUTH = 40;
+/** Distances ahead, px (plus 0.4 s of speed), at which a car far off its lane looks for a
+ * clear way back, nearest first. */
+const REJOIN_AHEAD = [40, 100, 170, 260];
+/** Farther than this from its lane, px, a car checks that the way back is clear. */
+const REJOIN_CHECK = 36;
 
 export class Pilot {
   readonly plan: RoutePlan;
@@ -48,7 +74,7 @@ export class Pilot {
   mask = 0;
   s = 0;
   lateral = 0;
-  /** Lap on which each shortcut was last decided. */
+  /** 1 once a shortcut has been decided on this approach to its fork, 0 while open. */
   readonly decided: number[];
   /** The car could not be found near its route (far off the road): it is heading back. */
   lost = false;
@@ -65,8 +91,15 @@ export class Pilot {
   allowed = Infinity;
   /** Extra speed ceiling from tactics this tick (follow, line up a shot). */
   speedWish = Infinity;
-  /** Wall-clock of recoveries, for the tournament's stuck detector. */
+  /** The way back to the lane is blocked by a wall or an obstacle (it runs along instead). */
+  blocked = false;
+  /** The point of the lane the last clear-way check looked at. */
+  private readonly rejoin = { x: 0, y: 0 };
+  /** Recoveries so far, for the tournament's stuck detector. */
   recoveries = 0;
+  /** Route place of the last recovery and how many in a row were from about there. */
+  private lastRecoveryS = Number.NaN;
+  private repeats = 0;
   private initialized = false;
   private readonly loc: TrackLocation = createLocation();
 
@@ -76,7 +109,7 @@ export class Pilot {
   ) {
     this.plan = plan;
     this.track = plan.track;
-    this.decided = this.track.branches.map(() => -1);
+    this.decided = this.track.branches.map(() => 0);
   }
 
   reset(): void {
@@ -90,7 +123,26 @@ export class Pilot {
     this.reverseTicks = 0;
     this.coastPhase = 0;
     this.recoveries = 0;
-    for (let i = 0; i < this.decided.length; i++) this.decided[i] = -1;
+    this.lastRecoveryS = Number.NaN;
+    this.repeats = 0;
+    for (let i = 0; i < this.decided.length; i++) this.decided[i] = 0;
+  }
+
+  /**
+   * Drops the shortcut the route is on at the car's place when the car itself is on another
+   * road (it missed the mouth), and finds itself again on the route that remains.
+   */
+  private abandonShortcut(x: number, y: number): void {
+    const r = this.route;
+    const src = r.src[sampleIndex(r, this.s)]!;
+    if (src === 0) return;
+    locate(this.track, x, y, this.loc);
+    if (this.loc.branch === src) return;
+    const next = this.mask & ~(1 << (src - 1));
+    if (!this.plan.routes[next]) return;
+    this.mask = next;
+    this.decided[src] = 1;
+    this.relocate(x, y);
   }
 
   get route(): RouteLine {
@@ -110,7 +162,23 @@ export class Pilot {
     const span = j > i ? r.s[j]! - r.s[i]! : r.length - r.s[i]!;
     const w = ((s % r.length) + r.length) % r.length;
     const t = span > 1e-6 ? clamp((w - r.s[i]!) / span, 0, 1) : 0;
-    return lerp(r.offset[i]!, r.offset[j]!, t) * this.persona.skill.lineDepth;
+    const offset = lerp(r.offset[i]!, r.offset[j]!, t);
+    const depth = this.persona.skill.lineDepth;
+    if (depth >= 1) return offset;
+    // A shallow planner drives a lazier line, nearer the middle, except into a bend so tight
+    // that only the real line gets round it at all (a right-angle alley mouth: from the middle
+    // of the street a Rookie's car could not turn in, and backed and filled at the posts).
+    const follow = tightAhead(r)[i]!;
+    return follow > 0 ? offset * lerp(depth, 1, follow) : offset * depth;
+  }
+
+  /** The band of good, clear ground at a route distance (route lateral), px. */
+  bandAt(s: number, out: { lo: number; hi: number }): { lo: number; hi: number } {
+    const r = this.route;
+    const i = sampleIndex(r, s);
+    out.lo = r.lo[i]!;
+    out.hi = r.hi[i]!;
+    return out;
   }
 
   edgeAt(s: number): number {
@@ -172,6 +240,35 @@ export class Pilot {
       found = this.project(m.x, m.y, this.s, 30, 30);
     }
     this.lost = !found;
+    // On a shortcut's part of the route but clearly outside the shortcut (the mouth missed and
+    // left behind): give it up at once and race on, rather than scraping along the street wall
+    // toward an alley it has passed.
+    // And the other way round: inside a shortcut its route does not take (pushed in, or it ran
+    // in), it is driving that shortcut now.
+    if (found) {
+      const r = this.route;
+      const i = sampleIndex(r, this.s);
+      const outside = Math.abs(this.lateral) - r.halfWidth[i]!;
+      if (r.src[i] !== 0 && outside > MISSED_MOUTH) {
+        this.abandonShortcut(m.x, m.y);
+        this.project(m.x, m.y, this.s, 30, 30);
+      } else if (r.src[i] === 0 && outside > IN_SHORTCUT && this.adoptShortcut(m.x, m.y))
+        this.project(m.x, m.y, this.s, 30, 30);
+    }
+  }
+
+  /** Takes the shortcut the car is in, when its route does not (it was pushed in, or ran in). */
+  private adoptShortcut(x: number, y: number): boolean {
+    const loc = this.loc;
+    locate(this.track, x, y, loc);
+    const k = loc.branch;
+    if (k === 0 || this.takes(k) || Math.abs(loc.lateral) > loc.halfWidth) return false;
+    const next = this.mask | (1 << (k - 1));
+    if (!this.plan.routes[next]) return false;
+    this.mask = next;
+    this.decided[k] = 1;
+    this.relocate(x, y);
+    return true;
   }
 
   /** Finds the car's place on the route from scratch (start, or after being lost). */
@@ -233,6 +330,37 @@ export class Pilot {
     return true;
   }
 
+  /**
+   * Whether a wall or an obstacle stands between the car and its lane a little ahead (the
+   * point it would steer for), swept with the car's own radius.
+   */
+  private wayBlocked(x: number, y: number, radius: number, ahead: number): boolean {
+    const at = this.s + ahead;
+    this.pointAt(at, this.aimPoint);
+    const edge = this.edgeAt(at);
+    const lane = clamp(this.lineOffset(at) + this.bias, -edge, edge);
+    const tx = this.aimPoint.x - this.aimPoint.ty * lane;
+    const ty = this.aimPoint.y + this.aimPoint.tx * lane;
+    this.rejoin.x = tx;
+    this.rejoin.y = ty;
+    const d = Math.hypot(tx - x, ty - y);
+    const steps = Math.max(1, Math.ceil(d / 12));
+    for (let k = 1; k <= steps; k++) {
+      const px = x + ((tx - x) * k) / steps;
+      const py = y + ((ty - y) * k) / steps;
+      if (
+        wallDepth(this.track, px, py, radius) > 0 ||
+        obstacleDepth(this.track, px, py, radius) > 0
+      )
+        return true;
+      if (this.track.walled) {
+        locate(this.track, px, py, this.loc);
+        if (this.loc.edge + radius > 0) return true;
+      }
+    }
+    return false;
+  }
+
   /** Route distance from the car to `s` ahead, wrapped to [0, length). */
   ahead(s: number): number {
     const len = this.route.length;
@@ -250,12 +378,27 @@ export class Pilot {
     const conf = Math.sqrt(skill.cornerConfidence * gripScale);
     const decel0 = params.brakeDecel * Math.max(0.3, gripScale) * skill.brakeConfidence;
     const horizon = ((speed * speed) / (2 * decel0)) * skill.horizonFactor + skill.horizonExtra;
-    // Off the line (passing, avoiding) the car corners on a tighter arc: keep some margin.
-    const off = 1 - Math.min(0.12, Math.abs(this.bias) / 500);
+    // Off the line (passing, avoiding) the car corners on a tighter arc: keep some margin. And
+    // a car that is still well off its lane (knocked aside, running wide, just switched to a
+    // shortcut's line) must get back to it before the next bend or gap: the further off, the
+    // more margin, and a narrow passage ahead is entered only once the car is lined up for it
+    // (found by the bot tournament: cars arriving 20 to 50 px off the line at Conveyor Gap at
+    // full pace and clipping the entrance).
+    const miss = Math.max(0, Math.abs(this.lateral - (this.lineOffset(this.s) + this.bias)) - 8);
+    const off = 1 - Math.min(0.25, Math.abs(this.bias) / 500 + miss / 250);
     let allowed = Infinity;
+    const lockShare = params.maxSteerCurvature * LOCK_SHARE;
     for (let d = 0; d <= horizon; d += 20) {
       const i = sampleIndex(r, this.s + d);
-      const limit = r.limit[i]! * conf * off;
+      let limit = r.limit[i]! * conf * off;
+      if (miss > r.edge[i]! && r.edge[i]! < NARROW_EDGE)
+        limit = Math.min(limit, NARROW_LINE_UP_SPEED + 4 * r.edge[i]!);
+      // A narrow passage whose line asks for most of full lock leaves no steering in hand for an
+      // error and no road to run wide on: take it slowly, so the error stays small (a Rookie at
+      // 103 px/s into Lantern Alley's posts on a rainy night). A wide street corner as tight is
+      // taken at its grip limit as before.
+      if (r.edge[i]! < NARROW_EDGE && Math.abs(r.curvature[i]!) > lockShare)
+        limit = Math.min(limit, FULL_LOCK_SPEED);
       const decel = params.brakeDecel * r.grip[i]! * gripScale * skill.brakeConfidence + r.roll[i]!;
       const entry = Math.sqrt(limit * limit + 2 * decel * d);
       if (entry < allowed) allowed = entry;
@@ -314,6 +457,9 @@ export class Pilot {
   private readonly p1 = { x: 0, y: 0 };
   private readonly p2 = { x: 0, y: 0 };
   private readonly p3 = { x: 0, y: 0 };
+  private readonly q0 = { x: 0, y: 0 };
+  private readonly q1 = { x: 0, y: 0 };
+  private readonly q2 = { x: 0, y: 0 };
 
   /**
    * Steering and pedals toward the lane at the aim point, at no more than the plan allows.
@@ -336,8 +482,11 @@ export class Pilot {
     const here = sampleIndex(r, this.s + 20);
     const room = r.hi[here]! - r.lo[here]!;
     const wander = this.wander * clamp(room / 70, 0.15, 1);
-    // Tactics move the bias toward their wish at a limited rate.
-    this.bias += clamp(this.biasWish - this.bias, -LANE_RATE, LANE_RATE);
+    // Tactics move the bias toward their wish at a limited rate, and slower in a bend, where a
+    // lane change unwinding at the apex throws the car wide (found on Steel Circuit).
+    const bend = Math.abs(r.curvature[sampleIndex(r, this.s + 30)]!) > BEND_CURVATURE;
+    const rate = bend ? LANE_RATE_BEND : LANE_RATE;
+    this.bias += clamp(this.biasWish - this.bias, -rate, rate);
 
     // Steering: a Stanley-type tracker on the lane (line, bias and wander). The lane's own
     // heading a little ahead, turned toward the lane by the cross-track error, plus the yaw the
@@ -362,22 +511,76 @@ export class Pilot {
     laneAt(this.s + preview + 16, c);
     const laneHeading = headingFromVector(c.x - a.x, c.y - a.y);
     const laneHere = laneAt(this.s, this.p3);
-    const cross = laneHere - this.lateral;
-    const wanted = laneHeading + Math.atan2(CROSS_GAIN * cross, Math.max(25, v));
+    let cross = laneHere - this.lateral;
+    // Far off the lane (run wide onto open ground, behind a snow bank): head back only where the
+    // way is clear; otherwise run along the road until it is. Steering straight at the lane
+    // drove cars into the bank they were behind (Whiteout Pass).
+    this.blocked = false;
+    let rejoinHeading = Number.NaN;
+    if (Math.abs(cross) > REJOIN_CHECK) {
+      // The nearest point of the lane ahead that can be reached in a straight line: through a
+      // gap in a tree line, past the end of a bank. None: run along the road.
+      const radius = session.params.colliderRadius;
+      let clear = false;
+      for (const d of REJOIN_AHEAD) {
+        if (!this.wayBlocked(m.x, m.y, radius, d + 0.4 * v)) {
+          clear = true;
+          if (d !== REJOIN_AHEAD[0])
+            rejoinHeading = headingFromVector(this.rejoin.x - m.x, this.rejoin.y - m.y);
+          break;
+        }
+      }
+      if (!clear) {
+        this.blocked = true;
+        cross = 0;
+      }
+    }
+    const wanted = Number.isNaN(rejoinHeading)
+      ? laneHeading + Math.atan2(CROSS_GAIN * cross, Math.max(25, v))
+      : rejoinHeading;
     const error = angleDelta(m.headingRad, wanted);
-    const kappa = signedCurvature(a.x, a.y, b.x, b.y, c.x, c.y);
+    // The yaw the lane's curvature asks for, read where the car will be once the steering and
+    // the yaw have caught up (`STEER_LAG` s ahead), so a sharp turn-in (a right-angle alley
+    // mouth) is begun in time rather than a car length late. Taken as the stronger of here and
+    // there, so the end of a bend is not let go early.
+    const kappaHere = signedCurvature(a.x, a.y, b.x, b.y, c.x, c.y);
+    const lagAhead = preview + v * STEER_LAG;
+    laneAt(this.s + lagAhead - 16, this.q0);
+    laneAt(this.s + lagAhead, this.q1);
+    laneAt(this.s + lagAhead + 16, this.q2);
+    const kappaThere = signedCurvature(
+      this.q0.x,
+      this.q0.y,
+      this.q1.x,
+      this.q1.y,
+      this.q2.x,
+      this.q2.y,
+    );
+    const kappa = Math.abs(kappaThere) > Math.abs(kappaHere) ? kappaThere : kappaHere;
     const feedYaw = v * kappa;
     const grip = session.telemetry.grip > 0 ? session.telemetry.grip : 1;
     const gain = Math.max(steerYawGain(session.params, v, grip), HEADING_MIN_YAW_GAIN);
     const yaw = feedYaw + HEADING_GAIN * (error - HEADING_DAMPING * (m.yawRate - feedYaw));
-    let steer = clamp(yaw / gain, -1, 1);
+    // Its own damage, as a driver feels it: a damaged steering rack turns less for the same
+    // input and a damaged wheel pulls to one side (`effects.steerScale` and `steerBias`, which
+    // the physics applies to the command). Ask for the turn it wants after them; without this
+    // a battered car weaved (Backstreet Blitz).
+    const fx_ = session.effects;
+    let want = yaw / gain;
+    if (fx_.steerScale !== 1 || fx_.steerBias !== 0)
+      want = (want - fx_.steerBias) / Math.max(0.35, fx_.steerScale);
+    let steer = clamp(want, -1, 1);
     const point = this.aimPoint;
     this.pointAt(this.s + 34 + 0.3 * v, point);
 
-    const allowed = Math.min(this.allowed, this.speedWish);
+    let allowed = Math.min(this.allowed, this.speedWish);
+    if (this.blocked) allowed = Math.min(allowed, 160);
     let pull = 0;
     if (speed > allowed + 1) {
-      const lift = clamp((speed - allowed) / 40, 0.25, 1);
+      // Brake in proportion to the overspeed, but firmly: the plan assumes `brakeConfidence` of
+      // the car's braking, and a softer pedal over a 40 px/s band delivered about 60 percent of
+      // it, which carried cars past the posts of Lantern Alley (bot tournament).
+      const lift = clamp((speed - allowed) / 14, 0.3, 1);
       pull = BRAKE_LIFT_THRESHOLD + lift * (1 - BRAKE_LIFT_THRESHOLD);
     }
     let coast = false;
@@ -417,9 +620,19 @@ export class Pilot {
     if (this.stuckTicks > 36) {
       this.stuckTicks = 0;
       this.recoveries++;
-      this.reverseTicks = 26 + Math.floor(rng() * 14);
+      // A second try from the same place backs out further, and from the third it gives up a
+      // shortcut it has already overshot (its mouth behind or beside the car, the car still on
+      // the main road), and turns the other way: one move repeated is a loop.
+      const again = Math.abs(this.s - this.lastRecoveryS) < 80;
+      this.repeats = again ? this.repeats + 1 : 0;
+      this.lastRecoveryS = this.s;
+      if (this.repeats >= 2) this.abandonShortcut(m.x, m.y);
+      this.reverseTicks = Math.round(
+        (26 + Math.floor(rng() * 14)) * Math.min(2.4, 1 + 0.45 * this.repeats),
+      );
       // In reverse the wheels turn the tail: steer away from the way the nose should go.
-      this.reverseSteer = -Math.sign(error || 1);
+      const side = -Math.sign(error || 1);
+      this.reverseSteer = this.repeats >= 3 && this.repeats % 2 === 1 ? -side : side;
     }
     if (turnedRound && speed < 60) steer = Math.sign(error) || 1;
 
@@ -427,6 +640,26 @@ export class Pilot {
     out.brake = pull;
     out.coast = coast;
   }
+}
+
+const TIGHT = new WeakMap<RouteLine, Float32Array>();
+
+/**
+ * Per sample of a route: how much a shallow planner must follow the real line there, 0 to 1,
+ * from the tightest line curvature within `TIGHT_LOOKAHEAD` px ahead. Worked out once a route.
+ */
+function tightAhead(r: RouteLine): Float32Array {
+  let out = TIGHT.get(r);
+  if (out) return out;
+  out = new Float32Array(r.count);
+  for (let i = 0; i < r.count; i++) {
+    let tight = 0;
+    for (let d = 0; d <= TIGHT_LOOKAHEAD; d += 20)
+      tight = Math.max(tight, Math.abs(r.curvature[sampleIndex(r, r.s[i]! + d)]!));
+    out[i] = clamp((tight - TIGHT_FROM) / (TIGHT_FULL - TIGHT_FROM), 0, 1);
+  }
+  TIGHT.set(r, out);
+  return out;
 }
 
 /** Signed curvature of the circle through three points, positive bending right, 1/px. */

@@ -1,4 +1,4 @@
-import { hash2, mulberry32 } from '@bolt/shared';
+import { hash2, hashString, mulberry32 } from '@bolt/shared';
 import type { Canvas, Color } from '../canvas.js';
 import type { CorridorField } from '../field.js';
 import { FAR } from '../field.js';
@@ -6,6 +6,7 @@ import { K_OFFROAD, distanceTo } from './masks.js';
 import type { Masks } from './masks.js';
 import type { RegionGrid, SlopeGrid } from './ground.js';
 import { slopeAt } from './ground.js';
+import { vnoise } from './noise.js';
 import type { Look } from './palette.js';
 import { PAL, darker, lighter } from './palette.js';
 import { emptyRegion } from './spec.js';
@@ -22,7 +23,14 @@ const SEED = 6607;
 
 type Put = (x: number, y: number, c: Color) => void;
 
-export type DecorStats = { scrub: number; tufts: number; pebbles: number; tracks: number; gullies: number };
+export type DecorStats = {
+  scrub: number;
+  tufts: number;
+  pebbles: number;
+  tracks: number;
+  gullies: number;
+  washes: number;
+};
 
 export function paintDecor(
   world: Canvas,
@@ -62,25 +70,51 @@ export function paintDecor(
     put(x, y, look.shade(get(x, y)));
   };
   const reg = emptyRegion();
-  const stats: DecorStats = { scrub: 0, tufts: 0, pebbles: 0, tracks: 0, gullies: 0 };
+  const stats: DecorStats = { scrub: 0, tufts: 0, pebbles: 0, tracks: 0, gullies: 0, washes: 0 };
   const rock = spec.rock;
 
-  // Scrub clumps and dry grass.
-  const G = 26;
+  // Dry washes first: they are landforms, and the brush grows along their banks.
+  const bed = paintWashes(
+    world,
+    field,
+    masks,
+    spec,
+    look,
+    slopes,
+    hashString(field.track.def.id),
+    stats,
+  );
+
+  // Scrub: creosote and sage in loose stands (a clump and a few smaller ones round it), and
+  // dry grass. The stands are what gives open sand a rhythm at race speed; a lone two-pixel
+  // dot every so often reads as noise.
+  const G = 22;
   for (let cy = 0; cy < h; cy += G)
     for (let cx = 0; cx < w; cx += G) {
       const hx = hash2(cx, cy, SEED + seed);
       const x = Math.round(cx + hash2(cx, cy, SEED + 1) * G);
       const y = Math.round(cy + hash2(cx, cy, SEED + 2) * G);
-      if (!ok(x, y, 6)) continue;
+      if (!ok(x, y, 6) || bed[y * w + x]) continue;
       regions.sample(x, y, reg);
-      const want = reg.brush * (1 - reg.playa * 0.9);
-      if (hx < want * 0.42) {
-        const size = 2 + hash2(cx, cy, SEED + 3) * 3.4;
+      const want = Math.min(1, reg.brush * (1 - reg.playa * 0.9) + bank(bed, w, h, x, y) * 0.5);
+      if (hx < want * 0.46) {
+        const size = 2.4 + hash2(cx, cy, SEED + 3) * 3.6;
         const dead = hash2(cx, cy, SEED + 4) < 0.22;
         scrub(put, shadow, x, y, size, dead, hash2(cx, cy, SEED + 5) * 1e6);
         stats.scrub++;
-      } else if (hx < want * 0.42 + 0.1 * (1 - reg.playa)) {
+        // A stand: up to four smaller clumps round the first, more where the brush is thick.
+        const rnd = mulberry32(((cx * 31337) ^ (cy * 7331) ^ seed) >>> 0);
+        const extra = Math.floor(rnd() * (1 + want * 4));
+        for (let k = 0; k < extra; k++) {
+          const a = rnd() * Math.PI * 2;
+          const d = size + 3 + rnd() * 9;
+          const sx = Math.round(x + Math.cos(a) * d);
+          const sy = Math.round(y + Math.sin(a) * d * 0.75);
+          if (!ok(sx, sy, 6) || bed[sy * w + sx]) continue;
+          scrub(put, shadow, sx, sy, 1.6 + rnd() * size * 0.6, dead && rnd() < 0.6, rnd() * 1e6);
+          stats.scrub++;
+        }
+      } else if (hx < want * 0.46 + 0.12 * (1 - reg.playa)) {
         tuft(put, x, y, hash2(cx, cy, SEED + 6) * 1e6);
         stats.tufts++;
       }
@@ -94,9 +128,9 @@ export function paintDecor(
       const y = Math.round(cy + hash2(cx, cy, SEED + 12) * P);
       if (!ok(x, y, 3)) continue;
       regions.sample(x, y, reg);
-      if (hash2(cx, cy, SEED + 13) > reg.rubble * 0.55 + 0.03) continue;
+      if (hash2(cx, cy, SEED + 13) > reg.rubble * 0.7 + 0.04) continue;
       const rnd = mulberry32(((cx * 7919) ^ (cy * 104729) ^ seed) >>> 0);
-      const n = 2 + Math.floor(rnd() * (2 + reg.rubble * 6));
+      const n = 2 + Math.floor(rnd() * (2 + reg.rubble * 8));
       for (let k = 0; k < n; k++) {
         const px = Math.round(x + (rnd() - 0.5) * 12);
         const py = Math.round(y + (rnd() - 0.5) * 8);
@@ -142,7 +176,8 @@ export function paintDecor(
         const py = Math.round(y);
         if (!ok(px, py, 8)) break;
         put(px, py, darker(get(px, py), 0.12));
-        if (k % 2 === 0 && ok(px - 1, py - 1, 8)) put(px - 1, py - 1, lighter(get(px - 1, py - 1), 0.12));
+        if (k % 2 === 0 && ok(px - 1, py - 1, 8))
+          put(px - 1, py - 1, lighter(get(px - 1, py - 1), 0.12));
         drawn++;
       }
       if (drawn > 8) stats.gullies++;
@@ -167,7 +202,17 @@ export function paintDecor(
         const half = o.radius * 0.85 * (1 - t) ** 0.8;
         if (Math.abs(across) > half) continue;
         const edge = Math.abs(across) > half - 1.2;
-        put(px, py, edge ? (across * -wind.y + across * wind.x > 0 ? spec.sand.mid : spec.sand.light) : t < 0.5 ? spec.sand.hi : spec.sand.light);
+        put(
+          px,
+          py,
+          edge
+            ? across * -wind.y + across * wind.x > 0
+              ? spec.sand.mid
+              : spec.sand.light
+            : t < 0.5
+              ? spec.sand.hi
+              : spec.sand.light,
+        );
       }
   }
 
@@ -176,7 +221,11 @@ export function paintDecor(
   const rockWall = new Uint8Array(def.walls.length);
   def.walls.forEach((wl, i) => (rockWall[i] = wl.kind === 'cliff' ? 1 : 0));
   if (rockWall.some((v) => v === 1)) {
-    const dist = distanceTo(w, h, (p) => masks.solid[p] === 1 && rockWall[masks.owner[p]! - 1] === 1);
+    const dist = distanceTo(
+      w,
+      h,
+      (p) => masks.solid[p] === 1 && rockWall[masks.owner[p]! - 1] === 1,
+    );
     for (let p = 0; p < w * h; p++) {
       const dd = dist[p]!;
       if (dd <= 0 || dd > 26) continue;
@@ -260,7 +309,8 @@ function scrub(
     for (let xx = -R; xx <= R; xx++) {
       const px = x + xx;
       const py = y + yy;
-      if (inLobes(lobes, px - 2 + 0.5, py - 2 + 0.5) && !inLobes(lobes, px + 0.5, py + 0.5)) shadow(px, py);
+      if (inLobes(lobes, px - 2 + 0.5, py - 2 + 0.5) && !inLobes(lobes, px + 0.5, py + 0.5))
+        shadow(px, py);
     }
   for (let yy = -R; yy <= R; yy++)
     for (let xx = -R; xx <= R; xx++) {
@@ -282,11 +332,19 @@ function scrub(
   if (dead)
     for (let k = 0; k < 3; k++) {
       const a = rnd() * Math.PI * 2;
-      put(Math.round(x + Math.cos(a) * (size + 1)), Math.round(y + Math.sin(a) * (size + 1) * 0.7), dark);
+      put(
+        Math.round(x + Math.cos(a) * (size + 1)),
+        Math.round(y + Math.sin(a) * (size + 1) * 0.7),
+        dark,
+      );
     }
 }
 
-function inLobes(lobes: ReadonlyArray<readonly [number, number, number]>, x: number, y: number): boolean {
+function inLobes(
+  lobes: ReadonlyArray<readonly [number, number, number]>,
+  x: number,
+  y: number,
+): boolean {
   for (const [lx, ly, r] of lobes) if ((x - lx) ** 2 + ((y - ly) * 1.25) ** 2 <= r * r) return true;
   return false;
 }
@@ -302,4 +360,157 @@ function tuft(put: Put, x: number, y: number, seed: number): void {
     for (let j = 0; j < len; j++)
       put(x + ox + (j > 1 ? lean : 0), y - j, j === len - 1 ? PAL.brushHi : PAL.brush);
   }
+}
+
+/** How close a point is to a wash's bank, 0 to 1 (1 on the bank). */
+function bank(bed: Uint8Array, w: number, h: number, x: number, y: number): number {
+  let best = 0;
+  for (const [dx, dy, v] of [
+    [10, 0, 1],
+    [-10, 0, 1],
+    [0, 8, 1],
+    [0, -8, 1],
+    [20, 0, 0.5],
+    [-20, 0, 0.5],
+    [0, 16, 0.5],
+    [0, -16, 0.5],
+  ] as const) {
+    const px = x + dx;
+    const py = y + dy;
+    if (px < 0 || py < 0 || px >= w || py >= h) continue;
+    if (bed[py * w + px]) best = Math.max(best, v);
+  }
+  return best;
+}
+
+/**
+ * Dry washes across the open sand: shallow sandy channels that wander down the fall of the
+ * land, a pale silt bed with braided flow lines and cobbles, a lit bank on the south-east side
+ * (it faces the north-west sun) and a shaded one opposite. They are flat ground, drivable like
+ * the rest (Section 12.10's "sunlit rock debris" lies along them), and they stop short of the
+ * road's verge. What they add is structure: long readable lines that break the plain into
+ * places. Laid out from the track's own seed, so both weathers of a track share them.
+ * Returns the bed mask (1 inside a channel), for the brush to grow along.
+ */
+function paintWashes(
+  world: Canvas,
+  field: CorridorField,
+  masks: Masks,
+  spec: TerrainSpec,
+  look: Look,
+  slopes: SlopeGrid,
+  seed: number,
+  stats: DecorStats,
+): Uint8Array {
+  const { w, h } = masks;
+  const data = world.data;
+  // Distance from the nearest channel centre over its half width, in hundredths (255: none).
+  const q = new Uint8Array(w * h).fill(255);
+  const rnd = mulberry32((seed ^ 0x51a7e) >>> 0);
+  const area = w * h;
+  const count = Math.round(area / 1.6e6);
+  const free = (x: number, y: number, margin: number): boolean => {
+    if (x < 4 || y < 4 || x >= w - 4 || y >= h - 4) return false;
+    const p = (y | 0) * w + (x | 0);
+    if (masks.kind[p] !== K_OFFROAD || masks.solid[p]) return false;
+    const e = field.edge[p]!;
+    return e >= FAR || e > margin;
+  };
+  for (let k = 0, tries = 0; k < count && tries < count * 20; tries++) {
+    let x = 60 + rnd() * (w - 120);
+    let y = 60 + rnd() * (h - 120);
+    if (!free(x, y, 160)) continue;
+    k++;
+    const g0 = slopeAt(slopes, x, y);
+    let ang = Math.hypot(g0.x, g0.y) > 0.01 ? Math.atan2(-g0.y, -g0.x) : rnd() * Math.PI * 2;
+    const len = 700 + rnd() * 1100;
+    const width = 13 + rnd() * 12;
+    let turn = 0;
+    let drawn = 0;
+    for (let t = 0; t < len; t += 1.5) {
+      // Meander: a slowly wandering turn, pulled gently downhill.
+      turn += (rnd() - 0.5) * 0.012;
+      turn = Math.max(-0.018, Math.min(0.018, turn)) * 0.995;
+      const g = slopeAt(slopes, x, y);
+      const m = Math.hypot(g.x, g.y);
+      if (m > 0.02) {
+        const down = Math.atan2(-g.y, -g.x);
+        let d = down - ang;
+        while (d > Math.PI) d -= Math.PI * 2;
+        while (d < -Math.PI) d += Math.PI * 2;
+        ang += d * 0.004;
+      }
+      ang += turn;
+      x += Math.cos(ang) * 1.5;
+      y += Math.sin(ang) * 1.5;
+      if (x < 8 || y < 8 || x >= w - 8 || y >= h - 8) break;
+      // Narrow at its head, widest in the middle of its run.
+      const u = t / len;
+      const hw =
+        width *
+        (0.35 + 0.65 * Math.sin(Math.min(1, u * 1.6) * Math.PI * 0.5)) *
+        (0.8 + 0.4 * vnoise(t, k * 97, 90, seed + 3));
+      const R = Math.ceil(hw * 1.3) + 1;
+      for (let yy = -R; yy <= R; yy++)
+        for (let xx = -R; xx <= R; xx++) {
+          const px = Math.round(x) + xx;
+          const py = Math.round(y) + yy;
+          if (px < 0 || py < 0 || px >= w || py >= h) continue;
+          const d = Math.hypot(px + 0.5 - x, py + 0.5 - y) / hw;
+          if (d > 1.3) continue;
+          const v = Math.round(d * 100);
+          const p = py * w + px;
+          if (v < q[p]!) q[p] = v;
+        }
+      drawn++;
+    }
+    if (drawn > 100) stats.washes++;
+  }
+  const bed = new Uint8Array(w * h);
+  const L = { x: -Math.SQRT1_2, y: -Math.SQRT1_2 };
+  const sand = spec.sand;
+  const rock = spec.rock;
+  const at = (x: number, y: number): number =>
+    x < 0 || y < 0 || x >= w || y >= h ? 255 : q[y * w + x]!;
+  const put = (p: number, c: Color): void => {
+    const o = p * 4;
+    data[o] = (c >> 16) & 255;
+    data[o + 1] = (c >> 8) & 255;
+    data[o + 2] = c & 255;
+  };
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const p = y * w + x;
+      const v = q[p]!;
+      if (v > 118) continue;
+      if (!free(x, y, 7)) continue;
+      // Banks fade out toward the road, so a wash never draws a ledge at the verge.
+      const e = field.edge[p]! >= FAR ? 600 : field.edge[p]!;
+      const fade = e < 24 ? (e - 7) / 17 : 1;
+      if (hash2(x, y, seed + 9) > fade) continue;
+      if (v < 74) {
+        bed[p] = 1;
+        // The bed: coarse sand a step below the plain, braided flow lines, gravel and
+        // cobbles, more of them toward the banks. Never smooth and pale, so a wash can never
+        // be mistaken for the graded road.
+        const flow = vnoise(x * 0.5, y * 0.5, 6, seed + 11);
+        let c = flow > 0.74 ? sand.dark : flow < 0.2 ? sand.base : sand.mid;
+        const gravel = hash2(x >> 1, y >> 1, seed + 13);
+        if (gravel < 0.05 + (v / 74) * 0.2) {
+          const tone = hash2(x, y, seed + 14);
+          c = tone < 0.35 ? rock.mid : tone < 0.7 ? rock.base : tone < 0.9 ? rock.light : rock.dark;
+        } else if (hash2(x, y, seed + 15) < 0.04) c = sand.light;
+        put(p, c);
+      } else {
+        // The banks, lit from the upper left: the slope's fall line against the light.
+        const gx = at(x + 1, y) - at(x - 1, y);
+        const gy = at(x, y + 1) - at(x, y - 1);
+        // Distance grows away from the channel, so the bank falls toward -grad.
+        const lit = -(gx * L.x + gy * L.y);
+        if (v < 100) put(p, lit > 0 ? sand.light : look.shade(sand.base));
+        else if (v < 108) put(p, lit > 0 ? sand.hi : look.shade(sand.light));
+        else if (lit < 0 && v < 114) put(p, sand.mid);
+      }
+    }
+  return bed;
 }

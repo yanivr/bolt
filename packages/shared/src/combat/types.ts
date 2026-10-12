@@ -225,6 +225,13 @@ export type CombatCar = {
   /** Position before this tick's integration, for swept tests. */
   prevX: number;
   prevY: number;
+  /**
+   * Position right after this tick's own driving, where the checkpoint test last looked. The
+   * race moves cars after that (contact, shoves, the winch); a gate crossed by such a move is
+   * tested from here at the end of the tick (`creditMovedCrossing`).
+   */
+  gateX: number;
+  gateY: number;
   /** Last car to damage this one, for attributing a KO. */
   lastHitBy: number;
   /** Radar and sensor reach, from working parts. */

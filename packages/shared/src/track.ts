@@ -1223,12 +1223,8 @@ export function updateProgress(
   const count = track.checkpoints.length;
   if (progress.finishedAtMs === null) {
     const expected = track.checkpoints[progress.checkpointIndex]!;
-    const mx = x - prevX;
-    const my = y - prevY;
     for (const gate of expected.gates) {
-      if (mx * gate.tx + my * gate.ty <= 0) continue;
-      const hit = segmentIntersection(prevX, prevY, x, y, gate.ax, gate.ay, gate.bx, gate.by);
-      if (hit < 0) continue;
+      if (!crossesGate(track, gate, prevX, prevY, x, y)) continue;
       progress.lastCheckpointMs = simTimeMs;
       event = 'checkpoint';
       if (expected.index === 0) {
@@ -1271,6 +1267,40 @@ export function updateProgress(
   if (facing < -0.3 && speed > 24) progress.wrongWaySeconds += dt;
   else progress.wrongWaySeconds = 0;
   return event;
+}
+
+/**
+ * Px a crossing may pass beyond either end of a gate on a walled track and still count. Walls
+ * bound a walled corridor, so a gate's ends only matter where two corridors meet: at a fork the
+ * main line's gate and the shortcut's twin can leave a gap a car on the inside line goes
+ * through (found by the bot tournament at Steel Circuit's Conveyor Gap: a whole lap lost).
+ * Open tracks keep exact ends; their gates already reach 200 px past the shoulder.
+ */
+export const GATE_END_SLACK_WALLED = 28;
+
+/** Whether the move from (x0, y0) to (x1, y1) crosses `gate` forwards. */
+export function crossesGate(
+  track: TrackRuntime,
+  gate: TrackGate,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+): boolean {
+  if ((x1 - x0) * gate.tx + (y1 - y0) * gate.ty <= 0) return false;
+  let { ax, ay, bx, by } = gate;
+  if (track.walled) {
+    const len = Math.hypot(bx - ax, by - ay);
+    if (len > 1e-9) {
+      const ex = ((bx - ax) / len) * GATE_END_SLACK_WALLED;
+      const ey = ((by - ay) / len) * GATE_END_SLACK_WALLED;
+      ax -= ex;
+      ay -= ey;
+      bx += ex;
+      by += ey;
+    }
+  }
+  return segmentIntersection(x0, y0, x1, y1, ax, ay, bx, by) >= 0;
 }
 
 export function isWrongWay(progress: VehicleProgressState): boolean {

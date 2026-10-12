@@ -131,7 +131,13 @@ export function createAiRace(
   let pick: AiBuildPick | null = null;
   if (options.rivalTemplateId !== undefined) rival = getTemplate(options.rivalTemplateId);
   else {
-    pick = pickAiBuild(track.def.id, presetId, seed, options.strategy);
+    pick = pickAiBuild(
+      track.def.id,
+      presetId,
+      seed,
+      options.strategy,
+      options.difficulty ?? DEFAULT_DIFFICULTY,
+    );
     if (pick)
       rival = {
         id: `ai_${pick.frame}`,

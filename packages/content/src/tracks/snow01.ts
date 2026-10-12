@@ -19,7 +19,7 @@ export const SNOW_01: TrackDefinition = defineTrack({
   windExposure: 0.45,
   weatherPresetIds: ['snow_clear_frost', 'snow_snowfall'],
   surfaceMix: { snow: 0.55, ice: 0.25, asphalt: 0.2 },
-  landmarks: ['Ski lodge', 'Snow gun row', 'Frozen pond', 'Ice cave', 'Radio relay'],
+  landmarks: ['Ski lodge', 'Snow gun row', 'Frozen pond', 'Chairlift', 'Radio relay'],
   scale: 1.05,
   margin: 380,
   checkpointCount: 10,
@@ -157,7 +157,12 @@ export const SNOW_01: TrackDefinition = defineTrack({
           k.edge('main', { x: 750, y: 440 }, { x: 1750, y: 420 }, -1, 40, 250),
         ),
         k.anchor('frozen_pond', 'landmark', [k.T({ x: 1550, y: 1800 })]),
-        k.anchor('ice_cave', 'landmark', [k.at('main', { x: 2550, y: 1330 }, -150)]),
+        // The chairlift's line across the infield, from its bottom station by the lodge up to the
+        // top one: the terrain stands four pylons along it (thin furniture) with the haul rope.
+        k.anchor('chairlift', 'landmark', [
+          { x: k.T({ x: 1300, y: 900 }).x + 120, y: k.T({ x: 1300, y: 900 }).y - 40 },
+          { x: k.T({ x: 1300, y: 900 }).x + 750, y: k.T({ x: 1300, y: 900 }).y - 400 },
+        ]),
         k.anchor('radio_relay', 'landmark', [k.T({ x: 2800, y: 300 })]),
         k.anchor('pond_cracks', 'ice_cracks', [
           k.T({ x: 1000, y: 1700 }),

@@ -198,20 +198,94 @@ moving reflections go on top; the lamp list (`lights`) doubles as their reflecti
 A loop whose `kind` is `timetable:<hazardId>` follows that hazard's timetable
 (`city/timetable.ts`): it is exactly one period long (`frameCount / fps` is `periodSeconds`)
 and frame `k` shows race time `[k / fps, (k + 1) / fps)` from GO, modulo the period. The client
-must pick its frame from the race clock, `floor((raceSeconds mod period) * fps)`, and show
-frame 0 before GO (the clock reads 0 there). Frames are opaque over their whole box (the ground
+picks its frame from the race clock, `floor((raceSeconds mod period) * fps)`, and shows frame 0
+before GO (the clock reads 0 there): `timetableFrame` in `apps/web/src/game/weather/terrainArt.ts`,
+set every frame by `RaceScene` from `session.raceTicks`, so the boom is drawn down in exactly the
+ticks the physics has it down (`tests/unit/terrain_courses.test.ts` walks two periods of ticks). Frames are opaque over their whole box (the ground
 is copied in), the boom is down in every frame that touches the active phase, and the settled
 quiet frames equal the baked ground (checked by the bake). Long loops are packed in a grid
 (`AnimatedArt.columns`) so no sheet is wider than 4096 px; the client slices a sheet row by
 row, so the manifest entry does not change.
 
+#### Overlays and the fade
+
+The client fades an overlay marked `fadeNearPlayer` while a car's body box (plus an 18 px
+margin, taller upward because the sprites are tilted) touches the overlay's **pixels**, read on
+an 8 px grid from its texture the first time a car comes near (`weather/overlayFade.ts`,
+`coverageOfTexture`). Not its bounding box: a cliff face or a crown is ragged, and on the box
+alone pieces of canyon wall and crowns beside the road blinked translucent as a car passed them.
+So cut overlays with that rule in mind: a piece fades as a whole, so keep pieces whose pixels
+come within the fade reach of the road small (the desert's cutter splits them to 32 px), and
+never let a landform that does not stand over the road reach that close (the canyon walls taper
+there instead). `BODY_HALF`, `BODY_UP` and `FADE_MARGIN` are exported for the bakers and tests.
+
 #### Reviewing a bake
 
 `npx tsx art/scripts/bake-terrain.ts <track> <preset>` writes crops to
 `art/preview/terrain/<track>_<preset>/`, and `npx tsx art/scripts/preview-terrain-frames.ts
-<track> <preset> [count]` composes game-camera frames (870 x 390 world pixels, the `Close` step
-on the owner's phone) round the lap and on every shortcut from the shipped files, with a car on
-the road and overlays faded the way the client fades them (`frames/sheet.png`).
+<track> <preset> [count] [--dir=<bake>] [--out=<dir>]` composes game-camera frames (870 x 370
+world pixels, the `Close` step on the owner's phone) round the lap and on every shortcut from the
+shipped files (or another bake, to compare), with a car on the road, ground loops at frame 0 and
+overlays faded by the client's own function; also `far.png` (the `Far` step) and `contact.png`
+(six lap frames, a shortcut frame, `Far` and the minimap).
+
+In the real client: `npx tsx tests/visual/courses.ts <baseUrl> <outDir> [track_preset ...]
+[--sheets=<dir>] [--motion=reduce] [--flashes=reduce] [--vfx=low]` races the autopilot on a manual
+clock at 870 x 370 (two device pixels a CSS pixel), with the weather layer, the HUD and its
+minimap, six `Close` frames over the first lap and one at `Far` per course. `--sheets` writes the
+contact sheets of `docs/evidence/tracks`. Serve a production build first
+(`npx vite build --outDir <dir>` in `apps/web`, then `PORT=2676 WEB_DIST=<dir> node
+apps/server/dist/main.js`).
+
+Every course's bake is listed in `assets/maps/index.json`, has `art/manifests/<track>_<preset>.checks.json`
+written on the shipped bytes, and fits 2.5 MB (`tests/unit/terrain_courses.test.ts`;
+the size table is in `docs/evidence/tracks/README.md`).
+
+#### The desert biome
+
+`terrain/desert/` paints Dust Devil and Canyon Switch (`dustDevil.ts`, `canyonSwitch.ts` dress
+each track; `lands.ts` holds their land; the plans are `docs/art/tracks/desert_0*.md`).
+
+- **If it looks solid it is solid.** Both tracks are open: off the road is drivable sand inside
+  the boundary, and the only solids are rocks, canyon walls, the guard rail and the boundary. So
+  rock, cacti, wrecks and tire stacks stand only on obstacle discs, mesas only behind the
+  boundary, walls only on their capsules; everything that stands on open sand stands on open legs
+  a car can pass between (towers, poles, masts, signs, the windmill), like the forest's thin
+  furniture. Landforms (dunes, swells, the dip, the descent, washes) are light and texture on the
+  ground plane, never raised art.
+- **The stage splits raised art pixel by pixel** (`stage.ts`): a raised pixel over ground a car
+  can reach goes to the foreground, one over unreachable ground (a disc, a capsule, the land
+  behind the boundary) stays in the ground layer, and the guard compares the ground layer with
+  the flat picture on every reachable pixel (`coveredDrivable`). Masses are a height field drawn
+  by marching each screen pixel's line of sight, so walls, mesas and rocks hide one another and
+  lean east as they rise like the city's buildings.
+- **Cutting for the fade.** The foreground is cut into pieces on a 16 px grid, at most 192 px a
+  side, and a piece that does not stand over the road but has pixels within the client's fade
+  reach of the pavement is split down to 32 px. The north canyon walls' columns stop short where
+  they would lean out over open ground within that reach (their ends, beside the road), so the
+  wall tapers there instead of blinking. The test holds it: no cliff, mesa or rock overlay that
+  does not stand over the road is faded by a car anywhere on the pavement
+  (`tests/unit/terrain_desert.test.ts`, the client's own function). Signs, rails, poles and
+  towers stand at the verge and fade as a car passes.
+- **Open ground with structure.** At race speed a plain of single-pixel grain is empty filler.
+  What carries it: dune fields with a bright crest line and a slip face a full step of shade
+  darker; dry washes (eight or nine a map, from the track's own seed so both weathers share
+  them) that wander down the fall of the land, a gravelly bed a step below the plain (never pale
+  and smooth, so a wash cannot be read as the graded road), a lit south-east bank and a shaded
+  north-west one, stopping short of the verge; creosote and sage in stands of up to five clumps,
+  thicker along the washes; pebble fields and scree; old tire tracks; rills down the slopes.
+- **Surfaces read apart.** Asphalt is a bleached warm gray far darker than any sand; the graded
+  sand road is paler and smoother than the dunes, with wheel tracks, berms and white edge stones;
+  drifted sand over the tarmac (the surface zones) is the dunes' own sand with wind-combed edges.
+  The test measures the road's pixels against the physics: the 95th percentile of asphalt is more
+  than 30 luma below the 5th percentile of sand, and the mean colors are more than 90 apart.
+- **Weather is light, wind is written in the sand.** Clear is a golden afternoon (long violet
+  shadows), dry heat a bleached noon (short shadows, a grade toward bone), the crosswind and the
+  sandstorm the same lands with ripples across the wind of the day, sand fingers off the verges,
+  sand tails behind every rock, flags and socks leaning with the wind; the storm adds broad slow
+  dust shadows and posterizes to keep every chunk in one palette (no seams). The moving dust,
+  grit, tumbleweeds, dust devils and heat shimmer are the weather layer's (`docs/VFX_GUIDE.md`).
+- **Review**: `npx tsx art/scripts/terrain/desert/frames.ts <track> <preset> route|crop|overview`.
 
 #### The forest and snow biomes
 
@@ -286,7 +360,7 @@ cannot vouch for its own taste, so these are open until a person signs them off:
 | Core effects (smoke, sparks, skids, headlight pool)          | Awaiting review on hardware   | Only stills reviewed; motion needs a real device                              |
 | 60 mounted parts, hero pass (DECISIONS 102)                  | Awaiting product-owner review | Reviewed by the developer in `art/preview/parts`. Weakest: Heat Guard, Traction Computer, Turret Computer, Composite Shell, Decoy Drone |
 | Combat effects atlas, 20 weapon identities, damage and frost overlays | Awaiting product-owner review, and review on hardware | Reviewed by the developer only, in scenario captures (`tests/visual/out/combat`) and the software review renderer. Weakest: the mortar's column, the boomerang, the saw's teeth, charge lights, the tesla bolt at short range |
-| Rain variant, other biomes                                   | Not started                   | Milestone D. The wet road scenario is drawn on the clear-night bake            |
+| Dust Devil, Canyon Switch, both weathers each                | Awaiting product-owner review | Desert biome; reviewed by the developer in route frames and in the client (`docs/evidence/tracks`). The open sand is the sparsest ground of the eight tracks by design (only listed solids may look solid) |
 | Moss Run, Timber Dash, Whiteout Pass, both weathers each     | Awaiting product-owner review | Forest and snow biomes; reviewed by the developer in route frames and in the client. See the track docs in `docs/art/tracks/` for what has no collider and is therefore not drawn solid |
 | Neon Cut rainy night, Backstreet Blitz (both), Steel Circuit (both) | Awaiting product-owner review | Reviewed by the developer in game-camera frames only; weak spots in `docs/art/tracks/` |
 
