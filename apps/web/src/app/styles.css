@@ -4052,11 +4052,14 @@ p.g-spend.is-blocked {
 /* ============================================================================================
  * Milestone C: the race HUD, results and the garage's firing cones.
  *
- * The HUD is two columns that hug the sides of the screen. The local car is drawn around the
- * middle and the camera lets it wander up to 12 percent of the width and 27 percent of the
- * height from the centre, so the columns are no wider than 38 percent of the width less 118
- * pixels: a box of 220 by 150 pixels around the car cannot reach them from anywhere it can
- * be. `Driving Hand` swaps the two columns; nothing else moves.
+ * The HUD is slim and keeps to the corners: the track and the cars are the centre of the game.
+ * The local car is drawn around the middle and the camera lets it wander up to 12 percent of
+ * the width and 27 percent of the height from the centre. Each side of the HUD is a column no
+ * wider than 38 percent of the width less 158 pixels, so a box of 300 by 190 pixels around the
+ * car cannot reach it from anywhere it can be (under 760 pixels of width the column keeps its
+ * earlier 38 percent less 118, clear of a 220 by 150 box). The race strip may be wider than
+ * its column: it lies along the top edge, which the box only reaches when the car is far from
+ * the sides. `Driving Hand` swaps the two columns; nothing else moves.
  * ========================================================================================== */
 
 .hud {
@@ -4064,20 +4067,52 @@ p.g-spend.is-blocked {
   inset: 0;
   pointer-events: none;
   --hud-pad: 6px;
-  --hud-gap: 5px;
+  --hud-gap: 4px;
   --hud-edge: max(var(--safe-left), var(--safe-right));
-  --hud-col: clamp(131px, calc(38vw - 118px - var(--hud-edge)), 182px);
+  --hud-col: clamp(131px, calc(38vw - 158px - var(--hud-edge)), 182px);
   --btn-1: 72px;
   --btn-2: 64px;
   --btn-u: 48px;
-  --map-w: 96px;
+  --map-w: 68px;
+  --strip-h: 28px;
+  --strip-gap: 7px;
+  --bar-h: 6px;
+  --bar-row: 8px;
+  --bars-w: 104px;
+  --flag: 18px;
+  --cond-h: 64px;
   font-size: 13px;
 }
 
+@media (max-width: 759px) {
+  .hud {
+    --hud-col: clamp(131px, calc(38vw - 118px - var(--hud-edge)), 182px);
+    --strip-gap: 4px;
+  }
+  .hud .hud-strip {
+    padding: 0 4px;
+  }
+  /* Two pixel cells between the lap count and the clock read as one number ("1/30:07"). */
+  .hud-clock {
+    margin-left: 3px;
+  }
+  /* No room for the tow's caption beside its chevrons: they stand under the gap alone. */
+  .hud-tow .pixel-text {
+    display: none;
+  }
+}
+
+/* `Button Size`, `Larger Buttons`: the buttons grow, and with them what is read at a glance
+   beside them: thicker bars, a larger hull number and gap. The pixel numerals of the strip
+   stay as they are: one size up they would not fit the width the car leaves free. */
 .hud-scale-large {
   --btn-1: 84px;
   --btn-2: 72px;
   --btn-u: 52px;
+  --strip-h: 32px;
+  --bar-h: 8px;
+  --bar-row: 10px;
+  --flag: 20px;
 }
 
 .hud .btn,
@@ -4090,6 +4125,13 @@ p.g-spend.is-blocked {
   padding: 6px 8px;
 }
 
+/* The screen inside its safe area: the edge markers are measured against it. */
+.hud-safe {
+  position: absolute;
+  inset: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+  visibility: hidden;
+}
+
 .hud-col {
   position: absolute;
   top: calc(var(--safe-top) + var(--hud-pad));
@@ -4099,11 +4141,11 @@ p.g-spend.is-blocked {
   flex-direction: column;
   gap: var(--hud-gap);
   min-height: 0;
-  container-type: inline-size;
 }
 
 .hud-col-info {
   left: calc(var(--safe-left) + var(--hud-pad));
+  align-items: flex-start;
 }
 
 .hud-col-action {
@@ -4113,6 +4155,7 @@ p.g-spend.is-blocked {
 .hand-right .hud-col-info {
   left: auto;
   right: calc(var(--safe-right) + var(--hud-pad));
+  align-items: flex-end;
 }
 
 .hand-right .hud-col-action {
@@ -4120,117 +4163,312 @@ p.g-spend.is-blocked {
   left: calc(var(--safe-left) + var(--hud-pad));
 }
 
-/* --- Race panel: place, gap, lap, clock ------------------------------------------------------ */
-
-.hud-race {
+.hud-stack {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  align-items: inherit;
+  gap: var(--hud-gap);
 }
 
-.hud-pos {
+/* --- Race strip: place, gap, lap, clock on one line ------------------------------------------- */
+
+.hud .hud-strip {
+  flex: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-}
-
-.hud-place {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--gold);
-}
-
-.hud-gap {
-  font-size: 18px;
-  font-weight: 800;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
+  gap: var(--strip-gap);
+  width: max-content;
+  height: var(--strip-h);
+  padding: 0 6px;
   white-space: nowrap;
 }
 
-.hud-gap-unit {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--ivory-dim);
+.hud-pos,
+.hud-clock {
+  display: flex;
+  align-items: center;
 }
 
-.hud-lap-row {
+.hud-gap-cell {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 28px;
+}
+
+.hud-gap {
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-scale-large .hud-gap {
+  font-size: 15px;
+}
+
+/* The tow: its caption and one to three chevrons, lit by level, the rest hollow. */
+.hud-tow {
+  display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 5px 8px;
+  gap: 3px;
+}
+
+.hud-tow-steps {
+  display: flex;
+  gap: 1px;
+}
+
+.hud-tow-steps span {
+  width: 5px;
+  height: 7px;
+  background: #35705a;
+  clip-path: polygon(0 0, 40% 0, 100% 50%, 40% 100%, 0 100%, 60% 50%);
+  opacity: 0.55;
+}
+
+.hud-tow-steps span.is-on {
+  background: var(--mint);
+  opacity: 1;
 }
 
 .hud-lap {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
 }
 
-.hud-times {
+/* --- Car condition: three thin bars ----------------------------------------------------------- */
+
+/* As tall as the diagram that comes up beside the bars, so the lane under it never moves and
+   is never covered. The space under the bars is where the row of icons goes. */
+.hud-cond {
+  position: relative;
   display: flex;
-  gap: 10px;
-  margin: 0;
-  font-size: 12px;
+  flex-direction: column;
+  align-items: inherit;
+  gap: var(--hud-gap);
+  min-height: var(--cond-h);
+}
+
+.hud-car {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: var(--bars-w);
+  padding: 2px 4px;
+  background: rgba(14, 19, 32, 0.78);
+  border: 1px solid var(--steel-dark);
+}
+
+.hud-car-gauges {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.gauge {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+  height: var(--bar-row);
+  color: var(--ivory-dim);
+}
+
+.mini {
+  display: block;
+  width: 8px;
+  height: 8px;
+}
+
+.gauge-track {
+  position: relative;
+  display: block;
+  height: var(--bar-h);
+  background: #0b0f19;
+  outline: 1px solid #0b0f19;
+  overflow: hidden;
+}
+
+.gauge-fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  background: var(--mint);
+}
+
+/* Cells, so a bar reads as a count at a glance and not as a smear. */
+.gauge-track::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(90deg, transparent 0 7px, #0b0f19 7px 8px);
+  pointer-events: none;
+}
+
+/* The hull's number, at the end of the bars and as tall as the three of them. */
+.gauge-value {
+  flex: none;
+  min-width: 21px;
+  text-align: right;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--ivory);
   font-variant-numeric: tabular-nums;
 }
 
-.hud-times div {
-  display: flex;
-  gap: 4px;
-  white-space: nowrap;
+.hud-scale-large .gauge-value {
+  font-size: 18px;
+  min-width: 26px;
 }
 
-.hud-times dt {
-  color: var(--ivory-dim);
-  font-weight: 700;
+.gauge-value.tier-1 {
+  color: var(--amber);
 }
 
-.hud-times dd {
-  margin: 0;
-  font-weight: 700;
+.gauge-value.tier-2,
+.gauge-value.tier-3 {
+  color: #ff8a92;
 }
 
-.hud-race .badge {
-  margin-top: 0;
-  align-self: flex-start;
-  font-size: 12px;
+.gauge-hull.tier-1 .gauge-fill {
+  background: var(--amber);
 }
 
-.hud-times .hud-times-last {
-  display: none;
+/* Damaged, the hull's cells are cut on the slant; critical, the bar is framed as well. */
+.gauge-hull.tier-1 .gauge-track::after {
+  background: repeating-linear-gradient(115deg, transparent 0 6px, #0b0f19 6px 8px);
 }
 
-@container (min-width: 200px) {
-  .hud-times .hud-times-last {
-    display: flex;
-  }
+.gauge-hull.tier-2 .gauge-fill,
+.gauge-hull.tier-3 .gauge-fill {
+  background: #ff5a66;
 }
 
-/* --- Car condition --------------------------------------------------------------------------- */
+.gauge-hull.tier-2,
+.gauge-hull.tier-3 {
+  color: #ff5a66;
+}
 
-.hud-car {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 4px 8px;
+.gauge-hull.tier-2 .gauge-track,
+.gauge-hull.tier-3 .gauge-track {
+  outline-color: #ff5a66;
+}
+
+.gauge-hull.tier-2 .gauge-track::after,
+.gauge-hull.tier-3 .gauge-track::after {
+  background: repeating-linear-gradient(135deg, transparent 0 2px, #0b0f19 2px 4px);
+}
+
+.gauge-hull.tier-2 .mini,
+.gauge-hull.tier-3 .mini {
+  animation: seg-blink 0.5s steps(2) infinite;
+}
+
+.gauge-heat .gauge-fill {
+  background: var(--ivory-dim);
+}
+
+.gauge-heat.level-1 .gauge-fill {
+  background: var(--amber);
+}
+
+.gauge-heat.level-1,
+.gauge-power.is-low {
+  color: var(--amber);
+}
+
+.gauge-heat.level-2 .gauge-fill,
+.gauge-heat.level-3 .gauge-fill {
+  background: #ff5a66;
+}
+
+.gauge-heat.level-2,
+.gauge-heat.level-3 {
+  color: #ff5a66;
+}
+
+/* Hot: the cells lean. Thermal protection: the bar is framed and hatched close, and its mark
+   is the alarm triangle, blinking. */
+.gauge-heat.level-2 .gauge-track::after {
+  background: repeating-linear-gradient(115deg, transparent 0 6px, #0b0f19 6px 8px);
+}
+
+.gauge-heat.level-3 .gauge-track {
+  outline: 2px solid #ff5a66;
+}
+
+.gauge-heat.level-3 .gauge-track::after {
+  background: repeating-linear-gradient(135deg, transparent 0 2px, #0b0f19 2px 4px);
+}
+
+.gauge-heat.level-3 .mini,
+.gauge-power.is-low .mini {
+  animation: seg-blink 0.5s steps(2) infinite;
+}
+
+.gauge-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ivory);
+  z-index: 1;
+}
+
+.gauge-power .gauge-fill {
+  background: var(--cyan);
+}
+
+/* Low power: amber, framed, and banded lengthwise instead of in cells. */
+.gauge-power.is-low .gauge-fill {
+  background: var(--amber);
+}
+
+.gauge-power.is-low .gauge-track {
+  outline: 2px solid var(--amber);
+}
+
+.gauge-power.is-low .gauge-track::after {
+  background: repeating-linear-gradient(0deg, transparent 0 2px, #0b0f19 2px 3px);
+}
+
+/* --- The car diagram: beside the bars, only when something happens to a part ------------------- */
+
+.hud-diagram {
+  position: absolute;
+  top: 0;
+  left: calc(var(--bars-w) + 5px);
+  padding: 4px 5px;
+  background: rgba(14, 19, 32, 0.9);
+  border: 1px solid var(--steel-light);
+  opacity: 0;
+  transition: opacity 0.3s steps(4);
+}
+
+.hand-right .hud-diagram {
+  left: auto;
+  right: calc(var(--bars-w) + 5px);
+}
+
+.hud-diagram.is-shown {
+  opacity: 1;
+  transition: none;
 }
 
 .car-diagram {
   display: block;
-  width: 46px;
-  height: 78px;
+  width: 36px;
+  height: 54px;
   overflow: visible;
-}
-
-@container (min-width: 170px) {
-  .car-diagram {
-    width: 50px;
-    height: 76px;
-  }
 }
 
 .car-body {
@@ -4314,6 +4552,15 @@ p.g-spend.is-blocked {
   pointer-events: none;
 }
 
+/* The part the diagram came up for: a bright frame that blinks while the diagram is up. */
+.car-seg-focus {
+  fill: none;
+  stroke: var(--ivory);
+  stroke-width: 1.6;
+  pointer-events: none;
+  animation: seg-focus 0.36s steps(2) infinite;
+}
+
 .car-seg-repair {
   fill: none;
   stroke: var(--mint);
@@ -4343,6 +4590,12 @@ p.g-spend.is-blocked {
   }
 }
 
+@keyframes seg-focus {
+  50% {
+    opacity: 0.15;
+  }
+}
+
 @keyframes seg-repair {
   0% {
     opacity: 1;
@@ -4358,160 +4611,97 @@ p.g-spend.is-blocked {
   }
 }
 
-.hud-car-gauges {
+/* --- What is broken, and what is acting on the car: one row, there only while it is needed ---- */
+
+.hud-flags {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
+  flex-wrap: wrap;
+  gap: 3px;
+  max-width: calc(var(--bars-w) + 2px);
 }
 
-.gauge {
-  display: grid;
-  grid-template-columns: 12px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 5px;
-  color: var(--ivory-dim);
+.hand-right .hud-flags {
+  justify-content: flex-end;
 }
 
-.gauge-track {
-  position: relative;
-  display: block;
-  height: 10px;
-  background: var(--steel-dark);
-  border: 1px solid #0b0f19;
-  overflow: hidden;
-}
-
-.gauge-fill {
-  position: absolute;
-  inset: 0;
-  transform-origin: 0 50%;
-  transform: scaleX(0);
-  background: var(--mint);
-}
-
-/* Cells, so a bar reads as a count at a glance and not as a smear. */
-.gauge-track::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(90deg, transparent 0 7px, #0b0f19 7px 8px);
-  pointer-events: none;
-}
-
-.gauge-value {
-  display: none;
-  min-width: 22px;
-  text-align: right;
-  font-size: 13px;
-  font-weight: 800;
-  color: var(--ivory);
-  font-variant-numeric: tabular-nums;
-}
-
-@container (min-width: 170px) {
-  .gauge-value {
-    display: block;
-  }
-}
-
-.gauge-hull.tier-1 .gauge-fill {
-  background: var(--amber);
-}
-
-.gauge-hull.tier-2 .gauge-fill,
-.gauge-hull.tier-3 .gauge-fill {
-  background: #ff5a66;
-}
-
-.gauge-hull.tier-2,
-.gauge-hull.tier-3 {
-  color: #ff5a66;
-}
-
-.gauge-hull.tier-2 .gauge-track,
-.gauge-hull.tier-3 .gauge-track {
-  border-color: #ff5a66;
-}
-
-.gauge-heat .gauge-fill {
-  background: var(--ivory-dim);
-}
-
-.gauge-heat.level-1 .gauge-fill {
-  background: var(--amber);
-}
-
-.gauge-heat.level-1,
-.gauge-power.is-low {
-  color: var(--amber);
-}
-
-.gauge-heat.level-2 .gauge-fill,
-.gauge-heat.level-3 .gauge-fill {
-  background: #ff5a66;
-}
-
-.gauge-heat.level-2,
-.gauge-heat.level-3 {
-  color: #ff5a66;
-}
-
-/* Thermal protection: the bar is framed and striped, and its glyph blinks. */
-.gauge-heat.level-3 .gauge-track {
-  border-color: #ff5a66;
-  box-shadow: 0 0 0 1px #ff5a66;
-}
-
-.gauge-heat.level-3 .gauge-track::after {
-  background: repeating-linear-gradient(135deg, transparent 0 3px, #0b0f19 3px 6px);
-}
-
-.gauge-heat.level-3 .glyph,
-.gauge-power.is-low .glyph {
-  animation: seg-blink 0.5s steps(2) infinite;
-}
-
-.gauge-tick {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  margin-left: -1px;
-  background: var(--ivory);
-  z-index: 1;
-}
-
-.gauge-power .gauge-fill {
-  background: var(--cyan);
-}
-
-.gauge-power.is-low .gauge-fill {
-  background: var(--amber);
-}
-
-.gauge-power.is-low .gauge-track {
-  border-color: var(--amber);
-  box-shadow: 0 0 0 1px var(--amber);
-}
-
-.gauge-heat,
-.gauge-power {
-  grid-template-columns: 12px minmax(0, 1fr);
-}
-
+.broken-row,
 .status-row {
   display: flex;
   gap: 3px;
-  height: 24px;
-  overflow: hidden;
+}
+
+.broken-row:empty,
+.status-row:empty {
+  display: none;
+}
+
+.broken-icon {
+  position: relative;
+  flex: none;
+  width: var(--flag);
+  height: var(--flag);
+  display: grid;
+  place-items: center;
+  color: #ff8a92;
+  background: rgba(14, 19, 32, 0.92);
+}
+
+/* Destroyed: a dashed frame and a cross through the part. */
+.broken-icon.is-dead {
+  border: 1px dashed #ff5a66;
+}
+
+.broken-icon.is-dead .glyph {
+  opacity: 0.55;
+}
+
+.broken-x {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.broken-x path {
+  fill: none;
+  stroke: #ff5a66;
+  stroke-width: 2;
+  stroke-linecap: square;
+}
+
+/* Critical: a solid frame, hatched, with a corner that blinks. */
+.broken-icon.is-critical {
+  color: var(--amber);
+  border: 1px solid var(--amber);
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 180, 84, 0.22) 0 2px, transparent 2px 5px),
+    rgba(14, 19, 32, 0.92);
+}
+
+.broken-bang {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 6px;
+  height: 6px;
+  background: var(--amber);
+  animation: seg-blink 0.6s steps(2) infinite;
+}
+
+.broken-more {
+  align-self: center;
+  padding: 0 2px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #ff8a92;
+  background: rgba(14, 19, 32, 0.92);
 }
 
 .status-icon {
   position: relative;
   flex: none;
-  width: 24px;
-  height: 24px;
+  width: var(--flag);
+  height: var(--flag);
   display: grid;
   place-items: center;
   color: var(--mint);
@@ -4530,7 +4720,7 @@ p.g-spend.is-blocked {
   mask:
     linear-gradient(#000 0 0) content-box exclude,
     linear-gradient(#000 0 0);
-  padding: 3px;
+  padding: 2px;
 }
 
 .status-icon .glyph {
@@ -4540,7 +4730,7 @@ p.g-spend.is-blocked {
 /* What hurts is cut at the corners and drawn in the warning color; what helps is square. */
 .status-icon.is-harmful {
   color: var(--amber);
-  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
 }
 
 .status-icon.status-emp,
@@ -4554,8 +4744,14 @@ p.g-spend.is-blocked {
 .hud-lane {
   display: flex;
   flex-direction: column;
+  align-items: inherit;
   gap: 4px;
   min-height: 0;
+  max-width: 100%;
+}
+
+.hud-lane > * {
+  max-width: 100%;
 }
 
 .hud-warning {
@@ -4721,29 +4917,34 @@ p.g-spend.is-blocked {
   border-left: 4px solid var(--cyan);
 }
 
-/* --- Action side: route ribbon, menu, speed, rival ------------------------------------------- */
+/* --- Action side: route ribbon with the rival's hull, menu, speed ----------------------------- */
 
 .hud-topbar {
   display: flex;
   justify-content: flex-end;
-  align-items: stretch;
+  align-items: flex-start;
+  align-self: flex-end;
   gap: var(--hud-gap);
 }
 
 .hand-right .hud-topbar {
   flex-direction: row-reverse;
+  align-self: flex-start;
 }
 
 .hud .hud-map {
   flex: 0 1 auto;
   min-width: 0;
-  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 3px;
   line-height: 0;
 }
 
 .hud .minimap {
   display: block;
-  width: min(var(--map-w), calc(var(--hud-col) - 44px - var(--hud-gap) - 10px));
+  width: var(--map-w);
   height: auto;
   image-rendering: pixelated;
 }
@@ -4754,10 +4955,11 @@ p.g-spend.is-blocked {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 4px;
+  gap: 3px;
 }
 
 .hud .hud-menu {
+  position: relative;
   width: 44px;
   height: 44px;
   min-width: 44px;
@@ -4765,43 +4967,55 @@ p.g-spend.is-blocked {
   background: rgba(40, 52, 74, 0.94);
 }
 
+/* The offline test drive: a small mark on the menu button, named in full inside the menu. */
+.hud-offline-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 7px;
+  height: 7px;
+  background: var(--amber);
+  box-shadow: 0 0 0 1px var(--navy);
+}
+
 .hud-speed {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 3px 0 2px;
+  gap: 1px;
+  padding: 1px 0;
   background: rgba(14, 19, 32, 0.82);
   border: 1px solid var(--steel-dark);
 }
 
 .hud-unit {
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 800;
   line-height: 1;
+  letter-spacing: 0.04em;
   color: var(--ivory-dim);
 }
 
-.hud .hud-rival {
+/* The rival's hull: a thin bar under the ribbon, behind the rival's own mark, a diamond. */
+.hud-rival {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: 7px minmax(0, 1fr);
   align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
-  /* As wide as the route ribbon and the menu above it, against the same edge. */
-  width: min(100%, calc(var(--map-w) + 10px + var(--hud-gap) + 44px));
-  align-self: flex-end;
+  gap: 3px;
+  width: var(--map-w);
+  height: 7px;
 }
 
-.hand-right .hud .hud-rival {
-  align-self: flex-start;
+.hud-rival-mark {
+  width: 5px;
+  height: 5px;
+  margin-left: 1px;
+  background: var(--coral);
+  transform: rotate(45deg);
 }
 
-.hud-rival-name,
-.hud-rival-note {
-  font-size: 12px;
-  font-weight: 800;
-  color: #ff9a8c;
+.hud-rival .gauge-track {
+  height: 5px;
 }
 
 .hud-rival .gauge-fill {
@@ -4815,6 +5029,17 @@ p.g-spend.is-blocked {
 .hud-rival.tier-2 .gauge-track::after,
 .hud-rival.tier-3 .gauge-track::after {
   background: repeating-linear-gradient(135deg, transparent 0 2px, #0b0f19 2px 4px);
+}
+
+/* Out of the race or over the line: the mark is hollow and the bar is struck through. */
+.hud-rival[data-note='out'] .hud-rival-mark,
+.hud-rival[data-note='done'] .hud-rival-mark {
+  background: none;
+  outline: 1px solid var(--coral);
+}
+
+.hud-rival[data-note='out'] .gauge-track {
+  outline-color: var(--coral);
 }
 
 .hud-col-action .bend {
@@ -5220,7 +5445,7 @@ p.g-spend.is-blocked {
   color: #ff5a66;
 }
 
-/* --- Edge markers ---------------------------------------------------------------------------- */
+/* --- Edge markers: compact tags against the real edge of the screen ---------------------------- */
 
 .edge-mark {
   position: absolute;
@@ -5231,45 +5456,44 @@ p.g-spend.is-blocked {
   will-change: transform;
 }
 
-.edge-mark::before {
-  content: '';
+.edge-tag {
   position: absolute;
-  left: -17px;
-  top: -17px;
-  width: 34px;
-  height: 34px;
-  background: var(--navy);
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+  padding: 0 5px 0 4px;
+  white-space: nowrap;
+  color: var(--ivory);
+  background: rgba(14, 19, 32, 0.92);
   border: 2px solid var(--coral);
 }
 
 .edge-arrow {
-  position: absolute;
-  left: -12px;
-  top: -12px;
-  width: 24px;
-  height: 24px;
+  flex: none;
+  width: 12px;
+  height: 12px;
   color: var(--coral);
   transform: rotate(var(--turn, 0rad));
 }
 
 .edge-label {
-  position: absolute;
-  left: 0;
-  top: 0;
-  padding: 1px 6px 2px;
+  min-width: 26px;
   font-size: 13px;
   font-weight: 800;
-  white-space: nowrap;
-  color: var(--ivory);
-  background: rgba(14, 19, 32, 0.92);
-  border: 1px solid var(--steel-dark);
-  transform: translate(
-    calc(-50% + var(--label-x, 0) * 34px),
-    calc(-50% + var(--label-y, 1) * 30px)
-  );
+  line-height: 1;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
-.edge-threat::before {
+.edge-threat .edge-tag {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  justify-content: center;
   border: 3px solid #ff5a66;
   border-image: repeating-linear-gradient(135deg, #ff5a66 0 5px, #0b0f19 5px 10px) 3;
   background: #4c101c;
@@ -5284,7 +5508,7 @@ p.g-spend.is-blocked {
   animation: warn-pulse 0.4s steps(2) infinite;
 }
 
-.edge-rival[data-threat='1']::before {
+.edge-rival[data-threat='1'] .edge-tag {
   border: 3px solid #ff5a66;
   border-image: repeating-linear-gradient(135deg, #ff5a66 0 5px, #0b0f19 5px 10px) 3;
   background: #4c101c;
@@ -5352,40 +5576,48 @@ p.g-spend.is-blocked {
 
 /* --- Short landscape phones ------------------------------------------------------------------ */
 
+/* Under 360 pixels of height the same HUD has a tenth less screen: the ribbon, the strip and
+   the equipment buttons each give a little, and the fire buttons give nothing. */
+@media (max-height: 359px), (max-width: 759px) {
+  .hud {
+    --map-w: 60px;
+    --btn-u: 44px;
+    --bars-w: 100px;
+  }
+  .hud-scale-large {
+    --btn-u: 48px;
+  }
+}
+
 @media (max-height: 359px) {
   .hud {
-    --hud-gap: 4px;
-    --map-w: 84px;
+    --strip-h: 26px;
   }
-  .hud-race {
-    gap: 4px;
+  .hud-scale-large {
+    --strip-h: 30px;
   }
-  .hud .panel {
-    padding: 5px 7px;
-  }
-  .car-diagram {
-    width: 40px;
-    height: 60px;
-  }
-  /* Best and last lap give their line up; each lap's time is still called out as it ends. */
-  .hud .hud-times {
-    display: none;
-  }
-  .status-row {
-    height: 20px;
-  }
-  .status-icon {
-    width: 20px;
-    height: 20px;
+  .hud-car {
+    padding: 1px 4px;
   }
 }
 
 @media (min-width: 1100px) and (min-height: 600px) {
   .hud {
     --hud-pad: 12px;
-    --hud-gap: 8px;
+    --hud-gap: 6px;
     --hud-col: 228px;
-    --map-w: 150px;
+    --map-w: 112px;
+    --strip-h: 32px;
+    --strip-gap: 10px;
+    --bar-h: 8px;
+    --bar-row: 10px;
+    --bars-w: 150px;
+    --flag: 22px;
+    --cond-h: 76px;
+  }
+  .car-diagram {
+    width: 44px;
+    height: 66px;
   }
 }
 
@@ -5393,7 +5625,7 @@ p.g-spend.is-blocked {
 @media (orientation: portrait) {
   .hud {
     --hud-col: clamp(124px, 36vw, 160px);
-    --map-w: 72px;
+    --map-w: 60px;
   }
 }
 
@@ -5401,7 +5633,9 @@ p.g-spend.is-blocked {
 .reduce-flashes .edge-threat,
 .reduce-flashes .edge-rival,
 .reduce-flashes .car-seg.is-critical .car-seg-base,
-.reduce-flashes .gauge .glyph,
+.reduce-flashes .car-seg-focus,
+.reduce-flashes .gauge .mini,
+.reduce-flashes .broken-bang,
 .reduce-flashes .fire-lock {
   animation: none;
 }
@@ -5410,7 +5644,9 @@ p.g-spend.is-blocked {
   .hud-warning,
   .edge-threat,
   .car-seg.is-critical .car-seg-base,
-  .gauge .glyph,
+  .car-seg-focus,
+  .gauge .mini,
+  .broken-bang,
   .fire-lock,
   .hud-callout,
   .car-seg-repair {
@@ -5419,6 +5655,62 @@ p.g-spend.is-blocked {
   .car-seg-repair {
     opacity: 0;
   }
+  /* The diagram is there or it is not: no fade. */
+  .hud-diagram {
+    transition: none;
+  }
+}
+
+/* --- The pause menu: where the race is running, and the lap times the HUD no longer shows ------ */
+
+.pause-info {
+  margin-bottom: 8px;
+}
+
+.pause-info .notice {
+  margin-bottom: 6px;
+}
+
+.pause-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+}
+
+.pause-facts .badge {
+  margin-top: 0;
+  font-size: 12px;
+}
+
+.pause-laps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  margin: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pause-laps div {
+  display: flex;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.pause-laps dt {
+  color: var(--ivory-dim);
+  font-weight: 600;
+}
+
+.pause-laps dd {
+  margin: 0;
+  font-weight: 800;
+}
+
+.results-offline {
+  margin-top: 0;
+  font-size: 12px;
 }
 
 /* --- Results --------------------------------------------------------------------------------- */

@@ -678,7 +678,12 @@ export function updateProgress(
     const low = lastIndex * span;
     const high = low + span;
     let pos = lapPosition(track, loc);
+    // `loc` is where the car was before this step, so on the tick it crosses a gate its
+    // position can still read as just short of it. Around the start line that is a whole lap
+    // away from the stretch it has entered, in either direction: bring it next to the stretch
+    // before clamping, or progress jumps a checkpoint span ahead for one tick at every line.
     if (pos < low - lapLength / 2) pos += lapLength;
+    else if (pos > high + lapLength / 2) pos -= lapLength;
     progress.courseProgress = (progress.lap - 1) * lapLength + clamp(pos, low, high);
   }
 

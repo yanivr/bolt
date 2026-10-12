@@ -112,6 +112,8 @@ export type DuelOptions = {
   posts?: Array<{ ahead: number; aside?: number; radius: number }>;
   /** Published time of day, for parts that care (Solar Panel). */
   timeOfDay?: 'day' | 'dusk' | 'night';
+  /** True runs the duel with the tow on. Off by default: a duel is about one part. */
+  tow?: boolean;
 };
 
 export type Duel = {
@@ -176,6 +178,7 @@ export function duel(
     seed: options.seed ?? 1,
     conditions,
     catalog: CATALOG,
+    tow: options.tow === true,
   });
   const a = race.cars[0]!;
   const b = race.cars[1]!;

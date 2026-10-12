@@ -2,7 +2,7 @@ import { STRINGS } from '@bolt/content';
 import { memo, useEffect, useRef } from 'react';
 import { Glyph } from '../components/Glyph.js';
 import type { EdgeMark, Rect, ScreenPoint } from './hudCamera.js';
-import { edgeMark } from './hudCamera.js';
+import { avoidPanels, edgeFrame, edgeMark } from './hudCamera.js';
 import type { WarningKind } from './hudStore.js';
 import { hudLive, onHudFrame, trapHazard, useCombat } from './hudStore.js';
 import { steadyMeters } from './model.js';
@@ -57,10 +57,19 @@ export function threatAngle(kind: WarningKind | null, tick: number): number | nu
   return Math.atan2(point.x - car.x, -(point.y - car.y));
 }
 
+/** Where edge tags may go: the screen inside its safe area, and the panels to keep off. */
+export type EdgeField = { screen: Rect; panels: Rect[] };
+
 type Props = {
-  /** The rectangle markers are kept inside: the part of the screen between the HUD's columns. */
-  frame: () => Rect;
+  /** Read each time a tag is placed, so it follows the panels as they come and go. */
+  field: () => EdgeField;
 };
+
+/** Half the size of the rival's tag and of the threat marker, CSS pixels. */
+const RIVAL_HALF = { w: 30, h: 11 };
+const THREAT_HALF = { w: 12, h: 12 };
+/** The panels move rarely: their boxes are read again this often, not every frame. */
+const FIELD_EVERY_MS = 200;
 
 function place(node: HTMLElement | null, mark: EdgeMark | null): void {
   if (!node) return;
@@ -80,22 +89,27 @@ function place(node: HTMLElement | null, mark: EdgeMark | null): void {
 }
 
 /**
- * Markers at the edge of the play field for things that are off screen: the rival (Section
- * 7.5: an edge-clamped arrow with `Ahead 85m` or `Behind 32m`) and whatever a warning is
- * about. The HUD computes them itself from its own copy of the camera; see hudCamera.ts.
- * They move every frame, so they are placed by writing to their own nodes.
+ * Tags at the edge of the screen for things that are off it: the rival (Section 7.5: an
+ * edge-clamped arrow with its distance) and whatever a warning is about. They lie against the
+ * real edge of the screen, never out toward the middle where the cars are, and slide along
+ * the edge past any panel in their way. The rival's tag is an arrow and a distance; whether
+ * that is ahead or behind is in its accessible name, and on the race strip as the place. The
+ * HUD computes them itself from its own copy of the camera; see hudCamera.ts. They move every
+ * frame, so they are placed by writing to their own nodes.
  */
-export const EdgeMarkers = memo(function EdgeMarkers({ frame }: Props) {
+export const EdgeMarkers = memo(function EdgeMarkers({ field }: Props) {
   const rivalNode = useRef<HTMLDivElement>(null);
   const rivalLabel = useRef<HTMLSpanElement>(null);
   const threatNode = useRef<HTMLDivElement>(null);
-  const frameOf = useRef(frame);
-  frameOf.current = frame;
+  const fieldOf = useRef(field);
+  fieldOf.current = field;
 
   useEffect(() => {
     const car: ScreenPoint = { x: 0, y: 0 };
     const point: ScreenPoint = { x: 0, y: 0 };
     let label = '';
+    let area: EdgeField | null = null;
+    let areaMs = -Infinity;
     return onHudFrame((tick, nowMs) => {
       const race = hudLive.race;
       const loadout = hudLive.loadout;
@@ -117,51 +131,55 @@ export const EdgeMarkers = memo(function EdgeMarkers({ frame }: Props) {
       );
       camera.car(car);
       const view: Rect = { left: 0, top: 0, right: camera.width, bottom: camera.height };
-      const clamp = frameOf.current();
 
       const state = useCombat.getState();
+      const warning = state.warning;
+      const wantRival =
+        state.rival.present && state.rival.tracked && race.phase !== 'COUNTDOWN' && !race.result;
+      const wantThreat = warning === 'missile' || warning === 'lock' || warning === 'trap';
+      if (!wantRival && !wantThreat) {
+        place(rivalNode.current, null);
+        place(threatNode.current, null);
+        return;
+      }
+      if (!area || nowMs - areaMs > FIELD_EVERY_MS) {
+        area = fieldOf.current();
+        areaMs = nowMs;
+      }
+
       let rivalMark: EdgeMark | null = null;
-      if (
-        state.rival.present &&
-        state.rival.tracked &&
-        race.phase !== 'COUNTDOWN' &&
-        !race.result
-      ) {
+      if (wantRival) {
         camera.toScreen(
           race.rival.x + race.rival.velocityX * ahead,
           race.rival.y + race.rival.velocityY * ahead,
           point,
         );
-        rivalMark = edgeMark(point, car, view, clamp);
+        const frame = edgeFrame(area.screen, RIVAL_HALF.w, RIVAL_HALF.h);
+        const raw = edgeMark(point, car, view, frame);
+        rivalMark = raw && avoidPanels(raw, frame, area.panels, RIVAL_HALF.w, RIVAL_HALF.h);
       }
       place(rivalNode.current, rivalMark);
       if (rivalMark) {
         // The gap is positive when the driver leads, so the rival is behind.
+        const meters = steadyMeters(race.gapMeters);
         const text = fill(race.gapMeters >= 0 ? STRINGS.hud.behind : STRINGS.hud.ahead, {
-          meters: steadyMeters(race.gapMeters),
+          meters,
         });
         if (text !== label) {
           label = text;
-          if (rivalLabel.current) rivalLabel.current.textContent = text;
+          if (rivalLabel.current)
+            rivalLabel.current.textContent = fill(STRINGS.hud.meters, { meters });
           rivalNode.current?.setAttribute('data-label', text);
+          rivalNode.current?.setAttribute('aria-label', `${STRINGS.hud.rival}: ${text}`);
         }
-        // The label sits on the inside of the arrow, toward the middle of the screen.
-        rivalNode.current?.style.setProperty(
-          '--label-x',
-          rivalMark.x > camera.width / 2 ? '-1' : '1',
-        );
-        rivalNode.current?.style.setProperty(
-          '--label-y',
-          rivalMark.y > camera.height / 2 ? '-1' : '1',
-        );
       }
 
-      const warning = state.warning;
-      let threat =
-        (warning === 'missile' || warning === 'lock' || warning === 'trap') &&
-        threatPoint(warning, tick, point)
-          ? edgeMark(point, car, view, clamp)
-          : null;
+      let threat: EdgeMark | null = null;
+      if (wantThreat && threatPoint(warning, tick, point)) {
+        const frame = edgeFrame(area.screen, THREAT_HALF.w, THREAT_HALF.h);
+        const raw = edgeMark(point, car, view, frame);
+        threat = raw && avoidPanels(raw, frame, area.panels, THREAT_HALF.w, THREAT_HALF.h);
+      }
       // A threat from where the rival is: one marker, the rival's, drawn as the threat.
       const merged =
         threat !== null &&
@@ -185,10 +203,12 @@ export const EdgeMarkers = memo(function EdgeMarkers({ frame }: Props) {
         role="img"
         aria-label={STRINGS.hud.rival}
       >
-        <span className="edge-arrow" aria-hidden="true">
-          <Glyph name="up" size={24} />
+        <span className="edge-tag">
+          <span className="edge-arrow" aria-hidden="true">
+            <Glyph name="up" size={12} />
+          </span>
+          <span className="edge-label" ref={rivalLabel} />
         </span>
-        <span className="edge-label" ref={rivalLabel} />
       </div>
       <div
         className="edge-mark edge-threat"
@@ -198,8 +218,10 @@ export const EdgeMarkers = memo(function EdgeMarkers({ frame }: Props) {
         style={{ visibility: 'hidden' }}
         aria-hidden="true"
       >
-        <span className="edge-arrow">
-          <Glyph name="up" size={24} />
+        <span className="edge-tag">
+          <span className="edge-arrow">
+            <Glyph name="up" size={12} />
+          </span>
         </span>
       </div>
     </>

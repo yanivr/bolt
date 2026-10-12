@@ -251,10 +251,37 @@ export type CombatCar = {
   burnPart: number;
   /** What put the grip status on: 1 oil, 2 frost. Fire thaws frost; it does not clean oil. */
   gripSource: number;
+  /** The tow (`TOW` in balance.ts). The bonus itself is carried from tick to tick here. */
+  tow: TowState;
+};
+
+/**
+ * One car's tow: what it is being given, and what the race last measured to decide it. The
+ * first three fields are the ones `VehicleEffects` carries, under the same names.
+ */
+export type TowState = {
+  /** Shares of top speed: now, the one being moved toward, and the one announced for next. */
+  tow: number;
+  towTarget: number;
+  towNext: number;
+  /** The car's own speed averaged over a few seconds, px/s. */
+  averageSpeed: number;
+  /** Time gap to the racing car ahead as last decided, seconds; 0 when there is none. */
+  gapSeconds: number;
+  /** Past the engage gap and not yet back under the threshold. */
+  latched: boolean;
+  /** Whether a `catchup` event last said engaged, and the tick it was sent. */
+  announced: boolean;
+  announcedTick: number;
 };
 
 export type RaceOptions = {
   seed: number;
+  /**
+   * False runs the race without the tow: scripted scenarios, tests of other things, and the
+   * "off" half of the balance report. Left out, the tow is on, as in every real race.
+   */
+  tow?: boolean;
   /** Conditions the cars' coefficients are derived under, again whenever a part fails. */
   conditions: BuildConditions;
   catalog: Catalog;

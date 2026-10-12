@@ -14,6 +14,7 @@ Snapshots are 15 a second.
 | File | What it holds |
 | :-- | :-- |
 | `race.ts` | `createRace`, `stepRace`, `resetRace`, standings, results, snapshot builders, `eventVisibleTo` |
+| `tow.ts` | The tow, the long-range catch-up: the gap measure, the bonus curve, the decision. Its numbers are `TOW` in `balance.ts` |
 | `combat/specs.ts` | `compileModules`: a mounted part's catalog `params` to the numbers the simulation runs on |
 | `combat/car.ts` | Components, statuses, driving effects, the damage pipeline (`applyHit`), repairs, impulses, energy |
 | `combat/weapons.ts` | Fire input, targeting, the weapon lifecycle, one `release` per primitive |
@@ -22,7 +23,7 @@ Snapshots are 15 a second.
 | `combat/geometry.ts` | Hull and arc tests, swept hits, line of sight, car contact |
 | `ai/brain.ts`, `ai/sparring.ts` | The `RaceBrain` seam and the sparring rival |
 | `scenario.ts`, `content/scenarios.ts` | Scripted showcase scenarios |
-| `protocol.ts` | Input sample, events, snapshots: the wire contract. `PROTOCOL_VERSION` is 4 |
+| `protocol.ts` | Input sample, events, snapshots: the wire contract. `PROTOCOL_VERSION` is 5 |
 
 ## The step
 
@@ -31,6 +32,8 @@ tick's events in `race.events`. It is a pure function of the race and the inputs
 blueprints, track, weather, seed and input sequence give the same bits, on the server, in the
 page and in a test. Order inside a tick (Section 11.8):
 
+0. The tow: every car's gap to the racing car ahead is measured before anything moves, and its
+   bonus moved on (see "The tow" below).
 1. Input and activation requests: utilities, then weapons. Refusals are decided here.
 2. For each car: effects from damage and statuses, then power, heat and motion
    (`stepDriveSession`), then the winch. Checkpoints, laps and finishes are reported.
@@ -157,10 +160,11 @@ The server room writes the same fields through its synchronized schema
 | Field | Contents |
 | :-- | :-- |
 | `tick`, `phase`, `raceTimeMs` | The race clock. `phase` is `COUNTDOWN`, `RACING` or `FINISHED` |
-| `car` | The viewer's own car: exact motion and powertrain (for prediction), `effects`, and `combat` |
+| `car` | The viewer's own car: exact motion and powertrain (for prediction), `effects`, `combat` and `tow` |
+| `car.tow` | The tow: the share of its whole bonus (`TOW.maxBonus`, 8 percent of top speed) the car has right now, 0 to 1 in steps of 0.01. Exactly 0 when the car is not being towed: the leader, a car within `TOW.thresholdGap` (1.0 s) of the car ahead, the countdown and the first 5 s, a wrecked, finished or knocked-out car. Not `car.effects.tow`, which is the bonus itself as a share of top speed, for prediction |
 | `car.combat` | `chassis`, `chassisMax`, `armor[4]`, `components[]`, `statuses[]`, `modules[]`, `reserve`, `lockWarning` (0 none, 1 locked, 2 missile inbound), `ko` |
 | `car.combat.modules[i]` | `state`, `charges`, `readyTick`, `cooldownTicks`, `aim`, `locked`, `pool` |
-| `rival` | The other car as seen from outside: pose, speed, steering, braking, lap, progress, chassis, armor, component integrity, statuses, and per part only `state`, `aim` and whether a shield is `up`. Never its heat, energy, ammunition or cooldowns (Section 7.5) |
+| `rival` | The other car as seen from outside: pose, speed, steering, braking, lap, progress, chassis, armor, component integrity, statuses, and per part only `state`, `aim` and whether a shield is `up`, and its own `tow` (same meaning as `car.tow`). Never its heat, energy, ammunition or cooldowns (Section 7.5) |
 | `rivalBlueprint` | Canonical JSON of the rival's blueprint, to draw it |
 | `projectiles[]` | `id`, `kind`, `owner`, `x`, `y`, `vx`, `vy` (px/s) at `tick`; `landTick` for lobbed kinds |
 | `hazards[]` | `id`, `kind`, `owner`, `x`, `y`, `radius`, `halfLength`, `angle`, `armedTick`, `endTick`, `revealed` |
@@ -193,6 +197,10 @@ needs the simulation.
 - Heat and energy: `car.motion.coreHeat` and `batteryEnergy`, as before.
 - Warnings: `lockWarning`, and `warning` events with `value` ticks to impact for a missile.
 - Position and gap, the finishing window, the result.
+- The tow: `car.tow`, 0 to 1, for an indicator; the `catchup` event for the moment it takes
+  hold and the moment it lets go. `rival.tow` is the same number for the other car. Both are
+  in hundredths on the wire (`tow`, uint8, on the room state and on its `rival`) and divided by
+  100 by the online link, so the HUD reads the same 0 to 1 online and offline.
 - Why a button did nothing: the `refused` event.
 
 ## Predicted and authoritative
@@ -207,6 +215,21 @@ that prediction only through numbers the snapshot carries:
 - Disabled parts: the predictor re-derives the car's coefficients without them, as the server does.
 - The rival's body: the predictor keeps a ghost of the rival, advanced on its last known
   velocity, and resolves contact against it so a ram does not rubber-band.
+
+- The tow is the one effect that is predicted, and exactly. It depends on where the rival is,
+  which the client only hears about, so the server decides it on a slow clock (every
+  `TOW.updateSeconds`, half a second) and each decision takes effect one period after it is
+  made. `car.effects` carries `tow` (the share of top speed the car has now), `towTarget` (what
+  it is moving toward) and `towNext` (what it will move toward from the next decision tick), and
+  the predictor moves them on with `advanceTow`, the function the race uses. Measured with a
+  delay each way on the wire and the tow coming on, building, fading and going off
+  (`tests/unit/towPrediction.test.ts`), against the same race with the tow switched off over
+  the same ticks (about 1,460 client ticks, the tow taking hold, building, fading and letting
+  go): at 100 ms and at 200 ms each way the towed car is corrected exactly as often and by
+  exactly as much as the car without the tow, which is never (not one reconciliation moved the
+  car by any distance at all). At 400 ms each way, where the client is more than one period
+  ahead of its last snapshot, the tow adds 18 corrections, the largest 0.055 px (0 without it).
+  A client that ignored the three numbers would be corrected 469 times, by up to 0.15 px.
 
 Not predicted, and so shown when the server says: firing (a shot appears with its `shot`
 event; there is no client-side muzzle flash ahead of the server), hits, damage, statuses,
@@ -235,6 +258,7 @@ catalog id (or `ram`, a tire kit id for blades).
 | `finish` | `car`, `raceTimeMs`, `finished` | The car crossed the line, or (`finished: false`) the race ended without it |
 | `wall` | `car`, `speed` | A wall or obstacle struck above the forgiven speed. At most every quarter second |
 | `position` | `leader`, `gapMeters` | A new leader, once the lead is six pixels |
+| `catchup` | `car`, `state` | The tow took hold of a car (`engaged`: its `tow` left zero) or let go of it (`released`: back at zero). The two alternate for a car, and a car sends at most one every `TOW.eventMinSeconds` (3 s), so a later one can be up to that late. Sent to both drivers. A race can end with a car still engaged: the snapshot, not the event, is the state |
 | `windup` | `car`, `part`, `weapon`, `ticks` | A weapon began charging or drawing back. Its release follows `ticks` later, unless an EMP cancels it |
 | `shot` | `car`, `part`, `weapon`, `x`, `y`, `dir`, `projectile`, `n`, `of` | Something left a weapon, at its muzzle. `projectile` is 0 when nothing flies. One per round of a burst |
 | `beam` | `car`, `part`, `weapon`, `x`, `y`, `toX`, `toY`, `hit` | An instant line: railgun, Tesla arc, interceptor, sweeper. The `hit` event, if any, is in the same tick |
@@ -256,6 +280,101 @@ catalog id (or `ram`, a tire kit id for blades).
 | `refused` | `car`, `part`, `reason` | A command did nothing. Own driver only. `part` is -1 for a button with no weapon |
 | `ko` | `car`, `by` | Knocked out |
 | `result` | `winner`, `reason` | The race is over. Always the last event |
+
+## The tow
+
+The long-range catch-up, by product-owner decision (`docs/DECISIONS.md` 189 to 198). A car that
+trails the racing car ahead of it by more than the edge of fighting range runs with a little
+more top speed, more the further back it is. Inside fighting range it has exactly none, so the
+final approach and the pass are driving, the build and weapons alone. The car ahead is never
+slowed, never told apart from any other car and never changed in any way (asserted to the bit:
+a leader that is never caught drives the same race with the tow on and off). The rule is the
+same for the player, the sparring rival and any later driver, and it is part of `stepRace`, so
+the server, the offline link, the harness and the tests all run it. It reaches the physics only
+through `VehicleEffects.tow`, and `stepVehicle` reads it only when it is above zero, so a car
+with no tow drives exactly as it did before the tow existed.
+
+**The gap.** For each car, the nearest car ahead of it along the course that is still racing
+(not finished, not knocked out). The distance between them is the difference of
+`courseProgress`, the same distance along the course as the snapshot's `gapMeters` (in pixels
+rather than meters). It only counts checkpoints crossed forward and runs on across laps, so it
+neither jumps at the start line nor rewards a car pointed the wrong way. The time gap is that
+distance divided by the trailing car's own speed averaged over about three seconds
+(`TOW.speedAverageSeconds`), never taken as less than `TOW.speedFloor`. The snapshot's
+`gapSeconds` divides by the speed of this very tick instead, and moves with every lift; the
+average keeps a lift or a corner from moving the bonus.
+
+**Across laps.** A car a lap or more down is measured by the course like any other and gets the
+whole bonus. The leader coming up to lap it gets none: the car it is catching is behind it on the
+course, not ahead.
+
+**Where the threshold comes from.** The eleven shipped builds race Neon Cut at 247 px/s on
+average (216 to 282: course length over race time, alone, weapons off, tow off), so a gap of
+1.0 s is about 250 px of road. Eight of the twenty weapons reach 220 px, among them both bullet
+guns, the Swivel Turret, both rockets and the Frost Cannon; the Arc Mortar reaches 320 and the
+Needle Railgun 350. At the threshold the trailing car is just outside the reach of the common
+guns and inside the reach of the two longest weapons: the edge of the fight.
+`tests/unit/tow.test.ts` measures the speed and reads the ranges from the catalog, and fails if
+the threshold leaves that band.
+
+**The bonus.** Zero at and below `thresholdGap`; from there a straight line to the whole bonus
+at `fullGap`. A tow that is off starts only once the gap reaches `engageGap`, then follows the
+line down to exactly zero at the threshold, so it cannot flicker at the edge. The bonus stretches
+the speed axis of the engine's force and of the drag by `1 + tow`, which raises top speed by
+that share and leaves grip, braking and steering alone; it follows the throttle (a car that has
+lifted or is braking slows exactly as it would without it) and fades in between
+`fadeStartSpeed` and `fadeFullSpeed`, so a launch and the drive out of a slow corner are
+untouched (the launch is bit-identical until the car reaches 140 px/s).
+
+**The clock, and why it cannot oscillate.** Every `updateSeconds` each car's bonus is decided
+from its gap, and the decision takes effect one period later. The gap it is decided on is carried
+forward a period and a half at the rate it changed since the last decision (at most half a
+second either way), so a car closing quickly is let go as it reaches the threshold, not after.
+In between, the bonus moves toward the decision in force at no more than `rampUpPerSecond` or
+`rampDownPerSecond` of the whole bonus a second: no step a driver could feel as a surge. With
+the engage gap above the threshold, a car sitting at the edge is either towed or not; it is
+never switched on and off. Measured: a car's `catchup` events never come closer than
+`eventMinSeconds` together, and in the balance report's 440 armed races and the tow study's
+440 unarmed ones no change of the lead was made by a car that had any tow in the second before.
+
+**Who has none.** Everybody during the countdown and the first `startDelaySeconds` of the race.
+The leader, and any car with nobody racing ahead of it. A car inside the threshold. A car that
+has finished or been knocked out (taken off at once, not ramped). A wrecked car, its chassis at
+zero, limping (nothing more is decided for it, and what it had ramps away at the usual rate;
+chassis is never repaired, so it is for the rest of the race). A car that has been driving the
+wrong way for 1.2 s. A car in the air keeps its level but nothing acts on it: the integrator
+applies no drive and no drag off the ground. A race created with `tow: false` (`RaceOptions`)
+has none at all: the 33 combat scenarios, and tests of other things.
+
+**The sparring rival** never reads the tow (asserted: its every control is the same when every
+number of the tow is replaced with nonsense), so it cannot hang back to collect it. It drives
+its fastest line every lap.
+
+**The table** (`TOW` in `packages/shared/src/balance.ts`; nothing else holds a number of the tow):
+
+| Field | Value | Meaning |
+| :-- | --: | :-- |
+| `thresholdGap` | 1.0 s | At and below this gap the bonus is exactly zero |
+| `engageGap` | 1.15 s | A tow that is off starts here |
+| `fullGap` | 2.5 s | The whole bonus from this gap |
+| `maxBonus` | 0.08 | The whole bonus: 8 percent of top speed |
+| `rampUpPerSecond` | 0.5 | Rise, in whole bonuses a second (zero to all of it in 2 s) |
+| `rampDownPerSecond` | 1 | Fall (all of it to zero in 1 s) |
+| `startDelaySeconds` | 5 | No decision before this race time; none in the countdown |
+| `updateSeconds` | 0.5 | Decided this often, in effect one period later |
+| `speedAverageSeconds` | 3 | Time constant of the trailing car's average speed |
+| `speedFloor` | 120 px/s | The least that average counts as |
+| `fadeStartSpeed`, `fadeFullSpeed` | 140, 200 px/s | No bonus below the first, all of it from the second |
+| `eventMinSeconds` | 3 | Least time between two `catchup` events of one car |
+
+So `tow` (the snapshot's share) is 0 up to 1.0 s, 0.33 at 1.5 s, 0.67 at 2.0 s and 1 from
+2.5 s, which is 2.7, 5.3 and 8 percent more top speed.
+
+How these were chosen, every setting that was tried and what each measured:
+`docs/evidence/balance/tow-study.md`; the shipped table against the tow off, with the four
+targets, the matchup matrix and the upgrade test: `docs/evidence/balance/tow-0.6.0-clear.md`.
+`npx tsx tests/balance/towStudy.ts` measures a setting; `npx tsx tests/balance/report.ts`
+writes the report.
 
 ## One activation of each weapon
 
@@ -367,7 +486,8 @@ example templates by seed. Milestone D replaces it by implementing `RaceBrain`.
 ## Scenarios
 
 Scripted two-car situations on Neon Cut's first straight, each with legal builds of 1,000
-credits or less. A scenario is data (`ScenarioDefinition`): two cars, where they start, a
+credits or less. They run with the tow off (they place cars at chosen distances to show one
+thing), except the one scenario that is about it. A scenario is data (`ScenarioDefinition`): two cars, where they start, a
 lane and speed to hold, and timed button presses.
 
 - Command line: `npx tsx tests/scenarios/run.ts` lists them; `npx tsx tests/scenarios/run.ts rocket_hit`
@@ -380,6 +500,7 @@ lane and speed to hold, and timed button presses.
 
 | Id | Title | Shows |
 | :-- | :-- | :-- |
+| `tow` | The tow | The one scenario that runs with the tow on, kept apart from the 33 below (`TOW_SCENARIO`, found by `getScenario('tow')`). The catch-up indicator on the local car: off through the start, engaging at 5.5 s (gap 4.2 s), rising to the whole bonus by 7.5 s, falling as the gap closes and off again at one second, short of the car ahead. The car ahead never has any. |
 | `kinetic_impact` | Small kinetic impacts | Section 13.3 small kinetic impact, twice: tight bullet impacts, then a fan of pellet impacts. Armor absorbs before the bodywork. |
 | `rocket_hit` | Rocket hit | Section 13.3 rocket explosion: approach, flash, fireball, shrapnel and smoke; then the splash of a near miss. |
 | `mortar_strike` | Mortar strike | Section 13.3 heavy mortar explosion with its warning reticle. The target sits still so the whole sequence can be studied. |

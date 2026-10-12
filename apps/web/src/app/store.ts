@@ -3,6 +3,8 @@ import type { MatchPhase, VehicleBlueprint } from '@bolt/shared';
 import { serializeBlueprint, validateUntrustedBlueprint } from '@bolt/shared';
 import { BLUEPRINT_KEY, restoreBlueprint } from './savedBlueprint.js';
 import { create } from 'zustand';
+import type { CameraDistance } from '../game/rendering/frame.js';
+import { parseCameraDistance } from '../game/rendering/frame.js';
 import { setVfxQuality } from '../game/vfx/quality.js';
 import type { SteeringMode } from '../input/driveInput.js';
 import type { LinkMode, LinkStatus } from '../network/link.js';
@@ -38,6 +40,11 @@ export type Settings = {
    * out decoration by themselves; nothing that carries gameplay is ever reduced.
    */
   effectsQuality: 'auto' | 'high' | 'low';
+  /**
+   * How much of the track the race view shows (the `Camera` setting). A fixed view chosen
+   * in the menu: the camera still never rotates and never zooms while driving.
+   */
+  cameraDistance: CameraDistance;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -54,6 +61,7 @@ export const DEFAULT_SETTINGS: Settings = {
   callouts: true,
   hudScale: 'normal',
   effectsQuality: 'auto',
+  cameraDistance: 'close',
 };
 
 const SETTINGS_KEY = 'bolt.settings.v1';
@@ -96,6 +104,11 @@ function loadSettings(): Settings {
       settings.effectsQuality !== 'low'
     )
       settings.effectsQuality = DEFAULT_SETTINGS.effectsQuality;
+    // `wide` was the name of `far` in an earlier build.
+    settings.cameraDistance = parseCameraDistance(
+      settings.cameraDistance,
+      DEFAULT_SETTINGS.cameraDistance,
+    );
     return settings as Settings;
   } catch {
     return { ...DEFAULT_SETTINGS };

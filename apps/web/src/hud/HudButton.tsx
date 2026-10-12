@@ -6,6 +6,8 @@ type Props = {
   onPress: () => void;
   label: string;
   className?: string;
+  /** A tooltip, which is also the button's accessible description. */
+  title?: string;
   children: ReactNode;
 };
 
@@ -16,13 +18,14 @@ type Props = {
  * It is for menu controls. Weapon and equipment buttons act on the press and hold, and are
  * `FireButton`.
  */
-export function HudButton({ onPress, label, className, children }: Props) {
+export function HudButton({ onPress, label, className, title, children }: Props) {
   const active = useRef<number | null>(null);
   return (
     <button
       type="button"
       className={className}
       aria-label={label}
+      title={title}
       onPointerDown={(event) => {
         active.current = event.pointerId;
         event.currentTarget.setPointerCapture?.(event.pointerId);

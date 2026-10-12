@@ -15,16 +15,18 @@ import { raceFeed } from '../game/raceFeed.js';
 import type { Callout, CalloutOffer } from './callouts.js';
 import { CalloutQueue, calloutFor } from './callouts.js';
 import { HudCamera } from './hudCamera.js';
-import type { ActionView, HeatLevel, HudLoadout, StatusView, Tier } from './model.js';
+import type { ActionView, HeatLevel, HudLoadout, StatusView, Tier, TowLevel } from './model.js';
 import {
   GapSmoother,
   StatusClock,
   actionView,
+  changedComponent,
   chassisTier,
   estimateTick,
   heatLevel,
   powerLow,
   tierOf,
+  towLevel,
 } from './model.js';
 import type { ResultsSummary } from './results.js';
 import { RaceLog } from './results.js';
@@ -75,6 +77,15 @@ export type CombatView = {
   hitStamp: number[];
   repairStamp: number[];
   hullStamp: number;
+  /**
+   * Bumped whenever something happens to a component of the local car (a hit, a change of
+   * condition, a repair): the car diagram comes up for a moment. `popFocus` is the component
+   * it was, or -1 for the hull.
+   */
+  popStamp: number;
+  popFocus: number;
+  /** The catch-up tow on the local car as a level of one to three, or 0 for none. */
+  tow: TowLevel;
   /** State of each mounted part's button or pip, by part index. */
   actions: ActionView[];
   refusal: RefusalView | null;
@@ -115,6 +126,9 @@ function initial(): CombatView {
     hitStamp: [],
     repairStamp: [],
     hullStamp: 0,
+    popStamp: 0,
+    popFocus: -1,
+    tow: 0,
     actions: [],
     refusal: null,
     statuses: [],
@@ -268,6 +282,11 @@ function derive(race: RaceSnapshot, nowMs: number): void {
   if (prev.position !== race.position) next.position = race.position;
   const shownGap = gap.push(race.gapSeconds, dt);
   if (prev.gap !== shownGap) next.gap = shownGap;
+  // The tow only means something while the race is on, and never for the leader (the
+  // simulation gives the leader none; this keeps a stale or overridden value off the strip).
+  const tow =
+    race.phase === 'RACING' && !race.result && race.position !== 1 ? towLevel(race.car.tow) : 0;
+  if (prev.tow !== tow) next.tow = tow;
 
   const rivalPresent = race.rival.buildHash !== '' && race.rival.chassisMax > 0;
   const rival: RivalView = rivalPresent
@@ -300,7 +319,13 @@ function derive(race: RaceSnapshot, nowMs: number): void {
     const chassisPercent = Math.round((combat.chassis / Math.max(1, combat.chassisMax)) * 100);
     if (prev.chassisPercent !== chassisPercent) next.chassisPercent = chassisPercent;
     const hull = chassisTier(combat.chassis, combat.chassisMax);
-    if (prev.hullTier !== hull) next.hullTier = hull;
+    if (prev.hullTier !== hull) {
+      next.hullTier = hull;
+      if (prev.live) {
+        next.popStamp = prev.popStamp + 1;
+        next.popFocus = -1;
+      }
+    }
     if (hull >= 2 && lastHullTier < 2)
       offer(
         { key: 'hull', text: STRINGS.hud.callout.hullCritical, tone: 'bad', priority: 7 },
@@ -318,7 +343,14 @@ function derive(race: RaceSnapshot, nowMs: number): void {
     if (!sameArray(prev.armor, armor, is)) next.armor = armor;
 
     const tiers = combat.components.map((integrity) => tierOf(integrity));
-    if (!sameArray(prev.tiers, tiers, is)) next.tiers = tiers;
+    if (!sameArray(prev.tiers, tiers, is)) {
+      next.tiers = tiers;
+      const changed = changedComponent(prev.tiers, tiers);
+      if (changed >= 0) {
+        next.popStamp = prev.popStamp + 1;
+        next.popFocus = changed;
+      }
+    }
 
     const emp = hasStatus(race, 'emp');
     const jam = hasStatus(race, 'jam');
@@ -440,7 +472,11 @@ function onEvent(event: RaceEvent, race: RaceSnapshot | null, nowMs: number): vo
       if (event.component >= 0) {
         const hitStamp = [...state.hitStamp];
         hitStamp[event.component] = (hitStamp[event.component] ?? 0) + 1;
-        useCombat.setState({ hitStamp });
+        useCombat.setState({
+          hitStamp,
+          popStamp: state.popStamp + 1,
+          popFocus: event.component,
+        });
       }
       if (event.chassis > 0) useCombat.setState({ hullStamp: state.hullStamp + 1 });
       break;
@@ -450,6 +486,12 @@ function onEvent(event: RaceEvent, race: RaceSnapshot | null, nowMs: number): vo
         repairStamp[event.component] = (repairStamp[event.component] ?? 0) + 1;
         useCombat.setState({ repairStamp });
       }
+      // Destroyed, disabled or repaired: the diagram shows which part.
+      if (event.car === you && event.component >= 0)
+        useCombat.setState({
+          popStamp: useCombat.getState().popStamp + 1,
+          popFocus: event.component,
+        });
       break;
     case 'windup':
       if (event.car !== you) break;
@@ -573,6 +615,8 @@ export type HudOverride = {
   rivalChassis?: number;
   /** A guided missile at an offset from the local car, world pixels. */
   missileOffset?: { x: number; y: number };
+  /** The catch-up tow on the local car, 0 to 1 (the snapshot's `tow`). */
+  tow?: number;
 };
 
 let override: HudOverride | null = null;
@@ -580,6 +624,7 @@ let override: HudOverride | null = null;
 function applyOverride(race: RaceSnapshot, o: HudOverride): RaceSnapshot {
   const car = { ...race.car, motion: { ...race.car.motion } };
   const out: RaceSnapshot = { ...race, car, rival: { ...race.rival } };
+  if (o.tow !== undefined) car.tow = o.tow;
   if (o.coreHeat !== undefined) car.motion.coreHeat = o.coreHeat;
   if (o.thermalLimited !== undefined) car.motion.thermalLimited = o.thermalLimited;
   if (o.battery !== undefined) car.motion.batteryEnergy = o.battery;
@@ -657,6 +702,8 @@ export type HudDebug = {
   showResults: () => void;
   /** The local car's place on screen as the HUD has it, CSS pixels. */
   carScreen: () => { x: number; y: number } | null;
+  /** The HUD's own reading of the view: its size and how many CSS pixels a world pixel covers. */
+  camera: () => { width: number; height: number; cssPerWorld: number };
   /** Combat view, for assertions. */
   view: () => CombatView;
   /** The local car's mounted parts, so a test can find one by its catalog id. */
@@ -683,6 +730,11 @@ function installDebug(): void {
     summary: () => hudLive.log.summary(),
     showResults: () => useCombat.setState({ summary: hudLive.log.summary(), preview: true }),
     carScreen: () => (hudLive.camera.ready ? hudLive.camera.car({ x: 0, y: 0 }) : null),
+    camera: () => ({
+      width: hudLive.camera.width,
+      height: hudLive.camera.height,
+      cssPerWorld: hudLive.camera.cssPerWorld,
+    }),
     view: () => useCombat.getState(),
     parts: () =>
       (hudLive.loadout?.parts ?? []).map((p) => ({

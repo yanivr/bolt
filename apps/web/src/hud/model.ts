@@ -548,3 +548,93 @@ export function steadyMeters(meters: number): number {
   const m = Math.abs(meters);
   return m < 30 ? Math.round(m) : Math.round(m / 5) * 5;
 }
+
+/**
+ * The gap on the strip: tenths under ten seconds, whole seconds beyond, so the strip keeps
+ * its width (it has only as much as the car's keep-out box leaves along the top edge).
+ */
+export function formatStripGap(seconds: number): string {
+  if (Math.abs(seconds) < 9.95) return formatGap(seconds);
+  const whole = Math.min(99, Math.round(Math.abs(seconds)));
+  return seconds >= 0 ? `+${whole}` : `−${whole}`;
+}
+
+/** The race clock on the strip: whole seconds, which is all a glance takes in while driving. */
+export function formatStripClock(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+// --- Catch-up tow ------------------------------------------------------------------------------------
+
+/** Steps the tow indicator shows. */
+export const TOW_STEPS = 3;
+
+export type TowLevel = 0 | 1 | 2 | 3;
+
+/** Below this share of its bonus the tow is not shown: a tow that is just letting go. */
+export const TOW_SHOWN_ABOVE = 0.05;
+
+/**
+ * The tow (the long-range catch-up a trailing car is given) as a level of one to three
+ * chevrons, or 0 for none. `tow` is the snapshot's `tow`, 0 to 1. Anything that is not a
+ * finite number above `TOW_SHOWN_ABOVE` reads as none, so a snapshot of a simulation without
+ * the field, or with a damaged one, draws nothing.
+ */
+export function towLevel(tow: unknown): TowLevel {
+  if (typeof tow !== 'number' || !Number.isFinite(tow) || !(tow > TOW_SHOWN_ABOVE)) return 0;
+  return Math.max(
+    1,
+    Math.min(TOW_STEPS, Math.ceil(Math.min(1, tow) * TOW_STEPS - 1e-9)),
+  ) as TowLevel;
+}
+
+// --- What is broken ----------------------------------------------------------------------------------
+
+/** A component that is critical or destroyed: what the persistent row of icons shows. */
+export type BrokenPart = {
+  component: number;
+  kind: HudComponentKind;
+  category: PartCategory | null;
+  name: string;
+  tier: 2 | 3;
+};
+
+/** Most icons the row shows; anything beyond is counted in a `+n` tag. */
+export const BROKEN_MAX = 4;
+
+/**
+ * The components that are critical or destroyed right now, destroyed first, then in the
+ * car's own order. A healthy or merely damaged car gives an empty list: the row is not there.
+ */
+export function brokenParts(loadout: HudLoadout, tiers: readonly Tier[]): BrokenPart[] {
+  const out: BrokenPart[] = [];
+  for (const c of loadout.components) {
+    const tier = tiers[c.index] ?? 0;
+    if (tier >= 2)
+      out.push({
+        component: c.index,
+        kind: c.kind,
+        category: c.category,
+        name: c.name,
+        tier: tier as 2 | 3,
+      });
+  }
+  return out.sort((a, b) => b.tier - a.tier || a.component - b.component);
+}
+
+// --- When the car diagram is on show -----------------------------------------------------------------
+
+/** How long the diagram stays up after the last thing that happened to a component. */
+export const DIAGRAM_POP_MS = 1800;
+
+/**
+ * The first component whose condition differs between two snapshots, or -1. A first snapshot
+ * (nothing to compare with) is not a change: a car that starts a scenario damaged does not
+ * announce it, its icons are simply there.
+ */
+export function changedComponent(before: readonly Tier[], after: readonly Tier[]): number {
+  if (before.length === 0) return -1;
+  for (let i = 0; i < after.length; i++) if ((before[i] ?? 0) !== after[i]) return i;
+  return -1;
+}

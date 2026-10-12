@@ -45,8 +45,8 @@ import type { EngineAudio } from '../audio/EngineAudio.js';
 import { CarView } from '../composition/CarView.js';
 import { createPaintedBody } from '../composition/paint.js';
 import { Effects } from '../particles/Effects.js';
-import type { SimPose } from '../rendering/frame.js';
-import { BodyMotion, RenderPipeline } from '../rendering/frame.js';
+import type { CameraDistance, SimPose } from '../rendering/frame.js';
+import { BodyMotion, RenderPipeline, chunksInView } from '../rendering/frame.js';
 import { CombatView, FX_TEXTURE } from '../combat/CombatView.js';
 import '../debugHook.js';
 import { CombatStage } from '../combat/stage.js';
@@ -74,8 +74,11 @@ export type RaceSceneConfig = {
   audio: EngineAudio;
   /** Development aid: a centerline driver replaces the controls for capture and soak runs. */
   autopilot: boolean;
-  /** Whole canvas pixels per world pixel. Owned by the game shell, which also sizes the canvas. */
-  view: { scale: number };
+  /**
+   * Whole canvas pixels per world pixel, and the `Camera` setting it came from. Owned by the
+   * game shell, which also sizes the canvas and changes these in place when the setting does.
+   */
+  view: { scale: number; distance: CameraDistance; filter: 'pixelated' | 'smooth' };
   onLoadProgress: (fraction: number) => void;
   onLoadError: () => void;
   onReady: () => void;
@@ -331,6 +334,40 @@ export class RaceScene extends Phaser.Scene {
           };
         },
         setQuality: (value) => setVfxQuality(value),
+        view: () => {
+          const scale = Math.max(1, Math.round(this.cfg.view.scale));
+          const cam = this.cameras.main;
+          const world = {
+            worldWidth: this.scale.width / scale,
+            worldHeight: this.scale.height / scale,
+          };
+          const x1 = cam.scrollX + world.worldWidth;
+          const y1 = cam.scrollY + world.worldHeight;
+          let chunks = 0;
+          for (const chunk of manifests.terrain.ground)
+            if (
+              chunk.x < x1 &&
+              chunk.x + chunk.w > cam.scrollX &&
+              chunk.y < y1 &&
+              chunk.y + chunk.h > cam.scrollY
+            )
+              chunks++;
+          return {
+            distance: this.cfg.view.distance,
+            filter: this.cfg.view.filter,
+            scale,
+            widthPx: this.scale.width,
+            heightPx: this.scale.height,
+            ...world,
+            cssPerWorld:
+              (scale * this.game.canvas.getBoundingClientRect().width) / this.scale.width,
+            scrollX: cam.scrollX,
+            scrollY: cam.scrollY,
+            chunks,
+            chunksMax: chunksInView(world, manifests.terrain.chunkSize),
+            chunksTotal: manifests.terrain.ground.length,
+          };
+        },
       };
     }
 

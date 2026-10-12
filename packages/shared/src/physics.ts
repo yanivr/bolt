@@ -21,6 +21,7 @@ import {
   SHOULDER_GRIP_FACTOR,
   SHOULDER_ROLLING_DECEL,
   SCRUB_FULL_SLIP,
+  SIM_DT,
   SLOW_ONSET_DECEL,
   STABILITY_MAX,
   STABILITY_MIN,
@@ -37,6 +38,7 @@ import {
   TIRE_FADE_END,
   TIRE_FADE_START,
   TIRE_KNEE_SHARPNESS,
+  TOW,
   UNSTABLE_ALIGN_LOSS,
   UNSTABLE_GRIP_LOSS,
   UNSTABLE_RECOVERY_LOSS,
@@ -106,6 +108,9 @@ export function createEffects(): VehicleEffects {
     driveSupplyLimit: 1,
     stabilityAdd: 0,
     airborne: false,
+    tow: 0,
+    towTarget: 0,
+    towNext: 0,
   };
 }
 
@@ -124,6 +129,40 @@ export function copyEffects(from: VehicleEffects, to: VehicleEffects): void {
   to.driveSupplyLimit = from.driveSupplyLimit;
   to.stabilityAdd = from.stabilityAdd;
   to.airborne = from.airborne;
+  to.tow = from.tow;
+  to.towTarget = from.towTarget;
+  to.towNext = from.towNext;
+}
+
+/**
+ * Moves a car's tow on by one race tick: `raceTick` is the tick about to be simulated, counted
+ * from GO. On a decision tick the share announced one period ago becomes the one the bonus
+ * moves toward; every tick the bonus moves toward it at the ramp rate. Everything it reads is
+ * in the effects record, so the race and a predicting client, starting from the same snapshot,
+ * get the same bits for as many ticks as one decision period holds (the race alone then writes
+ * the next announcement into `towNext`).
+ *
+ * Returns true on a decision tick, so the caller that owns the race can make the next decision.
+ */
+export function advanceTow(
+  fx: Pick<VehicleEffects, 'tow' | 'towTarget' | 'towNext'>,
+  raceTick: number,
+): boolean {
+  const period = Math.max(1, Math.round(TOW.updateSeconds / SIM_DT));
+  const decision = raceTick % period === 0;
+  if (decision) fx.towTarget = fx.towNext;
+  if (fx.tow !== fx.towTarget) {
+    const rate = fx.towTarget > fx.tow ? TOW.rampUpPerSecond : TOW.rampDownPerSecond;
+    fx.tow = approach(fx.tow, fx.towTarget, TOW.maxBonus * rate * SIM_DT);
+  }
+  return decision;
+}
+
+/** Takes the tow off at once: a car that has finished, is wrecked or is not racing has none. */
+export function clearTow(fx: Pick<VehicleEffects, 'tow' | 'towTarget' | 'towNext'>): void {
+  fx.tow = 0;
+  fx.towTarget = 0;
+  fx.towNext = 0;
 }
 
 export function resetEffects(fx: VehicleEffects): void {
@@ -678,7 +717,14 @@ export function stepVehicle(
   const grip = Math.min(MAX_COMBINED_GRIP, gripRaw) * effects.grip;
   const unstable = instability(params, power.stabilityAdd + effects.stabilityAdd);
   const road = isRoad(ground.surface);
-  const speedScale = road ? params.roadSpeedFactor : 1;
+  let speedScale = road ? params.roadSpeedFactor : 1;
+  // The tow: the whole speed axis of the engine's force and of the drag is stretched, which
+  // raises top speed by exactly that share and leaves grip, brakes and steering alone. It
+  // fades in with speed, so it is absent off the line and out of a slow corner, and it follows
+  // the throttle, so a car that has lifted or is braking slows exactly as it would without it.
+  if (effects.tow > 0)
+    speedScale *=
+      1 + effects.tow * throttle * smoothstep(TOW.fadeStartSpeed, TOW.fadeFullSpeed, vf);
 
   // --- 5. Forward speed ----------------------------------------------------------------------
   const tractionLimit =

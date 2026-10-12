@@ -26,7 +26,10 @@ import {
   PROTOCOL_VERSION,
   ROOM_DRIVE,
   ServerMessage,
+  TOW,
   buildTrack,
+  towGapSeconds,
+  towShareOf,
   eventVisibleTo,
   stepRaceWithBrains,
 } from '@bolt/shared';
@@ -137,6 +140,8 @@ type Mirror = {
   events: RaceEvent[];
   /** State of the mirrored race after the last sample. */
   chassis: [number, number];
+  /** The player's car after each tick, by race tick: its tow level and the bonus behind it. */
+  tow: Map<number, { tow: number; bonus: number; rival: number; gap: number }>;
 };
 
 /** The scenario stepped here, recording the sample each tick was given: the offline path. */
@@ -146,6 +151,7 @@ function mirror(def: ScenarioDefinition, limitTicks = Infinity): Mirror {
   const { race, brains } = setup;
   const samples: InputSample[] = [];
   const events: RaceEvent[] = [];
+  const tow: Mirror['tow'] = new Map();
   const human: Array<ControlInput | undefined> = [];
   const rivalOnly = [null, brains[1] ?? null];
   const guard = def.countdownTicks + def.durationTicks + 5;
@@ -165,8 +171,14 @@ function mirror(def: ScenarioDefinition, limitTicks = Infinity): Mirror {
     human[0] = own;
     stepRaceWithBrains(race, human, rivalOnly);
     for (const event of race.events) if (eventVisibleTo(event, 0)) events.push({ ...event });
+    tow.set(race.tick, {
+      tow: towShareOf(race.cars[0]!),
+      bonus: race.cars[0]!.session.effects.tow,
+      rival: towShareOf(race.cars[1]!),
+      gap: towGapSeconds(race, race.cars[0]!),
+    });
   }
-  return { samples, events, chassis: [race.cars[0]!.chassis, race.cars[1]!.chassis] };
+  return { samples, events, chassis: [race.cars[0]!.chassis, race.cars[1]!.chassis], tow };
 }
 
 type Played = {
@@ -287,6 +299,80 @@ describe('every scenario through a real room', () => {
     const retried = [...played.values()].filter((run) => run.attempts > 1).length;
     expect(retried).toBeLessThanOrEqual(3);
   });
+});
+
+describe('the tow through a real room', () => {
+  it('is the same race as offline, event for event, and the room state carries tow and the bonus exactly', async () => {
+    const def = getScenario('tow')!;
+    expect(def.tow).toBe(true);
+    const expected = mirror(def);
+    let run: { received: RaceEvent[]; seen: Array<[number, number, number, number]> } | null = null;
+    for (let attempt = 1; attempt <= 3 && !run; attempt++) {
+      const received: RaceEvent[] = [];
+      const seen: Array<[number, number, number, number]> = [];
+      const room = await join({ scenarioId: 'tow' });
+      collect(room, received);
+      room.onStateChange((state) => {
+        const fx = (state as unknown as { fx?: { tow: number } }).fx;
+        const rival = (state as unknown as { rival?: { tow: number } }).rival;
+        seen.push([
+          state.tick,
+          (state as unknown as { tow: number }).tow,
+          fx?.tow ?? -1,
+          rival?.tow ?? -1,
+        ]);
+      });
+      const inStep = await feed(room, expected.samples);
+      await sleep(120);
+      await room.leave();
+      if (inStep || attempt === 3)
+        run = {
+          received: received.filter((event) => event.tick <= expected.samples.length),
+          seen,
+        };
+    }
+    const { received, seen } = run!;
+    // The server's race and the offline race are one race: every event, id for id.
+    expect(received).toEqual(expected.events);
+    const tows = received.filter((event) => event.type === 'catchup');
+    expect(tows.map((event) => event.type === 'catchup' && [event.car, event.state])).toEqual([
+      [0, 'engaged'],
+      [0, 'released'],
+    ]);
+    // Every state the client was shown agrees with the mirror at that tick: the level in
+    // hundredths, and the bonus the predictor replays with to the last bit.
+    let peak = 0;
+    let checked = 0;
+    for (const [tick, tow, bonus, rival] of seen) {
+      const want = expected.tow.get(tick);
+      if (!want) continue;
+      expect(tow / 100, `tow at tick ${tick}`).toBe(want.tow);
+      expect(bonus, `bonus at tick ${tick}`).toBe(want.bonus);
+      expect(rival / 100, `rival tow at tick ${tick}`).toBe(want.rival);
+      expect(rival).toBe(0);
+      peak = Math.max(peak, tow);
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(100);
+    expect(peak).toBeGreaterThan(50);
+    expect(peak).toBeLessThanOrEqual(100);
+    expect(TOW.maxBonus).toBeGreaterThan(0);
+    // The trailing car received it while far behind, and it fell to zero as the car closed:
+    // the last state the client saw has none, and from the peak on it only ever fell, while
+    // the gap shrank to the threshold.
+    const shown = seen.filter(([tick]) => expected.tow.has(tick));
+    const top = shown.findIndex(([, tow]) => tow === peak);
+    const atPeak = expected.tow.get(shown[top]![0])!;
+    expect(atPeak.gap).toBeGreaterThan(TOW.engageGap);
+    for (let i = top + 1; i < shown.length; i++)
+      expect(shown[i]![1], `tick ${shown[i]![0]}`).toBeLessThanOrEqual(shown[i - 1]![1]);
+    expect(shown[shown.length - 1]![1]).toBe(0);
+    const zero = shown.findIndex(([, tow], i) => i > top && tow === 0);
+    expect(zero).toBeGreaterThan(top);
+    const atZero = expected.tow.get(shown[zero]![0])!;
+    expect(atZero.gap).toBeLessThan(atPeak.gap);
+    expect(atZero.gap).toBeLessThanOrEqual(TOW.engageGap);
+  }, 120_000);
 });
 
 describe('fire commands the server refuses', () => {

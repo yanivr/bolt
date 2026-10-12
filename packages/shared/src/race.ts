@@ -44,6 +44,7 @@ import type {
 import { STATUS_FAMILIES } from './protocol.js';
 import { NEUTRAL_BRAKE, createDriveSession, sessionSnapshot, stepDriveSession } from './sim.js';
 import type { TrackRuntime } from './track.js';
+import { stepTow, towShareOf } from './tow.js';
 import { createLocation } from './track.js';
 import type { RaceEnvironment, VehicleParams } from './types.js';
 
@@ -320,6 +321,9 @@ export function stepRace(race: RaceSession, inputs: ReadonlyArray<ControlInput |
 
   race.raceTicks += 1;
 
+  // --- 0. The tow: gaps are measured before anything moves ---------------------------------------
+  stepTow(race);
+
   // --- 1. Input and activation requests ---------------------------------------------------------
   for (const car of cars) {
     const input = inputs[car.index];
@@ -338,6 +342,9 @@ export function stepRace(race: RaceSession, inputs: ReadonlyArray<ControlInput |
     car.prevX = m.x;
     car.prevY = m.y;
     computeEffects(car);
+    session.effects.tow = car.tow.tow;
+    session.effects.towTarget = car.tow.towTarget;
+    session.effects.towNext = car.tow.towNext;
     const wasRacing = session.phase === 'RACING';
     const result = stepDriveSession(session, car.ko ? BRAKE : (inputs[car.index] ?? BRAKE));
     stepWinch(car);
@@ -498,6 +505,7 @@ export function carSnapshot(race: RaceSession, index: number, ackSequence: numbe
   const car = race.cars[index]!;
   const snapshot = sessionSnapshot(car.session, ackSequence, car.buildHash);
   snapshot.combat = combatSnapshot(car, race.tick);
+  snapshot.tow = towShareOf(car);
   return snapshot;
 }
 
@@ -530,6 +538,7 @@ export function rivalSnapshot(race: RaceSession, index: number): RivalSnapshot {
     })),
     ko: car.ko,
     buildHash: car.buildHash,
+    tow: towShareOf(car),
   };
 }
 

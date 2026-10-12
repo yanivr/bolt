@@ -17,23 +17,40 @@ import {
   CalloutQueue,
   calloutFor,
 } from '../../apps/web/src/hud/callouts.js';
-import { HudCamera, carCanReach, carRoam, edgeMark } from '../../apps/web/src/hud/hudCamera.js';
-import type { ActionContext, HudLoadout } from '../../apps/web/src/hud/model.js';
 import {
+  HudCamera,
+  avoidPanels,
+  carCanReach,
+  carRoam,
+  edgeFrame,
+  edgeMark,
+  keepOutBox,
+} from '../../apps/web/src/hud/hudCamera.js';
+import type { ActionContext, HudLoadout } from '../../apps/web/src/hud/model.js';
+import type { Tier } from '../../apps/web/src/hud/model.js';
+import {
+  BROKEN_MAX,
   GapSmoother,
   MAX_EXTRAPOLATED_TICKS,
   StatusClock,
+  TOW_SHOWN_ABOVE,
+  TOW_STEPS,
   actionView,
+  brokenParts,
   buildHudLoadout,
+  changedComponent,
   chassisTier,
   cooldownFraction,
   estimateTick,
   formatGap,
+  formatStripClock,
+  formatStripGap,
   heatLevel,
   powerLow,
   spanProgress,
   steadyMeters,
   tierOf,
+  towLevel,
 } from '../../apps/web/src/hud/model.js';
 import { RaceLog, resultFacts, verdictFor } from '../../apps/web/src/hud/results.js';
 import { duel } from '../helpers/combat.js';
@@ -1010,10 +1027,19 @@ describe('callouts', () => {
 
 // --- Where the HUD may stand -----------------------------------------------------------------------
 
-/** The column width the stylesheet gives the HUD at a viewport width, CSS pixels. */
+/**
+ * The column width the stylesheet gives each side of the HUD at a viewport width, CSS pixels:
+ * 38 percent less 158 from 760 pixels up, the earlier 38 percent less 118 below.
+ */
 function columnWidth(width: number, safe = 0): number {
-  return Math.min(182, Math.max(131, 0.38 * width - 118 - safe));
+  return Math.min(182, Math.max(131, 0.38 * width - (width >= 760 ? 158 : 118) - safe));
 }
+
+/**
+ * Widest the race strip gets: with the tow showing, as measured in the browser. It is laid
+ * out tighter under 760 pixels of width.
+ */
+const stripSize = (width: number) => ({ width: width >= 760 ? 180 : 163, height: 28 });
 
 describe('the HUD keeps clear of the car', () => {
   const sizes: Array<[number, number]> = [
@@ -1024,14 +1050,30 @@ describe('the HUD keeps clear of the car', () => {
     [932, 430],
   ];
 
-  it('cannot be reached by a 220 x 150 box around the car, wherever the camera puts it', () => {
+  it('keeps a 300 x 190 box around the car clear, and 220 x 150 on a narrow phone', () => {
+    expect(keepOutBox(870)).toEqual({ w: 300, h: 190 });
+    expect(keepOutBox(844)).toEqual({ w: 300, h: 190 });
+    expect(keepOutBox(932)).toEqual({ w: 300, h: 190 });
+    expect(keepOutBox(667)).toEqual({ w: 220, h: 150 });
+  });
+
+  it('cannot be reached by that box, wherever the camera puts the car', () => {
     for (const [w, h] of sizes) {
+      const box = keepOutBox(w);
       const col = columnWidth(w) + 6;
       for (const rect of [
         { left: 0, top: 0, right: col, bottom: h },
         { left: w - col, top: 0, right: w, bottom: h },
       ])
-        expect(carCanReach(rect, w, h, 220, 150), `${w}x${h} column ${rect.left}`).toBe(false);
+        expect(carCanReach(rect, w, h, box.w, box.h), `${w}x${h} column ${rect.left}`).toBe(false);
+      // The race strip may be wider than its column: it lies along the top edge, where the
+      // box only comes when the car is far from the sides.
+      const size = stripSize(w);
+      for (const strip of [
+        { left: 0, top: 0, right: 6 + size.width, bottom: 6 + size.height },
+        { left: w - 6 - size.width, top: 0, right: w, bottom: 6 + size.height },
+      ])
+        expect(carCanReach(strip, w, h, box.w, box.h), `${w}x${h} strip ${strip.left}`).toBe(false);
       // The top banner (countdown, GO, finish) is only up while the car stands on the grid,
       // in the middle of the view: a banner 64 pixels tall is clear of it there.
       const roam = carRoam(w, h);
@@ -1040,13 +1082,24 @@ describe('the HUD keeps clear of the car', () => {
       expect(h / 2 - 75).toBeGreaterThan(8 + 64);
       // A panel across the top middle would be reached, which is why there is none.
       expect(
-        carCanReach({ left: w / 2 - 60, top: 0, right: w / 2 + 60, bottom: 40 }, w, h, 220, 150),
+        carCanReach(
+          { left: w / 2 - 60, top: 0, right: w / 2 + 60, bottom: 40 },
+          w,
+          h,
+          box.w,
+          box.h,
+        ),
       ).toBe(true);
     }
+    // The old column of the owner's phone (182 wide) would be reached by the larger box.
+    expect(carCanReach({ left: 0, top: 0, right: 188, bottom: 370 }, 870, 370, 300, 190)).toBe(
+      true,
+    );
   });
 
-  it('stays clear with a notch on the steering side', () => {
-    // 844 wide with a 47 pixel inset: the column narrows, and what it gives up is the inset.
+  it('stays clear of the earlier 220 x 150 box with a notch on the steering side', () => {
+    // 844 wide with a 47 pixel inset: the column is at its narrowest and starts at the inset,
+    // so the larger box cannot be promised there, the earlier one still is.
     const col = 47 + 6 + columnWidth(844, 47);
     expect(carCanReach({ left: 0, top: 0, right: col, bottom: 390 }, 844, 390, 220, 150)).toBe(
       false,
@@ -1114,5 +1167,161 @@ describe('the HUD keeps clear of the car', () => {
       expect(mark.y).toBeLessThanOrEqual(frame.bottom);
       expect(mark.angle).toBeCloseTo(Math.atan2(Math.sin(a), Math.cos(a)), 4);
     }
+  });
+  it('lays an edge tag against the real edge of the screen and slides it past the panels', () => {
+    const screen = { left: 0, top: 0, right: 870, bottom: 370 };
+    const half = { w: 30, h: 11 };
+    const frame = edgeFrame(screen, half.w, half.h);
+    expect(frame).toEqual({ left: 34, top: 15, right: 836, bottom: 355 });
+    const view = screen;
+    const car = { x: 435, y: 185 };
+    // The panels of the owner's phone: strip and bars top left, ribbon and menu top right,
+    // buttons bottom right.
+    const panels = [
+      { left: 6, top: 6, right: 178, bottom: 102 },
+      { left: 740, top: 6, right: 864, bottom: 83 },
+      { left: 738, top: 186, right: 864, bottom: 364 },
+    ];
+    const clear = (x: number, y: number) =>
+      panels.every(
+        (p) =>
+          x <= p.left - half.w - 4 + 1e-6 ||
+          x >= p.right + half.w + 4 - 1e-6 ||
+          y <= p.top - half.h - 4 + 1e-6 ||
+          y >= p.bottom + half.h + 4 - 1e-6,
+      );
+    // Straight left with nothing in the way: against the left edge, where the line leaves.
+    const left = avoidPanels(
+      edgeMark({ x: -900, y: 185 }, car, view, frame)!,
+      frame,
+      panels,
+      half.w,
+      half.h,
+    );
+    expect(left.x).toBe(34);
+    expect(left.y).toBe(185);
+    // Up and to the left, into the strip's corner: still on the top edge, just past the strip.
+    const corner = avoidPanels(
+      edgeMark({ x: -400, y: -300 }, car, view, frame)!,
+      frame,
+      panels,
+      half.w,
+      half.h,
+    );
+    expect(corner.y).toBe(15);
+    expect(corner.x).toBe(178 + half.w + 4);
+    // To the right and behind, where the buttons are: on the right edge, in the gap above them.
+    const right = avoidPanels(
+      edgeMark({ x: 1900, y: 300 }, car, view, frame)!,
+      frame,
+      panels,
+      half.w,
+      half.h,
+    );
+    expect(right.x).toBe(836);
+    expect(right.y).toBe(186 - half.h - 4);
+    // Every direction: on an edge of the screen, never on a panel, never toward the middle.
+    for (let a = 0; a < Math.PI * 2; a += 0.05) {
+      for (const from of [car, { x: 520, y: 110 }, { x: 350, y: 270 }]) {
+        const raw = edgeMark(
+          { x: from.x + Math.sin(a) * 3000, y: from.y - Math.cos(a) * 3000 },
+          from,
+          view,
+          frame,
+        )!;
+        const mark = avoidPanels(raw, frame, panels, half.w, half.h);
+        expect(clear(mark.x, mark.y), `angle ${a.toFixed(2)}`).toBe(true);
+        const near = (p: number, q: number) => Math.abs(p - q) < 1e-6;
+        const onEdge =
+          near(mark.x, frame.left) ||
+          near(mark.x, frame.right) ||
+          near(mark.y, frame.top) ||
+          near(mark.y, frame.bottom);
+        expect(onEdge, `angle ${a.toFixed(2)} at ${mark.x},${mark.y}`).toBe(true);
+        expect(mark.angle).toBe(raw.angle);
+      }
+    }
+    // An edge with no room left on it: the tag steps inward, just past the panel.
+    const wall = [{ left: 0, top: 0, right: 100, bottom: 370 }];
+    const pushed = avoidPanels({ x: 34, y: 185, angle: -1.57 }, frame, wall, half.w, half.h);
+    expect(pushed).toMatchObject({ x: 100 + half.w + 4, y: 185 });
+  });
+});
+
+describe('the slim strip and the bars', () => {
+  it('shows the clock in whole seconds', () => {
+    expect(formatStripClock(0)).toBe('0:00');
+    expect(formatStripClock(79_660)).toBe('1:19');
+    expect(formatStripClock(599_999)).toBe('9:59');
+    expect(formatStripClock(605_000)).toBe('10:05');
+  });
+
+  it('shows the gap in tenths, and in whole seconds from ten, so the strip keeps its width', () => {
+    expect(formatStripGap(1.5)).toBe('+1.5');
+    expect(formatStripGap(-2.4)).toBe('−2.4');
+    expect(formatStripGap(0)).toBe('+0.0');
+    expect(formatStripGap(9.9)).toBe('+9.9');
+    expect(formatStripGap(-9.96)).toBe('−10');
+    expect(formatStripGap(-12.2)).toBe('−12');
+    expect(formatStripGap(250)).toBe('+99');
+    for (const gap of [-150, -12.2, -9.9, 0, 3.3, 9.9, 44])
+      expect(formatStripGap(gap).length).toBeLessThanOrEqual(4);
+  });
+
+  it('shows the tow only above 5 percent, in three steps, and nothing for a missing or bad value', () => {
+    expect(TOW_STEPS).toBe(3);
+    expect(TOW_SHOWN_ABOVE).toBe(0.05);
+    // Nothing at zero, and nothing for a tow that is just letting go.
+    expect(towLevel(0)).toBe(0);
+    expect(towLevel(0.03)).toBe(0);
+    expect(towLevel(0.05)).toBe(0);
+    expect(towLevel(0.06)).toBe(1);
+    expect(towLevel(1 / 3)).toBe(1);
+    expect(towLevel(0.34)).toBe(2);
+    expect(towLevel(2 / 3)).toBe(2);
+    expect(towLevel(0.67)).toBe(3);
+    expect(towLevel(1)).toBe(3);
+    expect(towLevel(4)).toBe(3);
+    // A snapshot without the field, or with a damaged one.
+    expect(towLevel(undefined)).toBe(0);
+    expect(towLevel(null)).toBe(0);
+    expect(towLevel(-1)).toBe(0);
+    expect(towLevel(Number.NaN)).toBe(0);
+    expect(towLevel(Number.POSITIVE_INFINITY)).toBe(0);
+    expect(towLevel('0.5')).toBe(0);
+  });
+
+  it('lists only what is critical or destroyed, destroyed first', () => {
+    const loadout = loadoutOf(duel({ parts: ['utility_nitro', 'utility_repair'] }).a);
+    const count = loadout.components.length;
+    const tiers: Tier[] = Array.from({ length: count }, () => 0);
+    // A whole car, and a car that is only damaged: no row.
+    expect(brokenParts(loadout, tiers)).toEqual([]);
+    tiers[0] = 1;
+    expect(brokenParts(loadout, tiers)).toEqual([]);
+    // A critical engine and a destroyed wheel.
+    tiers[0] = 2;
+    tiers[COMPONENT_FIRST_WHEEL] = 3;
+    const broken = brokenParts(loadout, tiers);
+    expect(broken.map((b) => [b.component, b.tier, b.kind])).toEqual([
+      [COMPONENT_FIRST_WHEEL, 3, 'wheel'],
+      [0, 2, 'engine'],
+    ]);
+    expect(broken[0]!.name).toBe(loadout.components[COMPONENT_FIRST_WHEEL]!.name);
+    // Everything gone: every component is listed; the row shows the first few and counts the rest.
+    const all = brokenParts(
+      loadout,
+      tiers.map(() => 3 as Tier),
+    );
+    expect(all).toHaveLength(count);
+    expect(count).toBeGreaterThan(BROKEN_MAX);
+  });
+
+  it('brings the diagram up for a change of condition, not for the first snapshot', () => {
+    expect(changedComponent([], [0, 3, 2])).toBe(-1);
+    expect(changedComponent([0, 0, 0], [0, 0, 0])).toBe(-1);
+    expect(changedComponent([0, 0, 0], [0, 1, 0])).toBe(1);
+    expect(changedComponent([0, 3, 2], [0, 0, 2])).toBe(1);
+    expect(changedComponent([0, 3, 2], [0, 3, 1])).toBe(2);
   });
 });

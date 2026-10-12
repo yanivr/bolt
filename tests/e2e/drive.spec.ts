@@ -208,10 +208,18 @@ test('the view is north-up at a whole-number scale and a stale camera setting is
   );
   await startRace(page);
   // 844 CSS pixels at a device pixel ratio of 2 is 1688 device pixels: two per world pixel.
+  // With no Camera setting stored the view is the default, Close: the canvas at device
+  // resolution.
   const canvas = page.locator('.race-canvas canvas');
   await expect(canvas).toHaveAttribute('width', '1688');
   await expect(canvas).toHaveAttribute('height', '780');
   await page.getByRole('button', { name: 'Settings' }).tap();
+  // Medium is the same two canvas pixels per world pixel on a canvas a quarter larger each
+  // way, scaled down by the browser, and it applies at once.
+  await page.getByRole('radiogroup', { name: 'Camera' }).getByText('Medium').tap();
+  await expect(canvas).toHaveAttribute('width', '2110');
+  await expect(canvas).toHaveAttribute('height', '975');
+  expect((await canvas.boundingBox())!.width).toBeCloseTo(844, 0);
   await expect(page.getByText('Reduced Camera Motion')).toHaveCount(0);
   await expect(page.getByText('Touch Steering')).toBeVisible();
   await page.getByText('Left and Right').tap();
@@ -276,12 +284,14 @@ test('falls back to a clearly badged offline drive when the server is unreachabl
 }) => {
   await page.route('**/api/v1/health', (route) => route.abort());
   await startRace(page);
-  await expect(page.getByText('Offline test drive')).toBeVisible();
   await expect(page.getByTestId('debug')).toContainText('offline');
   const touch = new Touch(page);
   await touch.down({ id: 1, x: 300, y: 260 });
   await expect.poll(() => speed(page), { timeout: 20_000 }).toBeGreaterThan(25);
   await touch.up(1);
+  // The label is in the pause menu: the slim HUD does not carry it.
+  await page.getByRole('button', { name: 'Settings' }).tap();
+  await expect(page.getByText('Offline test drive')).toBeVisible();
 });
 
 test('portrait shows the rotate prompt with a working portrait option', async ({ page }) => {

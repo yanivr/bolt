@@ -816,6 +816,14 @@ export type VehicleEffects = {
   stabilityAdd: number;
   /** True while the car is off the ground: no tire forces, no steering, low obstacles pass under. */
   airborne: boolean;
+  /**
+   * The tow (`TOW` in balance.ts): the share of top speed this car is being given this tick,
+   * the share it is moving toward, and the share it will move toward from the next decision
+   * tick. Zero, zero and zero for a car that is not being towed. `advanceTow` moves them on.
+   */
+  tow: number;
+  towTarget: number;
+  towNext: number;
 };
 
 export type MatchPhase =

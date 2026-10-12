@@ -70,6 +70,11 @@ export type ScenarioDefinition = {
   /** Race ticks the scenario runs for. */
   durationTicks: number;
   cars: ScenarioCar[];
+  /**
+   * True runs the scenario with the tow (the long-range catch-up) on. Scenarios place cars at
+   * chosen distances to show one thing, so it is off unless the scenario is about it.
+   */
+  tow?: boolean;
   /** Events the scenario must produce, checked by the tests. */
   expect: Array<{ type: RaceEventType; weapon?: string; car?: number }>;
 };

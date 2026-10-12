@@ -287,6 +287,10 @@ describe('every event resolves to sound', () => {
   /** One or more of every event type. The record's key type makes the compiler check coverage. */
   const SAMPLES: Record<RaceEventType, RaceEvent[]> = {
     checkpoint: [event('checkpoint', { car: 0, index: 2 })],
+    catchup: [
+      event('catchup', { car: 0, state: 'engaged' }),
+      event('catchup', { car: 0, state: 'released' }),
+    ],
     lap: [
       event('lap', { car: 0, lap: 1, lapTimeMs: 30000 }),
       event('lap', { car: 0, lap: 2, lapTimeMs: 30000 }),

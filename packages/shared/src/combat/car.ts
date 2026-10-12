@@ -274,6 +274,16 @@ export function createCombatCar(
     burnWeapon: '',
     burnPart: -1,
     gripSource: 0,
+    tow: {
+      tow: 0,
+      towTarget: 0,
+      towNext: 0,
+      averageSpeed: 0,
+      gapSeconds: 0,
+      latched: false,
+      announced: false,
+      announcedTick: -100000,
+    },
   };
   refreshDerived(car, conditions, true);
   for (let arc = 0; arc < 4; arc++) car.armor[arc] = car.armorMax[arc]!;

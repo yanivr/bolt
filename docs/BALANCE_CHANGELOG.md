@@ -4,6 +4,130 @@ Catalog and balance data use semantic versions (`CATALOG_VERSION` in
 `packages/content/src/catalog.ts`). Every change to a price, mass, coefficient or track is
 listed here with the measurement that motivated it.
 
+## The catch-up tow (protocol 5, catalog unchanged at 0.6.0, October 12, 2026)
+
+A rule of the race, not a change to any part: no price, mass or coefficient changed, so the
+catalog stays 0.6.0 and no blueprint goes out of date. A car that trails the racing car ahead of
+it by more than 1.0 s gets a little more top speed, from nothing at 1.0 s to 8 percent at 2.5 s
+and beyond; nothing at all inside 1.0 s, nothing ever for the leader. The rule, the threshold's
+derivation and the table are `docs/COMBAT_API.md` "The tow"; the decisions are
+`docs/DECISIONS.md` 189 to 198. Reports: `docs/evidence/balance/tow-0.6.0-clear.md` (the
+shipped table against the tow off) and `docs/evidence/balance/tow-study.md` (thirteen settings).
+
+**The table** (`TOW`): threshold 1.0 s, engage 1.15 s, whole bonus 8 percent of top speed from
+2.5 s, rising at most half the bonus a second and falling at most the whole bonus a second,
+decided every half second, none in the countdown or the first 5 s.
+
+**How it was measured.** As for 0.6.0: sparring brain against sparring brain on Neon Cut, clear
+night, four seeds, every shipped build against every other from both grid slots (440 races), the
+weapon bench (160), and new, the upgrade test (48): a shipped build against the same build with
+one upgrade bought from what is left of its budget, armed as it ships. Each with the tow off and
+on, over the same races (`npx tsx tests/balance/report.ts`).
+
+**Before and after, against the four targets.**
+
+| Target | Measure | Tow off | Tow on | Aim | Met |
+| :-- | :-- | --: | --: | :-- | :-- |
+| 1. Leading still pays | Races won by the car ahead after lap 1 | 96% | 93% | 60 to 75%, never under 60 | Above half, as asked; above the aim, see below |
+| 2. No build outside 30 to 70% | Builds outside | 6 | 6 | none | No |
+|  | Lowest and highest win rate | 0% and 100% | 0% and 100% | | |
+| 3. Combat happens | Seconds a race within 220 px | 12.6 | 15.1 | several times more | No: a fifth more |
+|  | Weapon activations a race (rounds) | 4.5 (18.3) | 6.1 (25.5) | | A third more |
+|  | Damage dealt a race | 56.6 | 73.1 | | 29 percent more |
+|  | Front Machine Gun, bursts a race (rounds) | 2.9 (14.3) | 4.2 (20.7) | | |
+|  | Rear Sentry, bursts a race (rounds) | 2.1 (8.3) | 3.0 (11.8) | | |
+| 4. Building well still pays | Upgraded twin's wins: Rookie V6, Sprinter V8, Packhorse V8, Sprinter Slicks, Tinker Slicks, Trap Slicks | 100, 63, 100, 50, 100, 50% | 100, 50, 100, 50, 100, 63% | clearly over half | For Rookie V6, Packhorse V8 and Tinker Slicks (100 percent); not for Sprinter V8 or the other two Slicks pairs (50 to 63 percent), with or without the tow |
+| Guards | Changes of the lead by a car with tow in the second before | 0 of 94 | 0 of 81 | 0 | Yes |
+|  | Lead changes a race | 0.21 | 0.18 | | |
+|  | Mean time gap | 6.62 s | 4.89 s | | |
+|  | Unarmed: races whose winner is the same with the tow on | | 436 of 440 | | The four: one pairing from one slot, decided by 0.42 s |
+
+Distribution of seconds within 220 px in a race (tow off, then on): 1 to 5 s 47 and 45 percent,
+5 to 15 s 36 and 30, 15 to 30 s 7 and 11, 30 to 60 s 6 and 5, 60 s or more 4 and 8. Changes of
+the lead in a race: none in 86 and 84 percent, one in 11 and 15, two or more in 3 and 2.
+
+**The matrix** (full tables in the report). The order of the builds is their order on pace, with
+the tow as without it, but for Longlegs and Rain Runner trading places: Straight-Line Rocket 100 percent, Sprinter 90, Tiny Trouble 80,
+Tinker 70, Back-Alley Trap 60, Longlegs 46 (was 35), Rain Runner 40 (50), Packhorse 31 (30),
+Rookie 23 (25), Dust Spider 10, Iron Mule 0. Three of the 55 pairings changed, all between builds
+within 2.4 s of each other over a race on pace alone: Packhorse against Rookie (from 50 to 75
+percent), Longlegs against Packhorse (50 to 63) and Longlegs against Rain Runner (0 to 100).
+Without weapons only the first changes (four races, decided by 0.42 s with the tow off), so the
+other two are the weapons' work once the tow keeps the cars in reach: Longlegs carries a Front
+Machine Gun.
+
+**What the numbers say, plainly.**
+
+- *The tow does what it was allowed to do and no more.* The trailing car is brought from 12.7 s
+  behind at the line on average to 8.6 s (unarmed); averaged over both cars, a car has tow for 42
+  percent of a race. The leader is never touched, the bonus is zero inside 1.0 s, and in the 440
+  armed races of the report and the 440 unarmed races of the study, with the tow on, no change of
+  the lead was made by a car that had any tow in the second before.
+- *It cannot fix the matrix.* 32 of the 55 pairings are more than 12 s apart on pace alone, up to
+  30 percent (Iron Mule against the Rocket). A top-speed bonus capped at 8 percent closes about a
+  third of a gap at the line; doubling it to 16 percent (measured as a reference) still left all
+  six builds outside. The 0.6.0 finding stands: pace spread needs the tracks, shortcuts and
+  repairs of Section 3.4 and an AI that fights for position (Milestone D).
+- *It cannot make combat several times more frequent, by design.* The threshold is outside the
+  guns' reach (1.0 s is about 250 px at race speed, the guns reach 220), and the sparring driver
+  never makes a mistake, so a slower car is held at the edge and does not close the last second
+  by itself. Within the brief's envelope every setting gave 13.9 to 15.9 s within reach. Putting the
+  threshold inside weapon reach (0.5 s, a reference) gave 18 s and 84 damage and broke target 4:
+  next item.
+- *Building well is undermined by the bullet guns, and the tow makes that a little worse.* In
+  three of eight Sprinter V8 races the V6 twin behind it fires 20 to 22 bursts of its Front
+  Machine Gun into it in the first laps, takes it to 9 to 12 percent chassis and wins, with the
+  tow off. With the tow on, which keeps the slower twin in reach a little longer, the V8 twin
+  wins four of the eight.
+  The two Slicks pairs that are 50 percent are 50 percent with the tow off too. With the threshold
+  inside reach (reference R2) the V8 twin wins none of its eight races.
+- *"Leading pays" is mostly a pace number in this harness.* The sparring driver is the same in
+  both cars and drives its fastest line every lap (it never reads the tow: unit tested), so the
+  car ahead after a lap is nearly always the faster build. 93 percent is above the 60 to 75 the
+  brief aims for, but it falls as the tow gets stronger (90 percent with the bonus doubled), so it
+  remains the right guard; it will only be a sharp one with drivers who make mistakes.
+
+**The bullet guns, re-checked with the tow on.** Weapon bench (one gun on a Spider against its
+unarmed twin, which stays in its company all race): Swivel Turret 235.2 damage per 100 credits
+and Front Machine Gun 222.8, as before, now 8.1x and 7.6x a median that rose from 22.9 to 29.2
+(weapons near the median got more chances: the Road Mine went from 21.0 to 40.3); Rear Sentry
+3.05x. On the shipped builds the
+Front Machine Gun went from 3.07x to 3.96x the median and the sentry from 1.74x to 2.00x. Heat does
+not limit them in the simulation. A gun is refused as `Too hot` only in thermal protection, from
+a core heat of 110 until it falls back to 75; on the bench the gun carriers peaked at 49 to 59
+(performance starts to fall at 90), and in the 440 races of the shipped builds no car spent a single
+tick in it (the hottest gun carrier peaked at 97). So the "Too hot" the owner saw on his
+phone came from heat these races do not produce (his own build and engine, a damaged engine, a
+fire or a heat status, sustained full throttle), not from the guns' own 2 heat a burst.
+
+**Proposed, not applied (weapon balance is the owner's call): a magazine for the three bullet
+guns.** The smallest change measured that brings them in, one number each, all other parts
+untouched: Front Machine Gun 12 bursts a race, Rear Sentry 8, Swivel Turret 8 (`charges`).
+A shipped build's gun fires 4.2 bursts in an average race, so the magazine only binds when two
+cars stay together, which is exactly when the gun dominates. Measured with the tow on, four
+seeds (`npx tsx tests/tools/weaponFixProbe.ts ammo`), against the tow on as shipped:
+
+| Measure | As shipped | With the magazine | 2 damage a round | 4x heat a burst | Cooldown 1.5x |
+| :-- | --: | --: | --: | --: | --: |
+| Bench, Front Machine Gun, against median | 7.64x | 4.76x | 6.88x | 7.64x | 6.79x |
+| Bench, Swivel Turret | 8.07x | 3.97x | 5.94x | 8.07x | 8.35x |
+| Bench, Rear Sentry | 3.05x | 2.01x | 2.83x | 3.05x | 3.38x |
+| Bench, Front Machine Gun wins against its twin | 100% | 75% | 100% | 100% | 100% |
+| Shipped builds, Front Machine Gun | 3.96x | 3.13x | 3.01x | 3.61x | 3.33x |
+| Upgrade test, upgraded twin's wins (six pairs) | 100 50 100 50 100 63 | 100 100 100 50 100 75 | 100 100 100 0 75 62 | 100 50 100 50 75 62 | 100 100 100 0 88 75 |
+| Lap 1 leader wins | 93% | 94% | 92% | 94% | 92% |
+| Seconds within 220 px a race | 15.1 | 15.4 | 14.8 | 15.1 | 14.9 |
+| Weapon activations a race | 6.1 | 4.7 | 6.4 | 5.8 | 5.1 |
+| Damage a race | 73 | 62 | 57 | 72 | 63 |
+| Builds outside 30 to 70% | 6 | 7 | 6 | 6 | 6 |
+
+The magazine halves the guns' bench lead and is the only change that improves the upgrade test
+without breaking a pair; its cost is fewer activations a race (the guns fall silent in a long
+duel). Cutting damage a round barely moves the bench (a twin in company loses what it has to
+lose either way) and turns the Sprinter Slicks pair to 0 percent. Four times the heat a burst
+raises peak heat to 82 to 89 and still never reaches protection at 110: heat as the limit would
+need a much larger number or a lower threshold for weapons, a larger change. Not applied.
+
 ## 0.6.0 (combat parameters and the first combat balance pass, October 11, 2026)
 
 The first version in which weapons, defenses and utilities do something in a race. No price

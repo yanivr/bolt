@@ -1,9 +1,10 @@
 import { STRINGS } from '@bolt/content';
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Glyph } from '../components/Glyph.js';
 import type { GlyphName } from '../components/glyphs.js';
 import { hudLive, onHudFrame, useCombat } from './hudStore.js';
-import type { HudComponent, HudLoadout, StatusKey, StatusView, Tier } from './model.js';
+import type { BrokenPart, HudComponent, HudLoadout, StatusKey, StatusView, Tier } from './model.js';
+import { BROKEN_MAX, DIAGRAM_POP_MS, brokenParts } from './model.js';
 
 function fill(template: string, values: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_, key: string) => String(values[key] ?? ''));
@@ -18,13 +19,14 @@ const TIER_CLASS = ['is-ok', 'is-damaged', 'is-critical', 'is-dead'] as const;
  */
 const Segment = memo(function Segment({ part }: { part: HudComponent }) {
   const tier: Tier = useCombat((s) => s.tiers[part.index]) ?? 0;
+  const focus = useCombat((s) => s.popFocus === part.index);
   const hit = useCombat((s) => s.hitStamp[part.index]) ?? 0;
   const repair = useCombat((s) => s.repairStamp[part.index]) ?? 0;
   const x = part.x - part.w / 2;
   const y = part.y - part.h / 2;
   return (
     <g
-      className={`car-seg seg-${part.kind} ${TIER_CLASS[tier]}`}
+      className={`car-seg seg-${part.kind} ${TIER_CLASS[tier]}${focus ? ' is-focus' : ''}`}
       data-component={part.index}
       data-tier={tier}
       data-hits={hit}
@@ -65,6 +67,15 @@ const Segment = memo(function Segment({ part }: { part: HudComponent }) {
           y={y - 1}
           width={part.w + 2}
           height={part.h + 2}
+        />
+      )}
+      {focus && (
+        <rect
+          className="car-seg-focus"
+          x={x - 1.5}
+          y={y - 1.5}
+          width={part.w + 3}
+          height={part.h + 3}
         />
       )}
       {repair > 0 && (
@@ -178,6 +189,95 @@ const Diagram = memo(function Diagram({ loadout }: { loadout: HudLoadout }) {
   );
 });
 
+/**
+ * Eight by eight pixel marks for the three bars. Each bar has a mark of its own, and a second
+ * one for its alarm state, so the state is told by the drawing as well as by the color.
+ */
+const MINI = {
+  hull: [
+    '.######.',
+    '#......#',
+    '#.####.#',
+    '#.#..#.#',
+    '#.#..#.#',
+    '#.####.#',
+    '#......#',
+    '.######.',
+  ],
+  heat: [
+    '...#....',
+    '...##...',
+    '..###.#.',
+    '.####.##',
+    '.######.',
+    '##.####.',
+    '##..###.',
+    '.##.##..',
+  ],
+  power: [
+    '....###.',
+    '...###..',
+    '..###...',
+    '.######.',
+    '.######.',
+    '...###..',
+    '..###...',
+    '.###....',
+  ],
+  alarm: [
+    '...##...',
+    '..####..',
+    '..#..#..',
+    '.##..##.',
+    '.##..##.',
+    '########',
+    '###..###',
+    '########',
+  ],
+  lost: [
+    '##....##',
+    '###..###',
+    '.######.',
+    '..####..',
+    '..####..',
+    '.######.',
+    '###..###',
+    '##....##',
+  ],
+} as const;
+
+type MiniName = keyof typeof MINI;
+
+const MINI_PATHS = new Map<MiniName, string>();
+
+function miniPath(name: MiniName): string {
+  let d = MINI_PATHS.get(name);
+  if (d === undefined) {
+    d = '';
+    MINI[name].forEach((row, y) => {
+      for (let x = 0; x < row.length; x++) if (row[x] === '#') d += `M${x} ${y}h1v1h-1z`;
+    });
+    MINI_PATHS.set(name, d);
+  }
+  return d;
+}
+
+function Mini({ name }: { name: MiniName }) {
+  return (
+    <svg
+      className="mini"
+      viewBox="0 0 8 8"
+      shapeRendering="crispEdges"
+      fill="currentColor"
+      aria-hidden="true"
+      focusable="false"
+      data-mini={name}
+    >
+      <path d={miniPath(name)} />
+    </svg>
+  );
+}
+
 /** A gauge whose fill is written every frame from the newest snapshot, never through React. */
 function useGauge(read: () => number) {
   const node = useRef<HTMLSpanElement>(null);
@@ -195,6 +295,7 @@ function useGauge(read: () => number) {
   return node;
 }
 
+/** The hull: a bar, its number at the end, and a different mark once it is critical. */
 function HullBar() {
   const percent = useCombat((s) => s.chassisPercent);
   const tier = useCombat((s) => s.hullTier);
@@ -209,18 +310,28 @@ function HullBar() {
       data-testid="hull"
       data-tier={tier}
     >
-      <Glyph name="chassis" size={12} />
+      <Mini name={tier >= 3 ? 'lost' : tier === 2 ? 'alarm' : 'hull'} />
       <span className="gauge-track">
         <span className="gauge-fill" style={{ transform: `scaleX(${percent / 100})` }} />
       </span>
-      <span className="gauge-value">{percent}</span>
     </div>
   );
 }
 
+function HullValue() {
+  const percent = useCombat((s) => s.chassisPercent);
+  const tier = useCombat((s) => s.hullTier);
+  return (
+    <span className={`gauge-value tier-${tier}`} aria-hidden="true" data-testid="hull-value">
+      {percent}
+    </span>
+  );
+}
+
 /**
- * Heat, with marks where output starts to fall and where weapons lock. At the limit the bar
- * hatches and says so in words, because that is the moment a driver asks why nothing fires.
+ * Heat, with a mark where output starts to fall. Hot, the bar is striped; at the limit it is
+ * framed, hatched the other way, its mark becomes the alarm triangle and blinks, because that
+ * is the moment a driver asks why nothing fires.
  */
 function HeatGauge({ loadout }: { loadout: HudLoadout }) {
   const level = useCombat((s) => s.heat);
@@ -233,7 +344,7 @@ function HeatGauge({ loadout }: { loadout: HudLoadout }) {
       data-testid="heat"
       data-level={level}
     >
-      <Glyph name="flame" size={12} />
+      <Mini name={level === 3 ? 'alarm' : 'heat'} />
       <span className="gauge-track">
         <span className="gauge-fill" ref={node} />
         <span
@@ -245,6 +356,7 @@ function HeatGauge({ loadout }: { loadout: HudLoadout }) {
   );
 }
 
+/** Energy. Low, the bar is framed and banded, and its mark becomes the alarm triangle and blinks. */
 function PowerGauge({ loadout }: { loadout: HudLoadout }) {
   const low = useCombat((s) => s.powerLow);
   const node = useGauge(
@@ -258,7 +370,7 @@ function PowerGauge({ loadout }: { loadout: HudLoadout }) {
       data-testid="power"
       data-low={low ? '1' : '0'}
     >
-      <Glyph name="bolt" size={12} />
+      <Mini name={low ? 'alarm' : 'power'} />
       <span className="gauge-track">
         <span className="gauge-fill" ref={node} />
       </span>
@@ -310,31 +422,126 @@ const StatusIcon = memo(function StatusIcon({ status }: { status: StatusView }) 
   );
 });
 
-function Statuses() {
-  const statuses = useCombat((s) => s.statuses);
+function brokenGlyph(part: BrokenPart): GlyphName {
+  if (part.kind === 'wheel') return 'tires';
+  if (part.kind === 'engine') return 'engine';
+  if (part.kind === 'steering') return 'rotate';
+  if (part.category === 'weapon') return 'weapon';
+  if (part.category === 'defense') return 'defense';
+  return 'utility';
+}
+
+/**
+ * One part that is critical or destroyed. Destroyed is a dashed frame with a cross through
+ * the part's glyph; critical is a hatched frame with an exclamation corner that blinks.
+ */
+const BrokenIcon = memo(function BrokenIcon({ part }: { part: BrokenPart }) {
+  const label = fill(STRINGS.hud.componentState, {
+    part: part.name,
+    condition: STRINGS.hud.condition[part.tier],
+  });
   return (
-    <div className="status-row" data-testid="statuses" data-count={statuses.length}>
-      {statuses.map((status) => (
-        <StatusIcon key={status.key} status={status} />
-      ))}
+    <span
+      className={`broken-icon ${part.tier === 3 ? 'is-dead' : 'is-critical'}`}
+      role="img"
+      aria-label={label}
+      title={label}
+      data-component={part.component}
+      data-tier={part.tier}
+      data-kind={part.kind}
+    >
+      <Glyph name={brokenGlyph(part)} size={12} />
+      {part.tier === 3 ? (
+        <svg className="broken-x" viewBox="0 0 18 18" aria-hidden="true" focusable="false">
+          <path d="M2 2L16 16M16 2L2 16" />
+        </svg>
+      ) : (
+        <span className="broken-bang" aria-hidden="true" />
+      )}
+    </span>
+  );
+});
+
+/**
+ * One row under the bars, there only while it has something to say: an icon for each part
+ * that is critical or destroyed right now, then whatever is acting on the car, each with the
+ * time it has left. A healthy car with nothing on it shows no row at all.
+ */
+function Flags({ loadout }: { loadout: HudLoadout }) {
+  const tiers = useCombat((s) => s.tiers);
+  const statuses = useCombat((s) => s.statuses);
+  const broken = useMemo(() => brokenParts(loadout, tiers), [loadout, tiers]);
+  const shown = broken.slice(0, BROKEN_MAX);
+  const more = broken.length - shown.length;
+  return (
+    <div className="hud-flags">
+      <div className="broken-row" data-testid="broken" data-count={broken.length}>
+        {shown.map((part) => (
+          <BrokenIcon key={part.component} part={part} />
+        ))}
+        {more > 0 && (
+          <span className="broken-more" aria-hidden="true">
+            +{more}
+          </span>
+        )}
+      </div>
+      <div className="status-row" data-testid="statuses" data-count={statuses.length}>
+        {statuses.map((status) => (
+          <StatusIcon key={status.key} status={status} />
+        ))}
+      </div>
     </div>
   );
 }
 
 /**
- * The car at a glance (Sections 5.9 and 8.1): what is damaged and how badly, how much hull is
- * left, how hot it is and how much power it has, and what is acting on it right now.
+ * The car diagram, on show only when it matters: for a moment after a component of the local
+ * car is hit, changes condition or is repaired, with that component outlined and blinking. It
+ * stays in the page the rest of the time (hidden, and still described to a screen reader), so
+ * its state is always the car's.
+ */
+function DiagramPop({ loadout }: { loadout: HudLoadout }) {
+  const stamp = useCombat((s) => s.popStamp);
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (stamp === 0) {
+      setShown(false);
+      return;
+    }
+    setShown(true);
+    const timer = window.setTimeout(() => setShown(false), DIAGRAM_POP_MS);
+    return () => window.clearTimeout(timer);
+  }, [stamp]);
+  return (
+    <div
+      className={`hud-diagram${shown ? ' is-shown' : ''}`}
+      data-testid="diagram-pop"
+      data-shown={shown ? '1' : '0'}
+    >
+      <Diagram loadout={loadout} />
+    </div>
+  );
+}
+
+/**
+ * The car at a glance (Sections 5.9 and 8.1), slim: three thin bars for hull, heat and
+ * energy with the hull's number at their end; beside them, only when something happens to a
+ * part, the car diagram; under them, only while there is something to show, what is broken
+ * and what is acting on the car.
  */
 export const CarStatus = memo(function CarStatus({ loadout }: { loadout: HudLoadout }) {
   return (
-    <div className="panel hud-car" data-testid="car-status">
-      <Diagram loadout={loadout} />
-      <div className="hud-car-gauges">
-        <HullBar />
-        <HeatGauge loadout={loadout} />
-        <PowerGauge loadout={loadout} />
-        <Statuses />
+    <div className="hud-cond">
+      <div className="hud-car" data-testid="car-status">
+        <div className="hud-car-gauges">
+          <HullBar />
+          <HeatGauge loadout={loadout} />
+          <PowerGauge loadout={loadout} />
+        </div>
+        <HullValue />
       </div>
+      <DiagramPop loadout={loadout} />
+      <Flags loadout={loadout} />
     </div>
   );
 });

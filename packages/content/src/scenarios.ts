@@ -916,8 +916,39 @@ export const SCENARIOS: ScenarioDefinition[] = [
   ...WEAPON_CASES.map(weaponScenario),
 ];
 
+/**
+ * The tow, the long-range catch-up, on its own: the one scenario that runs with it on. It is
+ * not a combat showcase and is kept out of `SCENARIOS`, whose 33 timelines the effects, sound
+ * and HUD tests replay; `getScenario('tow')` finds it, so it runs from the command line, in
+ * the client (`?debug=1&scenario=tow`) and in a server room like any other.
+ */
+export const TOW_SCENARIO: ScenarioDefinition = {
+  id: 'tow',
+  title: 'The tow',
+  description:
+    'Two identical Beetles on the run to the line. The one ahead holds a steady pace; the one behind starts well back, flat out. Five and a half seconds in, the tow takes hold of the car behind, builds, fades as the gap closes and lets go at one second, short of the car ahead.',
+  shows:
+    'The catch-up indicator on the local car: off through the start, engaging, rising and falling with the gap, and off again at the edge of fighting range. The car ahead never has any.',
+  trackId: TRACK,
+  weatherPresetId: CLEAR,
+  seed: 34,
+  countdownTicks: COUNTDOWN,
+  durationTicks: 540,
+  tow: true,
+  cars: [
+    // Both start short of the line, where course progress already counts (a car placed past
+    // the line has none until it has been round once).
+    car(beetle('Chaser', []), -790, 0, [{ from: 500, speed: 225 }], { speed: 999 }),
+    car(dummy([], 'Leader'), -200, 0, [], { speed: 225 }),
+  ],
+  expect: [{ type: 'catchup', car: 0 }],
+};
+
+/** Every scenario that can be asked for by id: the combat showcases and the tow. */
+export const ALL_SCENARIOS: ScenarioDefinition[] = [...SCENARIOS, TOW_SCENARIO];
+
 export function getScenario(id: string): ScenarioDefinition | undefined {
-  return SCENARIOS.find((s) => s.id === id);
+  return ALL_SCENARIOS.find((s) => s.id === id);
 }
 
 export type ScenarioRace = {
@@ -942,7 +973,13 @@ export function createScenarioRace(
     if (!entry) return null;
     entries.push(entry);
   }
-  const race = createRace(track, env, entries, { seed: def.seed, conditions, catalog: CATALOG });
+  // A scenario shows one thing at chosen distances, so the tow is off unless it is the thing.
+  const race = createRace(track, env, entries, {
+    seed: def.seed,
+    conditions,
+    catalog: CATALOG,
+    tow: def.tow === true,
+  });
   applyScenario(race, def);
   return { def, race, brains: def.cars.map((setup) => new ScenarioBrain(setup)), entries };
 }

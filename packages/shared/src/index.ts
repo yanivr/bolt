@@ -24,6 +24,7 @@ export * from './sha256.js';
 export * from './sim.js';
 export * from './sprites.js';
 export * from './stats.js';
+export * from './tow.js';
 export * from './track.js';
 export * from './types.js';
 export * from './validate.js';

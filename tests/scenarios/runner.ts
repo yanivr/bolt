@@ -1,5 +1,12 @@
 import type { ScenarioRace } from '@bolt/content';
-import { CITY_01, SCENARIOS, createScenarioRace, getScenario, getTrack } from '@bolt/content';
+import {
+  ALL_SCENARIOS,
+  CITY_01,
+  SCENARIOS,
+  createScenarioRace,
+  getScenario,
+  getTrack,
+} from '@bolt/content';
 import type { RaceEvent, ScenarioDefinition, TrackRuntime } from '@bolt/shared';
 import { SIM_DT, buildTrack, stepRaceWithBrains } from '@bolt/shared';
 
@@ -74,4 +81,4 @@ export function formatEvent(event: RaceEvent, goTick: number): string {
   return `${t}s  #${String(id).padStart(3)} t${tick - goTick} ${type.padEnd(10)} ${fields}`;
 }
 
-export { SCENARIOS };
+export { ALL_SCENARIOS, SCENARIOS };

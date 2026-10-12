@@ -78,7 +78,12 @@ type DriveStateView = {
     driveSupplyLimit: number;
     stabilityAdd: number;
     airborne: boolean;
+    tow?: number;
+    towTarget?: number;
+    towNext?: number;
   };
+  /** The tow level of the player's car, in hundredths. */
+  tow?: number;
   combat?: {
     chassis: number;
     chassisMax: number;
@@ -110,9 +115,11 @@ type DriveStateView = {
 type StatusView = { magnitude: number; untilTick: number };
 type RivalView = Omit<
   RivalSnapshot,
-  'armor' | 'components' | 'statuses' | 'modules' | 'finishedAtMs'
+  'armor' | 'components' | 'statuses' | 'modules' | 'finishedAtMs' | 'tow'
 > & {
   finishedAtMs: number;
+  /** In hundredths. */
+  tow?: number;
   armor: Iterable<number>;
   components: Iterable<number>;
   statuses: Iterable<StatusView>;
@@ -213,6 +220,7 @@ function toRace(state: DriveStateView, car: CarSnapshot): RaceSnapshot | null {
       modules: Array.from(rival.modules ?? [], (m) => ({ state: m.state, aim: m.aim, up: m.up })),
       ko: rival.ko,
       buildHash: rival.buildHash,
+      tow: (rival.tow ?? 0) / 100,
     },
     rivalBlueprint: state.rivalBlueprint ?? '',
     projectiles,
@@ -270,6 +278,7 @@ function toSnapshot(state: DriveStateView): CarSnapshot {
     lastLapMs: state.lastLapMs,
     wheelIntegrity: state.wheelIntegrity ? Array.from(state.wheelIntegrity) : [],
     buildHash: state.buildHash ?? '',
+    tow: (state.tow ?? 0) / 100,
     ...(fx
       ? {
           effects: {
@@ -285,6 +294,9 @@ function toSnapshot(state: DriveStateView): CarSnapshot {
             driveSupplyLimit: fx.driveSupplyLimit,
             stabilityAdd: fx.stabilityAdd,
             airborne: fx.airborne,
+            tow: fx.tow ?? 0,
+            towTarget: fx.towTarget ?? 0,
+            towNext: fx.towNext ?? 0,
           },
         }
       : {}),

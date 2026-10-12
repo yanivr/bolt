@@ -418,6 +418,7 @@ const EVENT_TYPES: Record<RaceEventType, true> = {
   finish: true,
   wall: true,
   position: true,
+  catchup: true,
   windup: true,
   shot: true,
   beam: true,
@@ -522,6 +523,7 @@ describe('event and weapon mapping', () => {
       finish: { ...base, type: 'finish', car: 0, raceTimeMs: 1000, finished: true },
       wall: { ...base, type: 'wall', car: 1, speed: 150 },
       position: { ...base, type: 'position', leader: 1, gapMeters: 3 },
+      catchup: { ...base, type: 'catchup', car: 0, state: 'engaged' },
       windup: { ...base, type: 'windup', car: 0, part: 1, weapon: 'weapon_railshot', ticks: 24 },
       shot: {
         ...base,

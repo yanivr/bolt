@@ -15,7 +15,7 @@ import { Results } from '../hud/Results.js';
 import { SettingsPanel } from '../hud/SettingsPanel.js';
 import { hudLive, setHudFrozen, startHudFeed, useCombat } from '../hud/hudStore.js';
 import type { HudLoadout } from '../hud/model.js';
-import { buildHudLoadout } from '../hud/model.js';
+import { buildHudLoadout, formatRaceTime } from '../hud/model.js';
 import { DriveInput } from '../input/driveInput.js';
 
 type LoadState =
@@ -66,9 +66,15 @@ function clock(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
-/** The notice at the top of the pause menu: what the race is doing while the menu is open. */
+/**
+ * The top of the pause menu: what the race is doing while the menu is open, the label that
+ * says a race is running on the device and not on the server, and the lap times that are no
+ * longer on the HUD itself.
+ */
 function PauseNotice({ online, onTimeout }: { online: boolean; onTimeout: () => void }) {
   const [left, setLeft] = useState(PAUSE_LIMIT_SECONDS);
+  const bestLapMs = useHud((s) => s.bestLapMs);
+  const lastLapMs = useHud((s) => s.lastLapMs);
   useEffect(() => {
     if (online) return;
     const started = Date.now();
@@ -79,10 +85,30 @@ function PauseNotice({ online, onTimeout }: { online: boolean; onTimeout: () => 
     }, 250);
     return () => window.clearInterval(timer);
   }, [online, onTimeout]);
+  const r = STRINGS.race;
   return (
-    <p className="notice" data-testid="pause-notice">
-      {online ? STRINGS.race.pauseNote : STRINGS.race.pausedNote.replace('{time}', clock(left))}
-    </p>
+    <div className="pause-info">
+      <p className="notice" data-testid="pause-notice">
+        {online ? r.pauseNote : r.pausedNote.replace('{time}', clock(left))}
+      </p>
+      <div className="pause-facts">
+        {!online && (
+          <span className="badge" data-testid="offline-badge">
+            {r.offlineBadge}
+          </span>
+        )}
+        <dl className="pause-laps" data-testid="pause-laps">
+          <div>
+            <dt>{r.bestLap}</dt>
+            <dd>{bestLapMs > 0 ? formatRaceTime(bestLapMs) : r.noLapTime}</dd>
+          </div>
+          <div>
+            <dt>{r.lastLap}</dt>
+            <dd>{lastLapMs > 0 ? formatRaceTime(lastLapMs) : r.noLapTime}</dd>
+          </div>
+        </dl>
+      </div>
+    </div>
   );
 }
 
@@ -338,6 +364,7 @@ export function RaceScreen() {
           result={result}
           summary={summary}
           you={you}
+          offline={linkMode === 'offline'}
           onRaceAgain={raceAgain}
           onChangeBuild={changeBuild}
           onHome={goHome}

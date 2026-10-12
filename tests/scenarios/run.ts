@@ -1,4 +1,4 @@
-import { SCENARIOS, formatEvent, runScenarioById } from './runner.js';
+import { ALL_SCENARIOS, formatEvent, runScenarioById } from './runner.js';
 
 /**
  * Prints the event timeline of a showcase scenario.
@@ -11,11 +11,11 @@ import { SCENARIOS, formatEvent, runScenarioById } from './runner.js';
 const name = process.argv[2];
 
 if (!name) {
-  for (const def of SCENARIOS) console.log(`${def.id.padEnd(20)} ${def.title}`);
+  for (const def of ALL_SCENARIOS) console.log(`${def.id.padEnd(20)} ${def.title}`);
   console.log('\nRun one with: npx tsx tests/scenarios/run.ts <id>');
 } else if (name === 'all') {
   let failed = 0;
-  for (const def of SCENARIOS) {
+  for (const def of ALL_SCENARIOS) {
     const run = runScenarioById(def.id);
     const counts = new Map<string, number>();
     for (const event of run.events) counts.set(event.type, (counts.get(event.type) ?? 0) + 1);

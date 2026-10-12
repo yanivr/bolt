@@ -2138,6 +2138,17 @@ export const EVENT_HANDLERS: HandlerTable = {
     s.pool.life[slot] = 0.8;
     s.pool.fade[slot] = 0.2;
   },
+  catchup(s, e) {
+    // The tow taking hold: three pale streaks off the tail, drawn back along the car's travel.
+    // A stand-in from the simulation track so the event is not invisible; the effects track
+    // owns what it should finally look like. Letting go is shown by the HUD alone.
+    const car = s.cars[e.car];
+    if (e.state !== 'engaged' || !car?.present || !car.rig) return;
+    for (const side of [-1, 0, 1]) {
+      s.atLocal(e.car, side * (car.rig.halfWidth - 1), car.rig.halfLength + 3, 2);
+      s.px.pixel(s.at.x, s.at.y, -car.vx * 0.5, -car.vy * 0.5, 0.3, PAL_CYAN, 3, 0, 0, 1);
+    }
+  },
   windup(s, e) {
     s.weapon(e.weapon).windup?.(s, e);
   },

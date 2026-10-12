@@ -190,6 +190,15 @@ export type RaceEventBody =
   | { type: 'wall'; car: number; speed: number }
   | { type: 'position'; leader: number; gapMeters: number }
   | {
+      /**
+       * The tow (the long-range catch-up) took hold of a car or let go of it. At most one every
+       * few seconds for a car. The level itself is `tow` in the snapshot.
+       */
+      type: 'catchup';
+      car: number;
+      state: 'engaged' | 'released';
+    }
+  | {
       /** A weapon is winding up: railgun charge, EMP charge, hammer draw, flame ignition. */
       type: 'windup';
       car: number;
@@ -425,6 +434,8 @@ export type RivalSnapshot = {
   modules: Array<{ state: number; aim: number; up: boolean }>;
   ko: boolean;
   buildHash: string;
+  /** The rival's tow, as `CarSnapshot.tow`: it can be seen pulling, so it may be shown. */
+  tow: number;
 };
 
 export type ProjectileSnapshot = {
@@ -545,6 +556,14 @@ export type CarSnapshot = {
   effects?: VehicleEffects;
   /** Combat state. Absent in a session with no combat (benches and tests of one car). */
   combat?: CarCombatSnapshot;
+  /**
+   * The tow, the long-range catch-up: the share of its whole bonus (`TOW.maxBonus` of top speed)
+   * this car has right now, 0 to 1 in steps of a hundredth. Exactly 0 when it is not being
+   * towed, which is always the case for the leader, within `TOW.thresholdGap` of the car ahead,
+   * in the countdown and the first seconds of the race, once wrecked and after the finish. Not to
+   * be confused with `effects.tow`, the bonus itself as a share of top speed, for prediction.
+   */
+  tow: number;
 };
 
 export type GuestSessionResponse = {

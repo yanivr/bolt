@@ -28,6 +28,11 @@ export function Minimap({ manifests }: { manifests: GameManifests }) {
       ctx.imageSmoothingEnabled = false;
       if (image.current) ctx.drawImage(image.current, 0, 0);
       const s = minimap.worldScale;
+      // The ribbon is shown smaller than it is drawn, so the marks are drawn larger: about
+      // five CSS pixels for the cars however small the ribbon is.
+      const shown = canvas.clientWidth > 0 ? canvas.clientWidth / minimap.width : 0.4;
+      const k = Math.max(1, Math.min(3, Math.round(0.8 / shown) / 2));
+      const u = (n: number) => Math.round(n * k);
       const race = hudLive.race;
       const loadout = hudLive.loadout;
       let hazards = 0;
@@ -37,11 +42,11 @@ export function Minimap({ manifests }: { manifests: GameManifests }) {
           const hx = Math.round(hazard.x * s);
           const hy = Math.round(hazard.y * s);
           ctx.fillStyle = '#151C2C';
-          ctx.fillRect(hx - 4, hy - 2, 9, 5);
-          ctx.fillRect(hx - 2, hy - 4, 5, 9);
+          ctx.fillRect(hx - u(4), hy - u(2), u(4) * 2 + 1, u(2) * 2 + 1);
+          ctx.fillRect(hx - u(2), hy - u(4), u(2) * 2 + 1, u(4) * 2 + 1);
           ctx.fillStyle = '#FFB454';
-          ctx.fillRect(hx - 3, hy - 1, 7, 3);
-          ctx.fillRect(hx - 1, hy - 3, 3, 7);
+          ctx.fillRect(hx - u(3), hy - u(1), u(3) * 2 + 1, u(1) * 2 + 1);
+          ctx.fillRect(hx - u(1), hy - u(3), u(1) * 2 + 1, u(3) * 2 + 1);
           hazards++;
         }
       }
@@ -51,8 +56,8 @@ export function Minimap({ manifests }: { manifests: GameManifests }) {
         const ry = Math.round(race.rival.y * s);
         // A diamond: rows widening to the middle and narrowing again.
         for (const [fillStyle, r] of [
-          ['#151C2C', 5],
-          ['#F46B58', 4],
+          ['#151C2C', u(5)],
+          ['#F46B58', u(4)],
         ] as const) {
           ctx.fillStyle = fillStyle;
           for (let dy = -r; dy <= r; dy++) {
@@ -64,11 +69,11 @@ export function Minimap({ manifests }: { manifests: GameManifests }) {
       const px = Math.round(x * s);
       const py = Math.round(y * s);
       ctx.fillStyle = '#151C2C';
-      ctx.fillRect(px - 4, py - 4, 9, 9);
+      ctx.fillRect(px - u(4), py - u(4), u(4) * 2 + 1, u(4) * 2 + 1);
       ctx.fillStyle = '#46D5E6';
-      ctx.fillRect(px - 3, py - 3, 7, 7);
+      ctx.fillRect(px - u(3), py - u(3), u(3) * 2 + 1, u(3) * 2 + 1);
       ctx.fillStyle = '#F5EED9';
-      ctx.fillRect(px - 1, py - 1, 3, 3);
+      ctx.fillRect(px - u(1), py - u(1), u(1) * 2 + 1, u(1) * 2 + 1);
       canvas.dataset.rival = rivalShown ? '1' : '0';
       canvas.dataset.hazards = String(hazards);
     };

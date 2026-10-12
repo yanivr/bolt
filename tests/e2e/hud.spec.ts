@@ -81,7 +81,21 @@ type HitEvent = {
   armor: number;
   absorbed: number;
 };
+type RaceView = {
+  distance: string;
+  filter: string;
+  scale: number;
+  widthPx: number;
+  heightPx: number;
+  worldWidth: number;
+  worldHeight: number;
+  cssPerWorld: number;
+  chunks: number;
+  chunksMax: number;
+  chunksTotal: number;
+};
 type DebugHost = {
+  __boltRace: { view: () => RaceView };
   __boltDebug: {
     input: Probe;
     hud: {
@@ -90,7 +104,10 @@ type DebugHost = {
       events: () => HitEvent[];
       showResults: () => void;
       carScreen: () => { x: number; y: number } | null;
+      camera: () => { width: number; height: number; cssPerWorld: number };
       view: () => {
+        popStamp: number;
+        tow: number;
         you: number;
         result: null | {
           winner: number;
@@ -206,12 +223,11 @@ async function centre(page: Page, testId: string): Promise<{ x: number; y: numbe
 async function hudRects(page: Page): Promise<{ rects: Rect[]; width: number; height: number }> {
   return page.evaluate(() => {
     const names: Array<[string, string]> = [
-      ['race', '.hud-race'],
+      ['strip', '.hud-strip'],
       ['car', '.hud-car'],
       ['map', '.hud-map'],
       ['menu', '.hud-menu'],
       ['speed', '.hud-speed'],
-      ['rival', '.hud-rival'],
       ['fire-0', '[data-testid="fire-0"]'],
       ['fire-1', '[data-testid="fire-1"]'],
       ['use-0', '[data-testid="use-0"]'],
@@ -230,17 +246,34 @@ async function hudRects(page: Page): Promise<{ rects: Rect[]; width: number; hei
 }
 
 /**
- * Whether a 220 x 150 box around the car can touch a rectangle, with the car anywhere the
+ * The box around the car that nothing persistent may enter: 300 x 190 from 760 pixels of
+ * width up, the earlier 220 x 150 on a narrower phone (docs/DECISIONS.md).
+ */
+const keepOut = (width: number) => (width >= 760 ? { w: 300, h: 190 } : { w: 220, h: 150 });
+
+/**
+ * The box the product owner's brief of October 12 names: nothing within 260 x 170 of the car.
+ * Asserted from 760 px of width up; a 667 px phone keeps the 220 x 150 box (docs/DECISIONS.md).
+ */
+const OWNER_BOX = { w: 260, h: 170 };
+
+/**
+ * Whether the keep-out box around the car can touch a rectangle, with the car anywhere the
  * camera can put it: inside an ellipse of 12 percent of the width by 27 percent of the height
  * around the middle of the view (docs/DECISIONS.md, entry 34).
  */
-function carCanReach(rect: Rect, width: number, height: number): boolean {
+function carCanReach(
+  rect: Rect,
+  width: number,
+  height: number,
+  box: { w: number; h: number } = keepOut(width),
+): boolean {
   const rx = width * 0.12;
   const ry = height * 0.27;
-  const left = rect.left - 110 - width / 2;
-  const right = rect.right + 110 - width / 2;
-  const top = rect.top - 75 - height / 2;
-  const bottom = rect.bottom + 75 - height / 2;
+  const left = rect.left - box.w / 2 - width / 2;
+  const right = rect.right + box.w / 2 - width / 2;
+  const top = rect.top - box.h / 2 - height / 2;
+  const bottom = rect.bottom + box.h / 2 - height / 2;
   const nx = Math.max(left, Math.min(0, right));
   const ny = Math.max(top, Math.min(0, bottom));
   return (nx / rx) ** 2 + (ny / ry) ** 2 <= 1;
@@ -260,16 +293,18 @@ const SIZES: Array<[number, number]> = [
   [932, 430],
 ];
 
+/** Most of the screen the persistent HUD may cover: a tenth, or 12 percent on the small phone. */
+const occupancyLimit = (width: number) => (width >= 840 ? 0.1 : 0.12);
+
 async function assertLayout(page: Page, hand: 'left' | 'right', where: string): Promise<number> {
   const { rects, width, height } = await hudRects(page);
   const names = rects.map((r) => r.name);
   for (const wanted of [
-    'race',
+    'strip',
     'car',
     'map',
     'menu',
     'speed',
-    'rival',
     'fire-0',
     'fire-1',
     'use-0',
@@ -287,6 +322,14 @@ async function assertLayout(page: Page, hand: 'left' | 'right', where: string): 
     expect(carCanReach(r, width, height), `${where}: ${r.name} can be reached by the car`).toBe(
       false,
     );
+    // The product owner's brief names a 260 x 170 box. It holds from 760 px of width up
+    // (inside the 300 x 190 above, asserted on its own so the brief's number is in the test).
+    // At 667 x 375 two thumbs' worth of buttons and the strip leave room for 220 x 150 only.
+    if (width >= 760)
+      expect(
+        carCanReach(r, width, height, OWNER_BOX),
+        `${where}: ${r.name} can be reached by the car's 260 x 170 box`,
+      ).toBe(false);
     area += (r.right - r.left) * (r.bottom - r.top);
   }
   for (let i = 0; i < rects.length; i++)
@@ -295,6 +338,22 @@ async function assertLayout(page: Page, hand: 'left' | 'right', where: string): 
         overlap(rects[i]!, rects[j]!),
         `${where}: ${rects[i]!.name} over ${rects[j]!.name}`,
       ).toBe(false);
+
+  // The strip is one thin line, and the three bars under it are thin too.
+  const strip = rects.find((x) => x.name === 'strip')!;
+  expect(strip.bottom - strip.top, `${where}: strip height`).toBeLessThanOrEqual(32);
+  expect(strip.bottom - strip.top, `${where}: strip height`).toBeGreaterThanOrEqual(26);
+  const bars = await page
+    .locator('.hud-car .gauge-track')
+    .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height));
+  expect(bars, `${where}: three bars`).toHaveLength(3);
+  for (const bar of bars) expect(bar, `${where}: bar height`).toBeLessThanOrEqual(8);
+  // The rival's hull is a line of the route ribbon's own panel.
+  const map = rects.find((x) => x.name === 'map')!;
+  const rival = (await page.getByTestId('rival').boundingBox())!;
+  expect(rival.x, `${where}: rival bar`).toBeGreaterThanOrEqual(map.left);
+  expect(rival.y + rival.height, `${where}: rival bar`).toBeLessThanOrEqual(map.bottom);
+  expect(map.right - map.left, `${where}: ribbon`).toBeLessThanOrEqual(80);
 
   // Fire buttons: big enough, and under the thumb of the action hand.
   const corner = { x: hand === 'left' ? width : 0, y: height };
@@ -318,13 +377,17 @@ async function assertLayout(page: Page, hand: 'left' | 'right', where: string): 
   }
   // The action side is the one opposite the steering hand.
   const fire = rects.find((x) => x.name === 'fire-0')!;
-  const race = rects.find((x) => x.name === 'race')!;
   if (hand === 'left') {
     expect(fire.left, `${where}: fire side`).toBeGreaterThan(width / 2);
-    expect(race.right, `${where}: info side`).toBeLessThan(width / 2);
+    expect(strip.right, `${where}: info side`).toBeLessThan(width / 2);
   } else {
     expect(fire.right, `${where}: fire side`).toBeLessThan(width / 2);
-    expect(race.left, `${where}: info side`).toBeGreaterThan(width / 2);
+    expect(strip.left, `${where}: info side`).toBeGreaterThan(width / 2);
+  }
+  // Nothing persistent is in the middle of the screen at all.
+  for (const r of rects) {
+    const middle = r.left < width * 0.72 && r.right > width * 0.28;
+    expect(middle, `${where}: ${r.name} in the middle band`).toBe(false);
   }
   // Where the HUD believes the car is, nothing of the HUD is within the box. After a resize
   // the HUD's camera starts over, and has the car again on its next frame.
@@ -332,19 +395,38 @@ async function assertLayout(page: Page, hand: 'left' | 'right', where: string): 
     page.evaluate(() => (window as unknown as DebugHost).__boltDebug.hud.carScreen());
   await expect.poll(carAt, { message: `${where}: car position`, timeout: 30_000 }).not.toBeNull();
   const car = await carAt();
+  const size = keepOut(width);
   const box: Rect = {
     name: 'car',
-    left: car!.x - 110,
-    right: car!.x + 110,
-    top: car!.y - 75,
-    bottom: car!.y + 75,
+    left: car!.x - size.w / 2,
+    right: car!.x + size.w / 2,
+    top: car!.y - size.h / 2,
+    bottom: car!.y + size.h / 2,
   };
   for (const r of rects)
     expect(overlap(box, r), `${where}: ${r.name} in the car's box`).toBe(false);
   return area / (width * height);
 }
 
-test('layout at five phone sizes, both hands: buttons under the thumb, nothing over the car or another panel', async ({
+/** Chooses a `Camera` setting in the pause menu, as a player would. */
+async function chooseCamera(page: Page, label: 'Close' | 'Medium' | 'Far'): Promise<void> {
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('radiogroup', { name: 'Camera' }).getByText(label, { exact: true }).click();
+  await page.getByRole('button', { name: 'Resume' }).click();
+  await expect(page.locator('.hud')).toHaveAttribute('data-camera', label.toLowerCase());
+}
+
+const raceView = (page: Page) =>
+  page.evaluate(() => (window as unknown as DebugHost).__boltRace.view());
+
+/** Where an edge tag has been put, CSS pixels. */
+const tagAt = (page: Page, testId: string) =>
+  page.getByTestId(testId).evaluate((el) => {
+    const m = new DOMMatrixReadOnly(getComputedStyle(el).transform);
+    return { x: m.m41, y: m.m42 };
+  });
+
+test('layout at five phone sizes, both hands: a slim HUD in the corners, buttons under the thumb, nothing near the car', async ({
   page,
 }) => {
   test.slow();
@@ -352,16 +434,32 @@ test('layout at five phone sizes, both hands: buttons under the thumb, nothing o
   await seed(page, ARMED_BEETLE);
   await toGrid(page, RACE);
   await racing(page);
+  // The default camera is Close, the view the game always had.
+  await expect(page.locator('.hud')).toHaveAttribute('data-camera', 'close');
+  // On the server: no offline mark on the menu button.
+  await expect(page.getByTestId('offline-dot')).toHaveCount(0);
   const occupancy: string[] = [];
   for (const [width, height] of SIZES) {
     await page.setViewportSize({ width, height });
     await page.waitForTimeout(350);
     const share = await assertLayout(page, 'left', `${width}x${height}`);
     occupancy.push(`${width}x${height} ${(share * 100).toFixed(1)}%`);
-    // Section 5.9: about 18 percent of the screen at most. The 667 x 375 phone has a quarter
-    // less screen for the same buttons, and is held to what it can do (docs/DECISIONS.md).
-    expect(share, `${width}x${height} occupancy`).toBeLessThan(width >= 840 ? 0.19 : 0.215);
+    // A tenth of the screen at most; the 667 x 375 phone has a quarter less screen for the
+    // same buttons and is held to 12 percent (docs/DECISIONS.md).
+    expect(share, `${width}x${height} occupancy`).toBeLessThanOrEqual(occupancyLimit(width));
   }
+  // The tow widens the strip a little: it still keeps clear, and the HUD is still under its limit.
+  await override(page, { tow: 0.9, position: 2, gapSeconds: -2.2 });
+  await expect(page.getByTestId('tow')).toHaveAttribute('data-level', '3');
+  for (const [width, height] of SIZES) {
+    await page.setViewportSize({ width, height });
+    await page.waitForTimeout(350);
+    const share = await assertLayout(page, 'left', `${width}x${height} with the tow`);
+    expect(share, `${width}x${height} occupancy with the tow`).toBeLessThanOrEqual(
+      occupancyLimit(width),
+    );
+  }
+  await override(page, null);
   // The other hand: the two columns swap, whole.
   await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByText('Right Thumb Steers').click();
@@ -369,20 +467,363 @@ test('layout at five phone sizes, both hands: buttons under the thumb, nothing o
   for (const [width, height] of SIZES) {
     await page.setViewportSize({ width, height });
     await page.waitForTimeout(350);
-    await assertLayout(page, 'right', `${width}x${height} right thumb steers`);
+    const share = await assertLayout(page, 'right', `${width}x${height} right thumb steers`);
+    expect(share, `${width}x${height} occupancy`).toBeLessThanOrEqual(occupancyLimit(width));
   }
-  // Larger buttons keep to the same rules at the owner's size.
+  // Larger buttons keep to the same rules at the owner's size, and the strip and the bars
+  // grow with them, a little.
   await page.setViewportSize({ width: 870, height: 370 });
   await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByText('Left Thumb Steers').click();
+  await page.getByRole('button', { name: 'Resume' }).click();
+  await page.waitForTimeout(350);
+  const standardBar = (await page.locator('.hud-car .gauge-track').first().boundingBox())!.height;
+  const standardStrip = (await page.locator('.hud-strip').boundingBox())!.height;
+  await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByText('Larger Buttons').click();
   await page.getByRole('button', { name: 'Resume' }).click();
   await page.waitForTimeout(350);
   await assertLayout(page, 'left', '870x370 larger buttons');
   const large = (await page.getByTestId('fire-0').boundingBox())!;
   expect(large.width).toBeGreaterThanOrEqual(84);
+  expect(
+    (await page.locator('.hud-car .gauge-track').first().boundingBox())!.height,
+  ).toBeGreaterThan(standardBar);
+  expect((await page.locator('.hud-strip').boundingBox())!.height).toBeGreaterThan(standardStrip);
   console.log(`HUD occupancy: ${occupancy.join(', ')}`);
   expect(problems).toEqual([]);
+});
+
+test.describe("on the owner's phone", () => {
+  // 870 x 370 CSS pixels at three device pixels each: the numbers of the Camera decision.
+  test.use({ viewport: { width: 870, height: 370 }, deviceScaleFactor: 3 });
+
+  test('the Camera setting: three views, applied at once from the pause menu, and the HUD follows each', async ({
+    page,
+  }) => {
+    test.slow();
+    const problems = collectProblems(page);
+    await seed(page, ARMED_BEETLE);
+    await toGrid(page, RACE);
+    await racing(page);
+    const arrow = page.getByTestId('rival-arrow');
+    const spans: Record<string, RaceView> = {};
+    for (const label of ['Close', 'Medium', 'Far'] as const) {
+      await chooseCamera(page, label);
+      await expect
+        .poll(async () => (await raceView(page)).distance, { message: label })
+        .toBe(label.toLowerCase());
+      const view = await raceView(page);
+      spans[label] = view;
+      // A whole number of canvas pixels to a world pixel, and the canvas fills the screen.
+      expect(Number.isInteger(view.scale), `${label}: scale`).toBe(true);
+      expect(view.worldWidth * view.cssPerWorld, `${label}: fills the width`).toBeCloseTo(870, 0);
+      expect(view.worldHeight * view.cssPerWorld, `${label}: fills the height`).toBeCloseTo(370, 0);
+      const canvas = (await page.locator('.race-canvas canvas').boundingBox())!;
+      expect(canvas.width, `${label}: canvas width`).toBeCloseTo(870, 0);
+      expect(canvas.height, `${label}: canvas height`).toBeCloseTo(370, 0);
+      expect(
+        await page
+          .locator('.race-canvas canvas')
+          .evaluate((el) => (el as HTMLElement).style.imageRendering),
+        `${label}: canvas filter`,
+      ).toBe(view.filter === 'pixelated' ? 'pixelated' : 'auto');
+      // The terrain it has to draw: never more chunks than the view can touch.
+      expect(view.chunks, `${label}: chunks`).toBeLessThanOrEqual(view.chunksMax);
+      expect(view.chunksMax, `${label}: chunks`).toBeLessThanOrEqual(12);
+      // The HUD's own camera has the same view.
+      await expect
+        .poll(
+          () =>
+            page.evaluate(
+              () => (window as unknown as DebugHost).__boltDebug.hud.camera().cssPerWorld,
+            ),
+          { message: `${label}: HUD camera` },
+        )
+        .toBeCloseTo(view.cssPerWorld, 2);
+      // The layout rules hold in every view: the car is in the same place on the screen.
+      await assertLayout(page, 'left', `870x370 camera ${label}`);
+
+      // A rival 500 world pixels to the left: on screen in the wider views, off it in Close.
+      const car = (await page.evaluate(() =>
+        (window as unknown as DebugHost).__boltDebug.hud.carScreen(),
+      ))!;
+      await override(page, { rivalOffset: { x: -500, y: 0 }, rivalTracked: true, gapMeters: 40 });
+      const onScreen = car.x - 500 * view.cssPerWorld >= 0;
+      await expect(arrow, `${label}: rival at -500`).toHaveAttribute(
+        'data-shown',
+        onScreen ? '0' : '1',
+      );
+      // Far off in four directions: the tag lies against that edge of the screen, clear of the panels.
+      const { rects } = await hudRects(page);
+      for (const [name, x, y] of [
+        ['left', -2500, 0],
+        ['right', 2500, 30],
+        ['top', 40, -2500],
+        ['bottom', -40, 2500],
+      ] as const) {
+        await override(page, { rivalOffset: { x, y }, rivalTracked: true, gapMeters: -85 });
+        await expect(arrow).toHaveAttribute('data-shown', '1');
+        await expect
+          .poll(
+            async () => {
+              const at = await tagAt(page, 'rival-arrow');
+              return name === 'left'
+                ? at.x
+                : name === 'right'
+                  ? 870 - at.x
+                  : name === 'top'
+                    ? at.y
+                    : 370 - at.y;
+            },
+            { message: `${label}: rival tag hugs the ${name} edge` },
+          )
+          .toBeLessThanOrEqual(40);
+        const tag = (await arrow.locator('.edge-tag').boundingBox())!;
+        const box: Rect = {
+          name: 'tag',
+          left: tag.x,
+          top: tag.y,
+          right: tag.x + tag.width,
+          bottom: tag.y + tag.height,
+        };
+        expect(tag.x, `${label} ${name}: tag inside`).toBeGreaterThanOrEqual(0);
+        expect(tag.y, `${label} ${name}: tag inside`).toBeGreaterThanOrEqual(0);
+        expect(tag.x + tag.width, `${label} ${name}: tag inside`).toBeLessThanOrEqual(870);
+        expect(tag.y + tag.height, `${label} ${name}: tag inside`).toBeLessThanOrEqual(370);
+        // Compact: an arrow and a distance.
+        expect(tag.width, `${label} ${name}: tag width`).toBeLessThanOrEqual(64);
+        expect(tag.height, `${label} ${name}: tag height`).toBeLessThanOrEqual(24);
+        await expect(arrow.locator('.edge-label')).toHaveText('85m');
+        await expect(arrow).toHaveAttribute('aria-label', 'Rival: Ahead 85m');
+        for (const r of rects)
+          expect(overlap(box, r), `${label} ${name}: tag over ${r.name}`).toBe(false);
+        // Never out toward the middle, where the cars are.
+        const cx = tag.x + tag.width / 2;
+        const cy = tag.y + tag.height / 2;
+        expect(
+          cx < 80 || cx > 790 || cy < 40 || cy > 330,
+          `${label} ${name}: tag at ${cx},${cy}`,
+        ).toBe(true);
+      }
+      await override(page, null);
+    }
+    const close = spans.Close!;
+    const medium = spans.Medium!;
+    const far = spans.Far!;
+    // Close is the view the game had; Medium shows a quarter more, Far half as much again.
+    expect(close.worldWidth).toBeCloseTo(870, 0);
+    expect(medium.worldWidth / close.worldWidth).toBeCloseTo(1.25, 2);
+    expect(medium.worldHeight / close.worldHeight).toBeCloseTo(1.25, 2);
+    expect(far.worldWidth / close.worldWidth).toBeCloseTo(1.5, 2);
+    // Medium is Close's own whole-number scale on a larger canvas; Far is the next scale out,
+    // on the same canvas as Close: device resolution, nothing resampled.
+    expect(medium.scale).toBe(close.scale);
+    expect(medium.filter).toBe('smooth');
+    expect(far.scale).toBe(close.scale - 1);
+    expect(far.widthPx).toBe(close.widthPx);
+    expect(far.filter).toBe('pixelated');
+    console.log(
+      `Camera: ${Object.entries(spans)
+        .map(
+          ([name, v]) =>
+            `${name} ${Math.round(v.worldWidth)}x${Math.round(v.worldHeight)} world px, scale ${v.scale}, canvas ${v.widthPx}x${v.heightPx}, chunks ${v.chunks} now and ${v.chunksMax} at most of ${v.chunksTotal}`,
+        )
+        .join('; ')}`,
+    );
+    // The choice is kept with the other settings.
+    expect(
+      await page.evaluate(
+        () =>
+          (
+            JSON.parse(window.localStorage.getItem('bolt.settings.v1') ?? '{}') as {
+              cameraDistance?: string;
+            }
+          ).cameraDistance,
+      ),
+    ).toBe('far');
+    expect(problems).toEqual([]);
+  });
+});
+
+test('the bars and the icons: the diagram comes up for a hit and leaves, what is broken stays, alarms are not told by color', async ({
+  page,
+}) => {
+  test.slow();
+  await seed(page, ARMED_BEETLE);
+  await page.setViewportSize({ width: 870, height: 370 });
+  await toGrid(page, RACE);
+  await racing(page);
+  const pop = page.getByTestId('diagram-pop');
+  const broken = page.getByTestId('broken');
+  const components = await page.evaluate(() =>
+    (window as unknown as DebugHost).__boltDebug.hud.components(),
+  );
+  const wheel = components.find((c) => c.name === 'Front left wheel')!;
+  const engine = components.find((c) => c.kind === 'engine')!;
+  // A whole car: three bars and the hull's number, no diagram, no row of icons, no tow.
+  await expect(pop).toHaveAttribute('data-shown', '0');
+  await expect(pop).toHaveCSS('opacity', '0');
+  await expect(broken).toHaveAttribute('data-count', '0');
+  await expect(page.locator('.broken-icon')).toHaveCount(0);
+  await expect(page.getByTestId('hull-value')).toHaveText('100');
+  await expect(page.getByTestId('tow')).toHaveCount(0);
+  // Best lap, last lap and the offline label are not on the HUD.
+  await expect(page.locator('.hud')).not.toContainText('BEST');
+  await expect(page.locator('.hud')).not.toContainText('Offline test drive');
+
+  // A hit on a wheel: the diagram comes up beside the bars with that wheel marked, and leaves.
+  await inject(page, {
+    type: 'hit',
+    car: 0,
+    by: 1,
+    weapon: 'weapon_shotgun',
+    cls: 'bullet',
+    x: 0,
+    y: 0,
+    component: wheel.index,
+    damage: 9,
+    chassis: 3,
+    shield: 0,
+    armor: 0,
+    absorbed: 0,
+    projectile: 0,
+  });
+  await expect(pop).toHaveAttribute('data-shown', '1');
+  await expect(pop).toHaveCSS('opacity', '1');
+  await expect(page.locator(`.car-seg[data-component="${wheel.index}"]`)).toHaveClass(/is-focus/);
+  await expect(page.locator('.car-seg.is-focus')).toHaveCount(1);
+  const bars = (await page.locator('.hud-car').boundingBox())!;
+  const diagram = (await pop.boundingBox())!;
+  expect(diagram.x).toBeGreaterThanOrEqual(bars.x + bars.width);
+  expect(diagram.y).toBeGreaterThanOrEqual(bars.y - 1);
+  // It is clear of the lane under it, and of the car's box.
+  const lane = (await page.locator('.hud-lane').boundingBox())!;
+  expect(diagram.y + diagram.height).toBeLessThanOrEqual(lane.y + 0.5);
+  expect(
+    carCanReach(
+      {
+        name: 'diagram',
+        left: diagram.x,
+        top: diagram.y,
+        right: diagram.x + diagram.width,
+        bottom: diagram.y + diagram.height,
+      },
+      870,
+      370,
+    ),
+  ).toBe(false);
+  // About a second and a half to two seconds, then it is gone again.
+  await page.waitForTimeout(1200);
+  await expect(pop).toHaveAttribute('data-shown', '1');
+  await expect(pop).toHaveAttribute('data-shown', '0', { timeout: 2500 });
+  await expect(pop).toHaveCSS('opacity', '0');
+
+  // The wheel is destroyed: the diagram comes up for the change, and when it has left, the
+  // wheel's icon stays, crossed out, with its name for a screen reader.
+  await override(page, { integrity: { [wheel.index]: 0 } });
+  await expect(pop).toHaveAttribute('data-shown', '1');
+  const icon = page.locator(`.broken-icon[data-component="${wheel.index}"]`);
+  await expect(icon).toHaveAttribute('data-tier', '3');
+  await expect(icon).toHaveAttribute('aria-label', 'Front left wheel: destroyed');
+  await expect(icon.locator('.broken-x')).toHaveCount(1);
+  await expect(pop).toHaveAttribute('data-shown', '0', { timeout: 4000 });
+  await expect(icon).toBeVisible();
+  await expect(broken).toHaveAttribute('data-count', '1');
+  // A critical engine has a different drawing: a hatch and a corner, no cross.
+  await override(page, { integrity: { [wheel.index]: 0, [engine.index]: 14 } });
+  const engineIcon = page.locator(`.broken-icon[data-component="${engine.index}"]`);
+  await expect(engineIcon).toHaveAttribute('data-tier', '2');
+  await expect(engineIcon.locator('.broken-x')).toHaveCount(0);
+  await expect(engineIcon.locator('.broken-bang')).toHaveCount(1);
+  expect(await engineIcon.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain(
+    'repeating-linear-gradient',
+  );
+  expect(await engineIcon.locator('svg path').first().getAttribute('d')).not.toBe(
+    await icon.locator('svg.glyph path').getAttribute('d'),
+  );
+  // A part that is only damaged is not in the row.
+  await override(page, { integrity: { [wheel.index]: 0, [engine.index]: 55 } });
+  await expect(engineIcon).toHaveCount(0);
+  // The row is in the steering corner, clear of the car's box.
+  const row = (await broken.boundingBox())!;
+  expect(
+    carCanReach(
+      {
+        name: 'row',
+        left: row.x,
+        top: row.y,
+        right: row.x + row.width,
+        bottom: row.y + row.height,
+      },
+      870,
+      370,
+    ),
+  ).toBe(false);
+  // Repaired: the icon goes.
+  await override(page, null);
+  await expect(page.locator('.broken-icon')).toHaveCount(0);
+
+  // Overheat and low power: a different mark and a different hatch each, not only a color.
+  const mark = (id: string) => page.getByTestId(id).locator('.mini').getAttribute('data-mini');
+  const hatch = (id: string) =>
+    page
+      .getByTestId(id)
+      .locator('.gauge-track')
+      .evaluate((el) => getComputedStyle(el, '::after').backgroundImage);
+  const outline = (id: string) =>
+    page
+      .getByTestId(id)
+      .locator('.gauge-track')
+      .evaluate((el) => getComputedStyle(el).outlineWidth);
+  expect(await mark('heat')).toBe('heat');
+  expect(await mark('power')).toBe('power');
+  const calmHeat = await hatch('heat');
+  const calmPower = await hatch('power');
+  await override(page, { coreHeat: 112, thermalLimited: true, battery: 0 });
+  await expect(page.getByTestId('heat')).toHaveAttribute('data-level', '3');
+  await expect(page.getByTestId('power')).toHaveAttribute('data-low', '1');
+  expect(await mark('heat')).toBe('alarm');
+  expect(await mark('power')).toBe('alarm');
+  expect(await hatch('heat')).not.toBe(calmHeat);
+  expect(await hatch('power')).not.toBe(calmPower);
+  expect(await hatch('heat')).not.toBe(await hatch('power'));
+  expect(await outline('heat')).toBe('2px');
+  expect(await outline('power')).toBe('2px');
+  // The mark blinks, and stops with Reduce Flashing Effects, which is on by default.
+  await expect(page.getByTestId('heat').locator('.mini')).toHaveCSS('animation-name', 'none');
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByText('Reduce Flashing Effects').click();
+  await page.getByRole('button', { name: 'Resume' }).click();
+  await expect(page.getByTestId('heat').locator('.mini')).toHaveCSS('animation-name', 'seg-blink');
+  await override(page, null);
+  await expect(page.getByTestId('heat')).not.toHaveAttribute('data-level', '3');
+  expect(await mark('heat')).toBe('heat');
+
+  // The tow: nothing at zero or for a tow just letting go (5 percent and under), a caption
+  // and one to three chevrons above that.
+  for (const none of [0, 0.04, 0.05]) {
+    await override(page, { tow: none, position: 2, gapSeconds: -1.8 });
+    await page.waitForTimeout(400);
+    await expect(page.getByTestId('tow'), `tow ${none}`).toHaveCount(0);
+  }
+  for (const [value, level] of [
+    [0.2, 1],
+    [0.5, 2],
+    [1, 3],
+  ] as const) {
+    await override(page, { tow: value, position: 2, gapSeconds: -1.8 });
+    const tow = page.getByTestId('tow');
+    await expect(tow).toHaveAttribute('data-level', String(level));
+    await expect(tow).toHaveAttribute('aria-label', `Tow, level ${level} of 3`);
+    await expect(tow.locator('.hud-tow-steps .is-on')).toHaveCount(level);
+    await expect(tow.locator('.hud-tow-steps span')).toHaveCount(3);
+  }
+  const strip = (await page.getByTestId('race-strip').boundingBox())!;
+  const towBox = (await page.getByTestId('tow').boundingBox())!;
+  expect(towBox.x).toBeGreaterThanOrEqual(strip.x);
+  expect(towBox.y + towBox.height).toBeLessThanOrEqual(strip.y + strip.height);
+  await override(page, null);
 });
 
 test('three fingers: steering, holding the primary button and tapping the secondary all reach the simulation', async ({
@@ -461,7 +902,7 @@ test('left-handed: the buttons move to the left and work there, and the world do
   const width = page.viewportSize()!.width;
   const p = await centre(page, 'fire-0');
   expect(p.x).toBeLessThan(width / 3);
-  expect((await page.locator('.hud-race').boundingBox())!.x).toBeGreaterThan(width / 2);
+  expect((await page.locator('.hud-strip').boundingBox())!.x).toBeGreaterThan(width / 2);
   expect((await page.getByRole('button', { name: 'Settings' }).boundingBox())!.x).toBeLessThan(
     width / 2,
   );
@@ -505,6 +946,16 @@ test('the car diagram shows the scripted repairs on the right parts, and the cal
     'aria-label',
     /Engine: critical\. Front left wheel: destroyed/,
   );
+  // The car starts like that, so the diagram is not up; the two icons are simply there.
+  await expect(page.getByTestId('broken')).toHaveAttribute('data-count', '2');
+  await expect(page.locator(`.broken-icon[data-component="${wheel.index}"]`)).toHaveAttribute(
+    'data-tier',
+    '3',
+  );
+  await expect(page.locator(`.broken-icon[data-component="${engine.index}"]`)).toHaveAttribute(
+    'data-tier',
+    '2',
+  );
   // The spare wheel goes on: the button fills, the wheel comes back, the callout says so.
   await expect(page.locator('[data-id="utility_spare"]')).toHaveAttribute(
     'data-phase',
@@ -516,6 +967,9 @@ test('the car diagram shows the scripted repairs on the right parts, and the cal
   await expect(page.locator('.status-icon[data-status="refit"]')).toBeVisible();
   await expect(seg(wheel.index)).toHaveAttribute('data-tier', '0', { timeout: SLOW });
   await expect(seg(wheel.index)).toHaveAttribute('data-repairs', '1');
+  // The diagram comes up for the repair, and the wheel's icon leaves the row.
+  await expect(page.getByTestId('diagram-pop')).toHaveAttribute('data-shown', '1');
+  await expect(page.locator(`.broken-icon[data-component="${wheel.index}"]`)).toHaveCount(0);
   await expect(page.getByTestId('callouts')).toContainText('WHEEL REPLACED');
   await expect(page.getByTestId('callouts-live')).toContainText('WHEEL REPLACED');
   await expect(page.locator('[data-id="utility_spare"]')).toHaveAttribute('data-block', 'empty');
@@ -523,6 +977,7 @@ test('the car diagram shows the scripted repairs on the right parts, and the cal
   await expect(seg(engine.index)).toHaveAttribute('data-tier', '1', { timeout: SLOW });
   await expect(page.getByTestId('callouts')).toContainText('REPAIRED');
   await expect(seg(engine.index).locator('.car-seg-mark')).toHaveCount(1);
+  await expect(page.getByTestId('broken')).toHaveAttribute('data-count', '0');
 });
 
 test('hits flash the part they landed on: every hit on the local car in three scenarios', async ({
@@ -604,6 +1059,8 @@ test('a rocket hit shows on the rival bar, the button counts down, and results m
   const results = page.getByTestId('results');
   await expect(results).toBeVisible();
   await expect(results).toHaveAttribute('data-outcome', 'preview');
+  // A scenario runs in the page, and the results say so.
+  await expect(results.getByTestId('offline-badge')).toHaveText('Offline test drive');
   await expect(page.getByTestId('res-dealt-you')).toHaveText(String(Math.round(dealt)));
   await expect(page.getByTestId('res-hits-you')).toHaveText(String(mine.length));
   await expect(page.getByTestId('res-dealt-rival')).toHaveText('0');
@@ -743,7 +1200,7 @@ test('warnings and the off-screen rival: a lock, a missile, an arrow with its di
   await expect(arrow).toHaveAttribute('data-shown', '1');
   await expect(arrow).toHaveAttribute('data-label', 'Ahead 85m');
   await expect(page.getByTestId('position')).toHaveAttribute('data-position', '2');
-  await expect(page.getByTestId('gap')).toHaveText('−2.4 s');
+  await expect(page.getByTestId('gap')).toHaveText('−2.4');
   const view = page.viewportSize()!;
   const info = (await page.locator('.hud-col-info').boundingBox())!;
   const action = (await page.locator('.hud-col-action').boundingBox())!;
@@ -751,7 +1208,7 @@ test('warnings and the off-screen rival: a lock, a missile, an arrow with its di
     const m = new DOMMatrixReadOnly(getComputedStyle(el).transform);
     return { x: m.m41, y: m.m42 };
   });
-  // Clamped to the top of the play field, between the two columns.
+  // Against the top edge of the screen, between the two corners of the HUD.
   expect(at.y).toBeLessThan(30);
   expect(at.x).toBeGreaterThan(info.x + info.width);
   expect(at.x).toBeLessThan(action.x);
@@ -764,7 +1221,9 @@ test('warnings and the off-screen rival: a lock, a missile, an arrow with its di
     gapSeconds: 1.1,
   });
   await expect(arrow).toHaveAttribute('data-label', 'Behind 30m');
-  await expect(page.getByTestId('gap')).toHaveText('+1.1 s');
+  await expect(page.getByTestId('gap')).toHaveText('+1.1');
+  // Against the right edge of the screen, not out beside the car.
+  expect((await tagAt(page, 'rival-arrow')).x).toBeGreaterThan(view.width - 45);
   // Out of tracking range, the server does not say where the rival is, and neither does the HUD.
   await override(page, { rivalOffset: { x: 900, y: 300 }, rivalTracked: false });
   await expect(arrow).toHaveAttribute('data-shown', '0');
@@ -866,8 +1325,15 @@ test('the countdown is clear of the car, and pausing a single-player race stops 
   test.setTimeout(400_000);
   await seed(page, null);
   await toGrid(page, '?debug=1&scenario=weapon_railshot');
-  // A scenario runs in the page: single player.
-  await expect(page.getByText('Offline test drive')).toBeVisible();
+  // A scenario runs in the page: single player. The HUD no longer carries the label for
+  // that; the pause menu and the results do.
+  await expect(page.getByText('Offline test drive')).toHaveCount(0);
+  // What the HUD keeps of it is a small mark on the menu button, named in its tooltip.
+  await expect(page.getByTestId('offline-dot')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Settings' })).toHaveAttribute(
+    'title',
+    'Offline test drive',
+  );
   // The railgun charges before it fires: the button fills. The charge is short, so every
   // phase the button goes through is recorded in the page instead of sampled from here.
   await page.evaluate(() => {
@@ -899,6 +1365,10 @@ test('the countdown is clear of the car, and pausing a single-player race stops 
   const notice = page.getByTestId('pause-notice');
   await expect(notice).toContainText('Paused. The race resumes by itself in ');
   await expect(notice).toContainText(/[12]:\d\d\./);
+  await expect(page.getByTestId('offline-badge')).toHaveText('Offline test drive');
+  await expect(page.getByTestId('offline-badge')).toBeVisible();
+  await expect(page.getByTestId('pause-laps')).toContainText('Best lap');
+  await expect(page.getByTestId('pause-laps')).toContainText('Last lap');
   const clock = page.locator('.hud-clock canvas');
   const before = await clock.getAttribute('aria-label');
   await page.waitForTimeout(900);
@@ -921,6 +1391,7 @@ test('the countdown is clear of the car, and pausing a single-player race stops 
   await expect(page.getByTestId('pause-notice')).toHaveText(
     'The race keeps going while this menu is open.',
   );
+  await expect(page.getByTestId('offline-badge')).toHaveCount(0);
   const running = await clock.getAttribute('aria-label');
   await expect(clock).not.toHaveAttribute('aria-label', running!, { timeout: 5000 });
 });
@@ -931,6 +1402,34 @@ test.describe('on a desktop', () => {
     hasTouch: false,
     isMobile: false,
     deviceScaleFactor: 1,
+  });
+
+  test('the Camera setting on a screen at one device pixel: the canvas covers the screen in every view', async ({
+    page,
+  }) => {
+    await seed(page, ARMED_BEETLE);
+    await toGrid(page, RACE);
+    await racing(page);
+    const widths: number[] = [];
+    // Each view has its own canvas size here; Far comes after another view, and again before one.
+    for (const label of ['Medium', 'Far', 'Close', 'Far', 'Medium'] as const) {
+      await chooseCamera(page, label);
+      await expect
+        .poll(async () => (await raceView(page)).distance, { message: label })
+        .toBe(label.toLowerCase());
+      const view = await raceView(page);
+      const canvas = (await page.locator('.race-canvas canvas').boundingBox())!;
+      expect(canvas.width, `${label}: canvas width`).toBeCloseTo(1280, 0);
+      expect(canvas.height, `${label}: canvas height`).toBeCloseTo(720, 0);
+      expect(view.worldWidth * view.cssPerWorld, `${label}: fills the width`).toBeCloseTo(1280, 0);
+      expect(Number.isInteger(view.scale), `${label}: scale`).toBe(true);
+      widths.push(view.worldWidth);
+    }
+    // Medium, Far, Close, Far, Medium: wider, narrower, wider, narrower.
+    expect(widths[1]).toBeGreaterThan(widths[0]!);
+    expect(widths[2]).toBeLessThan(widths[0]!);
+    expect(widths[3]).toBe(widths[1]);
+    expect(widths[4]).toBe(widths[0]);
   });
 
   test('keyboard only: steer, fire both weapons, use equipment, pause and restart', async ({

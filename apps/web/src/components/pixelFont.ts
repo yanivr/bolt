@@ -66,7 +66,27 @@ export function glyphRows(char: string): string[] {
   return rows;
 }
 
+/**
+ * Punctuation that may give up its empty columns in `tight` text, with the first column it
+ * uses and how many: a clock or a score reads the same and is a third narrower. Digits and
+ * letters always keep the full cell, so numbers never shift as they change.
+ */
+const TIGHT: Record<string, [start: number, width: number]> = {
+  '.': [1, 2],
+  ':': [1, 2],
+  ' ': [0, 2],
+};
+
+/** The columns of a glyph that are drawn: all five, or fewer for tight punctuation. */
+export function glyphSpan(char: string, tight: boolean): [start: number, width: number] {
+  return (tight ? TIGHT[char] : undefined) ?? [0, GLYPH_WIDTH];
+}
+
 /** Pixel width of a string at scale 1, with one cell of tracking between glyphs. */
-export function measurePixelText(text: string): number {
-  return text.length === 0 ? 0 : text.length * (GLYPH_WIDTH + 1) - 1;
+export function measurePixelText(text: string, tight = false): number {
+  if (text.length === 0) return 0;
+  if (!tight) return text.length * (GLYPH_WIDTH + 1) - 1;
+  let width = -1;
+  for (const char of text) width += glyphSpan(char, true)[1] + 1;
+  return width;
 }

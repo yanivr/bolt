@@ -115,6 +115,7 @@ export function sessionSnapshot(
     wheelIntegrity: [...session.wheelIntegrity],
     buildHash,
     effects: { ...session.effects },
+    tow: 0,
   };
 }
 

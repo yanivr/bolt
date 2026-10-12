@@ -12,7 +12,9 @@ import type {
 import {
   COMPONENT_FIRST_WHEEL,
   SIM_DT,
+  advanceTow,
   angleDelta,
+  clearTow,
   copyEffects,
   copyMotionState,
   createContact,
@@ -35,6 +37,13 @@ import {
  * - The local car's motion, heat, energy and checkpoint progress are predicted exactly.
  * - What damage and statuses do to its driving is not predicted: the snapshot carries the
  *   car's `VehicleEffects` and the replay uses those numbers as they were at the snapshot.
+ * - The tow (the long-range catch-up) is the exception among effects, and is predicted exactly.
+ *   It depends on where the rival is, which the client only hears about, so the server decides
+ *   it on a slow clock and announces each decision one period (half a second) before it takes
+ *   effect. The snapshot carries the bonus, what it is moving toward and what was announced
+ *   next, and `advanceTow` moves them on tick by tick here exactly as the race does. Only a
+ *   client more than a whole period ahead of its last snapshot would have to guess, and what
+ *   it would get wrong is a ramp of a fraction of a percent of top speed.
  * - Contact with the rival's body is predicted against where the rival was last seen, moved
  *   forward at its last known velocity, so the local car does not drive through it between
  *   snapshots. Only the local car is moved; the rival's response is the server's.
@@ -124,6 +133,9 @@ export class Predictor {
   /** One predicted step: the car's own physics, then contact with the rival's body. */
   private advance(control: ControlInput): StepResult {
     const s = this.session;
+    // The tow moves on with the race clock, as in `stepTow`: a car that is not racing has none.
+    if (s.phase === 'RACING') advanceTow(s.effects, s.raceTicks + 1);
+    else clearTow(s.effects);
     const result = stepDriveSession(s, control);
     const body = this.ghostParams;
     if (!body || this.ghostTick < 0 || s.phase !== 'RACING' || s.effects.airborne) return result;

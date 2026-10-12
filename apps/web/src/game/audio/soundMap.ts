@@ -306,6 +306,12 @@ export const EVENT_HANDLERS: Handlers = {
 
   position: (e, c) => [play(e.leader === c.you ? 'pos_gain' : 'pos_loss', { car: c.you })],
 
+  // The tow taking hold of the player's own car. A stand-in from the simulation track: it
+  // borrows the checkpoint tick until the sound track gives it a sound of its own. Letting go
+  // is silent, and so is the rival's.
+  catchup: (e, c) =>
+    e.car === c.you && e.state === 'engaged' ? [play('checkpoint_tick', { car: e.car })] : [],
+
   windup: (e) => {
     const sounds = WEAPON_SOUNDS[e.weapon]?.windup;
     if (!sounds) return [];

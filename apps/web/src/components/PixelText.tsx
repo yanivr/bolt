@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { GLYPH_HEIGHT, GLYPH_WIDTH, glyphRows, measurePixelText } from './pixelFont.js';
+import { GLYPH_HEIGHT, glyphRows, glyphSpan, measurePixelText } from './pixelFont.js';
 
 type Props = {
   text: string;
@@ -11,6 +11,10 @@ type Props = {
   className?: string;
   /** Screen readers get the plain string. Decorative uses can hide it. */
   decorative?: boolean;
+  /** Punctuation gives up its empty columns: for clocks and scores where width is short. */
+  tight?: boolean;
+  /** What a screen reader is told, when that is more than the text drawn. */
+  label?: string;
 };
 
 /**
@@ -24,10 +28,12 @@ export function PixelText({
   shadow,
   className,
   decorative,
+  tight = false,
+  label,
 }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
   const pad = shadow ? 1 : 0;
-  const width = Math.max(1, measurePixelText(text) + pad);
+  const width = Math.max(1, measurePixelText(text, tight) + pad);
   const height = GLYPH_HEIGHT + pad;
 
   useEffect(() => {
@@ -40,17 +46,18 @@ export function PixelText({
       let x = ox;
       for (const char of text) {
         const rows = glyphRows(char);
+        const [start, span] = glyphSpan(char, tight);
         for (let r = 0; r < GLYPH_HEIGHT; r++) {
           const row = rows[r]!;
-          for (let c = 0; c < GLYPH_WIDTH; c++)
-            if (row[c] === '#') ctx.fillRect(x + c, oy + r, 1, 1);
+          for (let c = 0; c < span; c++)
+            if (row[start + c] === '#') ctx.fillRect(x + c, oy + r, 1, 1);
         }
-        x += GLYPH_WIDTH + 1;
+        x += span + 1;
       }
     };
     if (shadow) paint(shadow, 1, 1);
     paint(color, 0, 0);
-  }, [text, color, shadow]);
+  }, [text, color, shadow, tight]);
 
   return (
     <canvas
@@ -60,7 +67,7 @@ export function PixelText({
       height={height}
       style={{ width: width * scale, height: height * scale }}
       role={decorative ? 'presentation' : 'img'}
-      aria-label={decorative ? undefined : text}
+      aria-label={decorative ? undefined : (label ?? text)}
       aria-hidden={decorative ? true : undefined}
     />
   );

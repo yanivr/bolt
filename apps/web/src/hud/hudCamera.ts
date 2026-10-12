@@ -1,9 +1,9 @@
-import type { SimPose } from '../game/rendering/frame.js';
+import type { CameraDistance, SimPose } from '../game/rendering/frame.js';
 import {
   FollowCamera,
   LEAD_FRACTION_X,
   LEAD_FRACTION_Y,
-  chooseViewScale,
+  chooseRaceView,
 } from '../game/rendering/frame.js';
 
 /**
@@ -11,8 +11,8 @@ import {
  *
  * The race feed carries no camera, and the HUD does not reach into the scene. The camera is a
  * pure function of the local car's pose, though (`FollowCamera` in rendering/frame.ts), so the
- * HUD runs a second one on the same numbers: the same view scale from the same canvas size,
- * the same lead through the same two low-pass stages. Its input is the snapshot pose moved
+ * HUD runs a second one on the same numbers: the same view scale from the same canvas size
+ * and the same `Camera` setting, the same lead through the same two low-pass stages. Its input is the snapshot pose moved
  * forward on its velocity rather than the scene's predicted and interpolated pose, so it can
  * be a few pixels off the real picture. That is far inside what an edge arrow needs.
  */
@@ -31,25 +31,26 @@ export class HudCamera {
   height = 0;
   ready = false;
 
-  /** Call when the view's CSS size, the pixel ratio or the track may have changed. */
+  /** Call when the view's CSS size, the pixel ratio, the track or the `Camera` setting may have changed. */
   configure(
     cssWidth: number,
     cssHeight: number,
     dpr: number,
     worldWidth: number,
     worldHeight: number,
+    distance: CameraDistance = 'close',
   ): void {
-    const key = `${cssWidth}x${cssHeight}@${dpr}:${worldWidth}x${worldHeight}`;
+    const key = `${cssWidth}x${cssHeight}@${dpr}:${worldWidth}x${worldHeight}:${distance}`;
     if (key === this.key) return;
     this.key = key;
-    const choice = chooseViewScale(cssWidth, cssHeight, dpr);
+    const choice = chooseRaceView(cssWidth, cssHeight, dpr, distance);
     this.scale = choice.scale;
     this.ratio = choice.renderRatio;
     this.width = cssWidth;
     this.height = cssHeight;
     this.camera.configure({
-      widthPx: Math.max(2, Math.round(cssWidth * choice.renderRatio)),
-      heightPx: Math.max(2, Math.round(cssHeight * choice.renderRatio)),
+      widthPx: choice.widthPx,
+      heightPx: choice.heightPx,
       scale: choice.scale,
       worldWidth,
       worldHeight,
@@ -184,4 +185,92 @@ export function edgeMark(
     y: Math.max(frame.top, Math.min(frame.bottom, oy + dy * t)),
     angle,
   };
+}
+
+// --- Hugging the screen edge -----------------------------------------------------------------------
+
+/**
+ * The rectangle the centre of an edge tag of `halfW` x `halfH` is clamped to so that the tag
+ * lies against the edge of `screen`, `inset` pixels in.
+ */
+export function edgeFrame(screen: Rect, halfW: number, halfH: number, inset = 4): Rect {
+  const left = screen.left + inset + halfW;
+  const top = screen.top + inset + halfH;
+  return {
+    left,
+    top,
+    right: Math.max(left, screen.right - inset - halfW),
+    bottom: Math.max(top, screen.bottom - inset - halfH),
+  };
+}
+
+/**
+ * Moves an edge tag off the HUD's panels without taking it off the edge. The tag slides along
+ * the edge it is on to the nearer end of the panel it would cover; only when the whole edge
+ * is taken does it step inward, past the panel. `frame` is the tag's own (`edgeFrame`), and
+ * `gap` the clear space kept between the tag and a panel.
+ */
+export function avoidPanels(
+  mark: EdgeMark,
+  frame: Rect,
+  panels: readonly Rect[],
+  halfW: number,
+  halfH: number,
+  gap = 4,
+): EdgeMark {
+  const hit = (x: number, y: number): Rect | null => {
+    for (const p of panels)
+      if (
+        x > p.left - halfW - gap &&
+        x < p.right + halfW + gap &&
+        y > p.top - halfH - gap &&
+        y < p.bottom + halfH + gap
+      )
+        return p;
+    return null;
+  };
+  const first = hit(mark.x, mark.y);
+  if (!first) return mark;
+  const onSide = mark.x <= frame.left + 0.5 || mark.x >= frame.right - 0.5;
+  const inFrame = (x: number, y: number) =>
+    x >= frame.left - 0.5 &&
+    x <= frame.right + 0.5 &&
+    y >= frame.top - 0.5 &&
+    y <= frame.bottom + 0.5;
+  // Along the edge: walk past each panel in turn, in both directions, and take the nearer.
+  let best: { x: number; y: number; d: number } | null = null;
+  for (const dir of [-1, 1]) {
+    let x = mark.x;
+    let y = mark.y;
+    for (let step = 0; step <= panels.length; step++) {
+      const p = hit(x, y);
+      if (!p) break;
+      if (onSide) y = dir < 0 ? p.top - halfH - gap : p.bottom + halfH + gap;
+      else x = dir < 0 ? p.left - halfW - gap : p.right + halfW + gap;
+    }
+    if (!inFrame(x, y) || hit(x, y)) continue;
+    const d = Math.abs(x - mark.x) + Math.abs(y - mark.y);
+    if (!best || d < best.d) best = { x, y, d };
+  }
+  if (best) return { x: best.x, y: best.y, angle: mark.angle };
+  // The whole edge is taken: step inward, just past the panel.
+  const midX = (frame.left + frame.right) / 2;
+  const midY = (frame.top + frame.bottom) / 2;
+  if (onSide) {
+    const x = mark.x < midX ? first.right + halfW + gap : first.left - halfW - gap;
+    return { x: Math.max(frame.left, Math.min(frame.right, x)), y: mark.y, angle: mark.angle };
+  }
+  const y = mark.y < midY ? first.bottom + halfH + gap : first.top - halfH - gap;
+  return { x: mark.x, y: Math.max(frame.top, Math.min(frame.bottom, y)), angle: mark.angle };
+}
+
+// --- The keep-out box ------------------------------------------------------------------------------
+
+/**
+ * The box around the car that no persistent part of the HUD may enter, CSS pixels: 300 by
+ * 190 from 760 pixels of width up, and the earlier 220 by 150 on narrower screens, where two
+ * thumbs' worth of buttons leave no room for more.
+ */
+export function keepOutBox(cssWidth: number): { w: number; h: number } {
+  return cssWidth >= 760 ? { w: 300, h: 190 } : { w: 220, h: 150 };
 }

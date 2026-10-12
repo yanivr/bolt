@@ -150,6 +150,17 @@ export function SettingsPanel({ onClose, notice, actions, closeLabel }: Props) {
         {notice}
         <div className="settings-body">
           <Choice
+            label={STRINGS.settings.camera}
+            name="camera"
+            value={settings.cameraDistance}
+            options={[
+              ['close', STRINGS.settings.cameraClose],
+              ['medium', STRINGS.settings.cameraMedium],
+              ['far', STRINGS.settings.cameraFar],
+            ]}
+            onChange={(v) => update({ cameraDistance: v })}
+          />
+          <Choice
             label={STRINGS.settings.drivingHand}
             name="hand"
             value={settings.drivingHand}

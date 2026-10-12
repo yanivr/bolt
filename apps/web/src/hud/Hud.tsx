@@ -12,11 +12,12 @@ import { EdgeMarkers, threatAngle } from './EdgeMarkers.js';
 import { AutoPip, FireButton } from './FireButton.js';
 import { HudButton } from './HudButton.js';
 import { Minimap } from './Minimap.js';
+import type { EdgeField } from './EdgeMarkers.js';
 import type { Rect } from './hudCamera.js';
 import type { WarningKind } from './hudStore.js';
 import { hudLive, onHudFrame, useCombat } from './hudStore.js';
 import type { HudLoadout } from './model.js';
-import { formatGap, formatRaceTime } from './model.js';
+import { TOW_STEPS, formatRaceTime, formatStripClock, formatStripGap } from './model.js';
 
 export { formatRaceTime } from './model.js';
 
@@ -137,75 +138,116 @@ function DebugReadout() {
   );
 }
 
-/** Position, gap, lap and clock: the race itself, on the steering side at the top. */
-const RacePanel = memo(function RacePanel() {
+/**
+ * The catch-up tow, shown only while the local car has it: a caption and one to three
+ * chevrons under the gap it is closing. Nothing is drawn when there is none.
+ */
+function Tow() {
+  const level = useCombat((s) => s.tow);
+  if (level === 0) return null;
+  const h = STRINGS.hud;
+  return (
+    <span
+      className={`hud-tow tow-${level}`}
+      role="img"
+      aria-label={fill(h.towLevel, { level, steps: TOW_STEPS })}
+      data-testid="tow"
+      data-level={level}
+    >
+      <PixelText text={h.tow} scale={1} color="#67DEA7" decorative />
+      <span className="hud-tow-steps" aria-hidden="true">
+        {Array.from({ length: TOW_STEPS }, (_, i) => (
+          <span key={i} className={i < level ? 'is-on' : undefined} />
+        ))}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * The race on one thin line, at the top of the steering side: place, gap to the rival, lap
+ * and clock. Best and last lap are not here: each lap's time is called out as it ends, and
+ * both are in the pause menu and the results.
+ */
+const RaceStrip = memo(function RaceStrip() {
   const lap = useHud((s) => s.lap);
   const laps = useHud((s) => s.laps);
   const phase = useHud((s) => s.phase);
-  const bestLapMs = useHud((s) => s.bestLapMs);
-  const lastLapMs = useHud((s) => s.lastLapMs);
-  const linkMode = useHud((s) => s.linkMode);
   const position = useCombat((s) => s.position);
   const gap = useCombat((s) => s.gap);
   const hasRival = useCombat((s) => s.rival.present);
   const finalLap = lap === laps && phase === 'RACING';
   const h = STRINGS.hud;
+  const lapName = finalLap ? STRINGS.race.finalLap : STRINGS.race.lap;
   return (
-    <div className="panel hud-race">
+    <div className="panel hud-strip" data-testid="race-strip">
       {hasRival && (
-        <div className="hud-pos" data-testid="position" data-position={position}>
-          <span className={`hud-place${position === 1 ? ' is-first' : ''}`}>
-            {position === 1 && <Glyph name="flag" size={12} />}
+        <>
+          <span
+            className={`hud-pos${position === 1 ? ' is-first' : ''}`}
+            data-testid="position"
+            data-position={position}
+          >
             <PixelText
               text={position === 1 ? h.first : h.second}
-              scale={3}
+              scale={2}
               color={position === 1 ? '#F6C35B' : '#F5EED9'}
+              label={h.positionLabel[position === 1 ? 1 : 2]}
             />
           </span>
-          <span
-            className="hud-gap"
-            data-testid="gap"
-            role="img"
-            aria-label={fill(gap >= 0 ? h.gapAhead : h.gapBehind, {
-              seconds: Math.abs(gap).toFixed(1),
-            })}
-          >
-            {formatGap(gap)}
-            <span className="hud-gap-unit"> s</span>
+          <span className="hud-gap-cell">
+            <span
+              className="hud-gap"
+              data-testid="gap"
+              role="img"
+              aria-label={fill(gap >= 0 ? h.gapAhead : h.gapBehind, {
+                seconds: Math.abs(gap).toFixed(1),
+              })}
+            >
+              {formatStripGap(gap)}
+            </span>
+            <Tow />
           </span>
-        </div>
+        </>
       )}
-      <div className="hud-lap-row">
-        <span className="hud-lap">
-          <PixelText
-            text={finalLap ? STRINGS.race.finalLap : STRINGS.race.lap}
-            scale={2}
-            color={finalLap ? '#F6C35B' : '#46D5E6'}
-          />
-          <PixelText text={`${lap}/${laps}`} scale={2} />
-        </span>
-        <RaceClock />
-      </div>
-      <dl className="hud-times">
-        <div className="hud-times-best">
-          <dt>{STRINGS.race.best}</dt>
-          <dd>{bestLapMs > 0 ? formatRaceTime(bestLapMs) : '-:--.--'}</dd>
-        </div>
-        <div className="hud-times-last">
-          <dt>{STRINGS.race.last}</dt>
-          <dd>{lastLapMs > 0 ? formatRaceTime(lastLapMs) : '-:--.--'}</dd>
-        </div>
-      </dl>
-      {linkMode === 'offline' && <span className="badge">{STRINGS.race.offlineBadge}</span>}
+      <span
+        className={`hud-lap${finalLap ? ' is-final' : ''}`}
+        role="img"
+        aria-label={`${lapName} ${lap}/${laps}`}
+        data-testid="lap"
+      >
+        <PixelText
+          text={STRINGS.race.lap}
+          scale={1}
+          color={finalLap ? '#F6C35B' : '#46D5E6'}
+          decorative
+        />
+        <PixelText
+          text={`${lap}/${laps}`}
+          scale={2}
+          color={finalLap ? '#F6C35B' : '#F5EED9'}
+          decorative
+        />
+      </span>
+      <RaceClock />
     </div>
   );
 });
 
+/**
+ * The clock shows whole seconds, which is what a glance takes in; what a screen reader and
+ * the tests are told is the time to the hundredth.
+ */
 function RaceClock() {
   const raceTimeMs = useHud((s) => s.raceTimeMs);
   return (
     <span className="hud-clock">
-      <PixelText text={formatRaceTime(raceTimeMs)} scale={2} />
+      <PixelText
+        text={formatStripClock(raceTimeMs)}
+        scale={2}
+        tight
+        label={formatRaceTime(raceTimeMs)}
+      />
     </span>
   );
 }
@@ -222,29 +264,32 @@ function Speed() {
   );
 }
 
-/** The rival's hull as a small bar (Section 7.5: only what could be seen from outside). */
+/**
+ * The rival's hull as a thin bar under the route ribbon (Section 7.5: only what could be
+ * seen from outside), with a diamond, the rival's mark on the ribbon, in front of it.
+ */
 function RivalBar() {
   const rival = useCombat((s) => s.rival);
   if (!rival.present) return null;
   const h = STRINGS.hud;
   return (
     <div
-      className={`panel hud-rival tier-${rival.tier}${rival.ko ? ' is-out' : ''}`}
+      className={`hud-rival tier-${rival.tier}${rival.ko ? ' is-out' : ''}`}
       role="img"
-      aria-label={fill(h.rivalHull, { percent: rival.chassisPercent })}
+      aria-label={`${fill(h.rivalHull, { percent: rival.chassisPercent })}${
+        rival.ko ? `. ${h.rivalOut}` : rival.finished ? `. ${h.rivalDone}` : ''
+      }`}
       data-testid="rival"
       data-percent={rival.chassisPercent}
+      data-note={rival.ko ? 'out' : rival.finished ? 'done' : ''}
     >
-      <span className="hud-rival-name">{h.rival}</span>
+      <span className="hud-rival-mark" aria-hidden="true" />
       <span className="gauge-track">
         <span
           className="gauge-fill"
           style={{ transform: `scaleX(${rival.chassisPercent / 100})` }}
         />
       </span>
-      {(rival.ko || rival.finished) && (
-        <span className="hud-rival-note">{rival.ko ? h.rivalOut : h.rivalDone}</span>
-      )}
     </div>
   );
 }
@@ -390,7 +435,7 @@ const ActionCluster = memo(function ActionCluster({
   const near = loadout.utilities.slice(0, 3);
   const far = loadout.utilities.slice(3, 6);
   return (
-    <div className="hud-actions" role="group" aria-label={STRINGS.hud.actions}>
+    <div className="hud-actions" role="group" aria-label={STRINGS.hud.actions} data-edge-block="">
       {loadout.autos.length > 0 && (
         <div className="hud-autos" data-testid="autos">
           {loadout.autos.map((action) => (
@@ -472,83 +517,105 @@ type Props = {
 };
 
 /**
- * The race HUD (Sections 5.9, 5.15, 7.5, 8.3, 16).
+ * The race HUD (Sections 5.9, 5.15, 7.5, 8.3, 16), slim: the track and the cars are the
+ * centre of the game, and the HUD keeps to the corners.
  *
- * Everything lives in two columns that hug the sides of the screen. The local car is drawn
- * around the middle of the screen and the camera lets it wander: up to 12 percent of the width
- * and 27 percent of the height from the centre, toward wherever it has come from. The columns
- * are narrow enough that a box of 220 by 150 pixels around the car cannot reach them from
- * anywhere it can be, so nothing is ever over the car or the road just ahead of it.
+ * The local car is drawn around the middle of the screen and the camera lets it wander: up
+ * to 12 percent of the width and 27 percent of the height from the centre, toward wherever
+ * it has come from. Everything persistent is laid out so that a box of 300 by 190 pixels
+ * around the car cannot reach it from anywhere the car can be (220 by 150 on screens under
+ * 760 pixels wide, which have no room for more).
  *
- * - Steering side (left by default): the race panel (place, gap, lap, clock), the car's
- *   condition, then the warning and callout lane. Nothing here takes a press, so the steering
- *   thumb can land on any of it.
- * - Action side: the route ribbon with the menu button and speed, the rival's hull, the next
- *   bend, and at the bottom, under the thumb, the fire and equipment buttons.
+ * - Steering side (left by default), top corner: the race strip (place, gap, lap, clock on
+ *   one line), three thin bars for hull, heat and energy, and under them, only while there
+ *   is something to show, what is broken and what is acting on the car; then the lane for one
+ *   warning and at most two callouts. The car diagram comes up beside the bars for a moment
+ *   when a part is hit, lost or repaired. Nothing here takes a press, so the steering thumb
+ *   can land on any of it.
+ * - Action side: the route ribbon with the rival's hull under it, the menu button and the
+ *   speed in the top corner; the fire and equipment buttons in the bottom corner, under the
+ *   thumb.
+ * - Off-screen markers hug the real edges of the screen and step round the panels.
  *
- * `Driving Hand` swaps the two columns whole. The world and the steering are not mirrored.
+ * `Driving Hand` swaps the two sides whole. The world and the steering are not mirrored.
  */
 export function Hud({ manifests, loadout, input, onPause }: Props) {
   const showGuide = useApp((s) => s.settings.showTouchGuide);
   const steering = useApp((s) => s.settings.steering);
   const hudScale = useApp((s) => s.settings.hudScale);
+  const cameraDistance = useApp((s) => s.settings.cameraDistance);
   const steered = useApp((s) => s.milestones.steered);
   const completeMilestone = useApp((s) => s.completeMilestone);
   const phase = useHud((s) => s.phase);
   const hasSteered = useHud((s) => s.hasSteered);
   const hasBraked = useHud((s) => s.hasBraked);
+  const offline = useHud((s) => s.linkMode) === 'offline';
   const root = useRef<HTMLDivElement>(null);
-  const infoCol = useRef<HTMLDivElement>(null);
-  const actionCol = useRef<HTMLDivElement>(null);
-  const play = useRef<Rect>({ left: 0, top: 0, right: 0, bottom: 0 });
+  const safe = useRef<HTMLDivElement>(null);
+  const field = useRef<EdgeField>({
+    screen: { left: 0, top: 0, right: 0, bottom: 0 },
+    panels: [],
+  });
 
   useEffect(() => {
     if (hasSteered && hasBraked) completeMilestone('steered');
   }, [hasSteered, hasBraked, completeMilestone]);
 
-  // The HUD's own camera needs the size of the view, and the edge markers the part of it
-  // between the two columns.
+  // The HUD's own camera needs the size of the view and the Camera setting.
   useEffect(() => {
     const node = root.current;
     if (!node) return;
-    const measure = () => {
-      const box = node.getBoundingClientRect();
+    const measure = () =>
       hudLive.camera.configure(
         node.clientWidth,
         node.clientHeight,
         window.devicePixelRatio || 1,
         loadout.world.width,
         loadout.world.height,
+        cameraDistance,
       );
-      const edges = [infoCol.current, actionCol.current].map((col) =>
-        col ? col.getBoundingClientRect() : null,
-      );
-      let left = 16;
-      let right = box.width - 16;
-      for (const edge of edges) {
-        if (!edge) continue;
-        if (edge.left - box.left < box.width / 2) left = Math.max(left, edge.right - box.left + 18);
-        else right = Math.min(right, edge.left - box.left - 18);
-      }
-      play.current = { left, top: 18, right, bottom: box.height - 18 };
-    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(node);
-    if (infoCol.current) observer.observe(infoCol.current);
-    if (actionCol.current) observer.observe(actionCol.current);
     return () => observer.disconnect();
-  }, [loadout]);
-  const frame = useCallback(() => play.current, []);
+  }, [loadout, cameraDistance]);
+
+  // Where the edge markers may go: the screen inside its safe area, less the panels that are
+  // there right now. Read when a marker is placed, a few times a second at most.
+  const edgeField = useCallback((): EdgeField => {
+    const node = root.current;
+    const area = safe.current;
+    if (!node || !area) return field.current;
+    const origin = node.getBoundingClientRect();
+    const rect = (el: Element): Rect => {
+      const r = el.getBoundingClientRect();
+      return {
+        left: r.left - origin.left,
+        top: r.top - origin.top,
+        right: r.right - origin.left,
+        bottom: r.bottom - origin.top,
+      };
+    };
+    const panels: Rect[] = [];
+    for (const el of node.querySelectorAll('[data-edge-block]')) {
+      const r = rect(el);
+      if (r.right - r.left > 1 && r.bottom - r.top > 1) panels.push(r);
+    }
+    field.current = { screen: rect(area), panels };
+    return field.current;
+  }, []);
 
   const hint = showGuide && !steered && phase === 'RACING' && !(hasSteered && hasBraked);
 
   return (
-    <div className={`hud hud-scale-${hudScale}`} ref={root}>
-      <div className="hud-col hud-col-info" ref={infoCol}>
-        <RacePanel />
-        <CarStatus loadout={loadout} />
-        <div className="hud-lane">
+    <div className={`hud hud-scale-${hudScale}`} ref={root} data-camera={cameraDistance}>
+      <div className="hud-safe" ref={safe} aria-hidden="true" />
+      <div className="hud-col hud-col-info">
+        <div className="hud-stack" data-edge-block="">
+          <RaceStrip />
+          <CarStatus loadout={loadout} />
+        </div>
+        <div className="hud-lane" data-edge-block="">
           <WarningChip />
           <Callouts />
           {hint && (
@@ -559,28 +626,33 @@ export function Hud({ manifests, loadout, input, onPause }: Props) {
         </div>
       </div>
 
-      <div className="hud-col hud-col-action" ref={actionCol}>
-        <div className="hud-topbar">
+      <div className="hud-col hud-col-action">
+        <div className="hud-topbar" data-edge-block="">
           <div className="panel hud-map">
             <Minimap manifests={manifests} />
+            <RivalBar />
           </div>
           <div className="hud-topbar-side">
             <HudButton
-              className="btn btn-icon hud-menu"
+              className={`btn btn-icon hud-menu${offline ? ' is-offline' : ''}`}
               onPress={onPause}
               label={STRINGS.home.settings}
+              title={offline ? STRINGS.race.offlineBadge : undefined}
             >
               <span className="icon-menu" aria-hidden="true" />
+              {/* The race runs on this device: said in full in the pause menu. */}
+              {offline && (
+                <span className="hud-offline-dot" aria-hidden="true" data-testid="offline-dot" />
+              )}
             </HudButton>
             <Speed />
           </div>
         </div>
-        <RivalBar />
         <BendWarning />
         <ActionCluster manifests={manifests} loadout={loadout} input={input} />
       </div>
 
-      <EdgeMarkers frame={frame} />
+      <EdgeMarkers field={edgeField} />
       <Countdown />
       <FinishBanner />
       {DEBUG && <DebugReadout />}

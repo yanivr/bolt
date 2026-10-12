@@ -83,6 +83,8 @@ type Props = {
   result: RaceResult | null;
   summary: ResultsSummary;
   you: number;
+  /** The race ran on the device, not on the server: the results say so. */
+  offline?: boolean;
   onRaceAgain: () => void;
   onChangeBuild: () => void;
   onHome: () => void;
@@ -108,6 +110,7 @@ export function Results({
   result,
   summary,
   you,
+  offline = false,
   onRaceAgain,
   onChangeBuild,
   onHome,
@@ -209,6 +212,11 @@ export function Results({
           <p className="results-line" data-testid="results-line">
             {verdict ? verdictLine(verdict) : r.preview}
           </p>
+          {offline && (
+            <span className="badge results-offline" data-testid="offline-badge">
+              {STRINGS.race.offlineBadge}
+            </span>
+          )}
         </header>
 
         <div className="results-body">

@@ -34,6 +34,7 @@ export type ViewScale = {
  * device resolution. When it cannot (a few laptop and small-phone sizes), the canvas is sized
  * so the same whole-number scale shows the nearest allowed width and the browser resamples the
  * finished frame by a few percent. Either way every player sees about the same amount of road.
+ * This is the `Close` camera, and the base the other two are stepped out from.
  */
 export function chooseViewScale(
   cssWidth: number,
@@ -56,6 +57,131 @@ export function chooseViewScale(
     return { renderRatio: ratio, scale, native: true };
   const wanted = clamp(view, VIEW_LONG_MIN, VIEW_LONG_MAX);
   return { renderRatio: (wanted * scale) / cssLong, scale, native: false };
+}
+
+// --- Camera distance --------------------------------------------------------------------------
+
+/**
+ * How much of the track the player has asked to see (the `Camera` setting). The camera still
+ * never rotates and never zooms while driving: this is one fixed view, chosen in the menu.
+ */
+export type CameraDistance = 'close' | 'medium' | 'far';
+
+export const CAMERA_DISTANCES: readonly CameraDistance[] = ['close', 'medium', 'far'];
+
+/** The view `Medium` shows against `Close`, each way. */
+export const MEDIUM_SPAN = 1.25;
+/**
+ * The least `Far` must show against `Close`, each way: clearly more than `Medium`. A step of
+ * one whole scale that gives less (five to four, six to five on a large desktop screen) is
+ * skipped for the next one.
+ */
+export const FAR_MIN_SPAN = 1.3;
+/**
+ * The most world pixels `Far` may show along the long side: twice the top of the `Close`
+ * band, which is what one step from two device pixels to one gives. No step can exceed it
+ * (`Close` is at most 1,040 and a step out at most doubles it); it is the band's upper end.
+ */
+export const FAR_LONG_MAX = 2 * VIEW_LONG_MAX;
+/**
+ * Where `Close` is already one canvas pixel per world pixel there is no whole step out; `Far`
+ * is then drawn as `Medium` is, at this span.
+ */
+export const FAR_FALLBACK_SPAN = 1.5;
+
+export type RaceView = ViewScale & {
+  distance: CameraDistance;
+  /**
+   * How the browser must scale the finished canvas onto the screen: `pixelated` when one
+   * canvas pixel is one device pixel, `smooth` when the frame is resampled.
+   */
+  filter: 'pixelated' | 'smooth';
+  /** Canvas size in its own pixels. */
+  widthPx: number;
+  heightPx: number;
+  /** World pixels the view shows. */
+  worldWidth: number;
+  worldHeight: number;
+  /** CSS pixels one world pixel covers on screen. */
+  cssPerWorld: number;
+};
+
+/**
+ * `Far`: the next whole-number scale out from `Close`, at the canvas resolution `Close` has
+ * (so on a phone where `Close` is drawn at device resolution, so is `Far`, and nothing is
+ * resampled). Three device pixels to a world pixel become two on the owner's phone, which is
+ * half as much road again; two become one on a phone at two device pixels, which is twice.
+ */
+export function chooseFarScale(close: ViewScale): ViewScale {
+  for (let scale = close.scale - 1; scale >= 1; scale--) {
+    if (close.scale / scale >= FAR_MIN_SPAN - 1e-9)
+      return { renderRatio: close.renderRatio, scale, native: close.native };
+  }
+  return {
+    renderRatio: close.renderRatio * FAR_FALLBACK_SPAN,
+    scale: close.scale,
+    native: false,
+  };
+}
+
+/**
+ * The view for a camera distance on a screen. All three draw the world at a whole number of
+ * canvas pixels per world pixel, with every position snapped to that grid, so the scene is
+ * the same picture at every setting and only the canvas and its scale change.
+ *
+ * - `close` is the standard view (`chooseViewScale`): whole device pixels per world pixel.
+ * - `far` is the next whole-number scale out (`chooseFarScale`).
+ * - `medium` shows a quarter more than `close`. No whole-number scale gives that, so the
+ *   world is drawn exactly as in `close`, at the same whole-number scale, into a canvas a
+ *   quarter larger each way, and the browser scales the finished frame down by one uniform
+ *   factor: five canvas pixels onto four device pixels. Every world pixel keeps the same
+ *   width as it moves (its edges are blended over at most one device pixel instead of some
+ *   pixels being a device pixel wider than their neighbours), at the price of 56 percent
+ *   more pixels to fill.
+ */
+export function chooseRaceView(
+  cssWidth: number,
+  cssHeight: number,
+  devicePixelRatio: number,
+  distance: CameraDistance,
+): RaceView {
+  const close = chooseViewScale(cssWidth, cssHeight, devicePixelRatio);
+  const choice: ViewScale =
+    distance === 'medium'
+      ? { renderRatio: close.renderRatio * MEDIUM_SPAN, scale: close.scale, native: false }
+      : distance === 'far'
+        ? chooseFarScale(close)
+        : close;
+  const widthPx = Math.max(2, Math.round(cssWidth * choice.renderRatio));
+  const heightPx = Math.max(2, Math.round(cssHeight * choice.renderRatio));
+  return {
+    ...choice,
+    distance,
+    filter: choice.native ? 'pixelated' : 'smooth',
+    widthPx,
+    heightPx,
+    worldWidth: widthPx / choice.scale,
+    worldHeight: heightPx / choice.scale,
+    cssPerWorld: choice.scale / choice.renderRatio,
+  };
+}
+
+/** A stored or requested camera distance, or `fallback` for anything else (`wide` is `far`). */
+export function parseCameraDistance(value: unknown, fallback: CameraDistance): CameraDistance {
+  if (value === 'wide') return 'far';
+  return value === 'close' || value === 'medium' || value === 'far' ? value : fallback;
+}
+
+/**
+ * How many terrain chunks of `chunkSize` world pixels a view can touch at once, at most: the
+ * draw calls the ground costs, since each chunk is a texture of its own.
+ */
+export function chunksInView(
+  view: { worldWidth: number; worldHeight: number },
+  chunkSize: number,
+): number {
+  const across = (span: number) => Math.floor((span - 1e-6) / chunkSize) + 2;
+  return across(view.worldWidth) * across(view.worldHeight);
 }
 
 // --- Frame pacing -----------------------------------------------------------------------------

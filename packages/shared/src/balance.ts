@@ -352,6 +352,76 @@ export const KO_SECONDS = 3;
 /** Floor on the speed a time gap is measured against, so a stopped car is not "hours" ahead. */
 export const GAP_SPEED_FLOOR = 80;
 
+// --- Tow: the long-range catch-up (product-owner decision, docs/DECISIONS.md 189 to 198) ---------
+
+/**
+ * Every number of the tow, and the only place they are written. A car that trails the racing
+ * car ahead of it by more than `thresholdGap` seconds runs with a higher top speed; nothing
+ * else about it changes and nothing about the car ahead changes at all.
+ *
+ * The time gap is the distance between the two cars along the course divided by the trailing
+ * car's own recent average speed. The bonus is zero at and below `thresholdGap`, grows in a
+ * straight line with the gap and is whole at `fullGap`. It is decided on a slow clock and
+ * announced one period ahead, so a predicting client replays it exactly (see `advanceTow`).
+ *
+ * Where the threshold comes from: the eleven shipped builds race Neon Cut at 247 px/s on
+ * average, 216 to 282 (course length over race time, alone, sparring driver, weapons off;
+ * `tests/unit/tow.test.ts` measures it), so one second of gap is about 250 px of road. That is just outside the 220 px that eight of
+ * the twenty weapons reach, both bullet guns among them, and inside the Arc Mortar's 320 and the
+ * Needle Railgun's 350: the edge of the fight. Below it the bonus is exactly zero, so closing
+ * the last second and passing are the cars' own business.
+ *
+ * How the rest was chosen, and every setting that was tried, is docs/evidence/balance/tow-study.md.
+ */
+export type TowTuning = {
+  /** Time gap, seconds, at and below which the bonus is exactly zero: the edge of fighting range. */
+  thresholdGap: number;
+  /** An idle tow starts only once the gap has grown to this, so it cannot flicker at the edge. */
+  engageGap: number;
+  /** Time gap at which the bonus is whole. */
+  fullGap: number;
+  /** The whole bonus, as a share of top speed: 0.07 is seven percent. */
+  maxBonus: number;
+  /** How fast the bonus may rise and fall, as shares of the whole bonus per second. */
+  rampUpPerSecond: number;
+  rampDownPerSecond: number;
+  /** No tow is decided before the race is this old, seconds. */
+  startDelaySeconds: number;
+  /** The bonus is decided this often, and each decision takes effect one period later. */
+  updateSeconds: number;
+  /** Time constant of the trailing car's average speed, seconds, and the least speed it counts as. */
+  speedAverageSeconds: number;
+  speedFloor: number;
+  /**
+   * The bonus acts on speed only: nothing below `fadeStartSpeed` (px/s), all of it from
+   * `fadeFullSpeed`. A launch, a hairpin and the drive out of one are untouched.
+   */
+  fadeStartSpeed: number;
+  fadeFullSpeed: number;
+  /** Least time between two `catchup` events of one car, seconds. */
+  eventMinSeconds: number;
+};
+
+/**
+ * Not frozen on purpose: the tow study (tests/balance/tow.ts) tries other values by writing
+ * them here for the length of a run and putting these back. Nothing in the game writes to it.
+ */
+export const TOW: TowTuning = {
+  thresholdGap: 1.0,
+  engageGap: 1.15,
+  fullGap: 2.5,
+  maxBonus: 0.08,
+  rampUpPerSecond: 0.5,
+  rampDownPerSecond: 1,
+  startDelaySeconds: 5,
+  updateSeconds: 0.5,
+  speedAverageSeconds: 3,
+  speedFloor: 120,
+  fadeStartSpeed: 140,
+  fadeFullSpeed: 200,
+  eventMinSeconds: 3,
+};
+
 // --- Combat: damage and components (Sections 8.1, 10.1) -----------------------------------------
 //
 // Numbers that belong to one part live in that part's catalog `params`. What follows are the
@@ -555,7 +625,7 @@ export const DIRECTION_REVERSE_SPEED = 30;
 
 // --- Network ----------------------------------------------------------------------------------
 
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 export const MAX_QUEUED_INPUTS = 8;
 export const MAX_INPUTS_PER_PACKET = 6;
 export const REMOTE_INTERP_DELAY_MS = 120;

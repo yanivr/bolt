@@ -12,6 +12,7 @@ import {
   raceTimeOf,
   rivalTracked,
   standingOf,
+  towShareOf,
 } from '@bolt/shared';
 
 const uint8 = (value = 0) => ({ type: 'uint8', default: value }) as const;
@@ -81,6 +82,8 @@ export const RivalState = schema(
     modules: [RivalModuleState],
     ko: bool(),
     buildHash: text(),
+    /** `RivalSnapshot.tow` in hundredths. */
+    tow: uint8(),
   },
   'RivalState',
 );
@@ -145,6 +148,10 @@ export const EffectsState = schema(
     driveSupplyLimit: float64(1),
     stabilityAdd: float64(),
     airborne: bool(),
+    // The tow: the bonus now, the one it is moving toward and the one announced for next.
+    tow: float64(),
+    towTarget: float64(),
+    towNext: float64(),
   },
   'EffectsState',
 );
@@ -257,6 +264,9 @@ export const DriveState = schema(
     /** Race time at the finish in milliseconds, or -1 while the car has not finished. */
     finishedAtMs: int32(-1),
 
+    /** `CarSnapshot.tow` in hundredths: the share of the tow's whole bonus the car has. */
+    tow: uint8(),
+
     /** What damage and statuses are doing to the player's car this tick. */
     fx: EffectsState,
     combat: CombatState,
@@ -353,6 +363,9 @@ export function writeDriveState(
   fx.driveSupplyLimit = from.driveSupplyLimit;
   fx.stabilityAdd = from.stabilityAdd;
   fx.airborne = from.airborne;
+  fx.tow = from.tow;
+  fx.towTarget = from.towTarget;
+  fx.towNext = from.towNext;
 }
 
 function writeStatuses(
@@ -422,6 +435,7 @@ export function writeRaceState(state: DriveState, race: RaceSession, viewer: num
   combat.reserve = me.reserve;
   combat.lockWarning = me.lockWarning;
   combat.ko = me.ko;
+  state.tow = Math.round(towShareOf(me) * 100);
 
   const rival = state.rival;
   const m = other.session.motion;
@@ -453,6 +467,7 @@ export function writeRaceState(state: DriveState, race: RaceSession, viewer: num
     to.up = other.specs[i]!.kind === 'shield' && from.pool > 0;
   }
   rival.ko = other.ko;
+  rival.tow = Math.round(towShareOf(other) * 100);
   if (rival.buildHash !== other.buildHash) rival.buildHash = other.buildHash;
   if (state.rivalBlueprint !== other.blueprintJson) state.rivalBlueprint = other.blueprintJson;
 
