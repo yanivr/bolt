@@ -243,6 +243,7 @@ function onHidden(): void {
 
 function onVisible(): void {
   hiddenAt = false;
+  system?.resume();
   if (!context) return;
   // Desktop browsers resume here. iOS may refuse outside a gesture; the next touch does it.
   if (context.state !== 'running') void context.resume().catch(() => undefined);

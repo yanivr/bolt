@@ -266,9 +266,15 @@ export class AudioSystem {
     }
   }
 
+  /** True while the page is hidden: the race is followed, nothing is started. */
+  private silenced = false;
+
   onRace(race: RaceSnapshot): void {
     const first = this.race === null;
     this.race = race;
+    // A hidden tab keeps receiving the race; starting loops then would sound on return as a
+    // backlog. The first snapshot after `resume` reconciles what should be playing.
+    if (this.silenced) return;
     if (first || !this.context) {
       const context = this.resolveContext?.(race);
       if (context) this.setContext(context);
@@ -559,6 +565,7 @@ export class AudioSystem {
   private frostTick = -1000;
 
   onEvent(event: RaceEvent, race: RaceSnapshot | null): void {
+    if (this.silenced) return;
     if (race && !this.race) this.onRace(race);
     this.mapContext.you = race?.you ?? this.mapContext.you;
     if (event.type === 'shot' && event.weapon === 'weapon_frost') this.frostTick = event.tick;
@@ -882,11 +889,17 @@ export class AudioSystem {
 
   /** Drops everything that is sounding, at once, without forgetting the race (tab hidden). */
   silence(): void {
+    this.silenced = true;
     for (const key of [...this.keyed.keys()]) this.stopKey(key, 0.02);
     this.mixer.stopBuses(
       ['weapons', 'impacts', 'ambience', 'alerts', 'ui', 'music', 'engine'],
       0.02,
     );
+  }
+
+  /** The page is visible again: follow the race and sound it from the next snapshot. */
+  resume(): void {
+    this.silenced = false;
   }
 
   get keys(): string[] {

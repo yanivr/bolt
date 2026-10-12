@@ -1352,9 +1352,9 @@ button:focus-visible,
   margin-right: 2px;
 }
 
-/* The rival's difficulty: the same choice buttons, a row shorter, under the title. */
+/* The rival's difficulty: the same choice buttons in a smaller type, still a full touch target. */
 .preview-pick-rival .weather-badge.weather-choice {
-  min-height: 36px;
+  min-height: 44px;
   font-size: 12px;
   padding: 2px 9px;
 }
@@ -4032,10 +4032,16 @@ p.g-spend.is-blocked {
     gap: 10px;
   }
   .preview-info {
-    gap: 5px;
+    gap: 3px;
   }
   .preview-facts {
-    gap: 2px 16px;
+    gap: 0 16px;
+  }
+  .preview-facts dd {
+    font-size: 15px;
+  }
+  .weather-badge.weather-choice.is-on {
+    font-size: 15px;
   }
   .preview-facts small {
     display: none;
