@@ -686,6 +686,20 @@ function pitchTone(p: Part, b: BuildingRamp, lx: number, ly: number): Color {
 
 type Plan = { lot: Lot; rnd: () => number; kind: FacadeKind; parts: Part[] };
 
+/**
+ * What a district builds on its roofs and walls. Defaults are Neon Cut's: rooftop neon common
+ * beside the track, modern roof features (helipads, pools, billboards).
+ */
+export type BuildingStyle = {
+  /** Chance of a rooftop neon sign on a roof beside the track, and deeper in the city. */
+  neonNear?: number;
+  neonFar?: number;
+  /** `old` roofs carry gardens, tanks and chimneys instead of helipads, pools and hoardings. */
+  roofs?: 'modern' | 'old';
+  /** Chance a block of flats wears a fire escape. */
+  escapeRate?: number;
+};
+
 export function buildBuildings(
   ctx: BakeContext,
   scene: Scene,
@@ -693,6 +707,7 @@ export function buildBuildings(
   wantsBillboard: (lot: Lot) => boolean,
   requests: readonly SignRequest[],
   out: BuildingsOutput,
+  style: BuildingStyle = {},
 ): void {
   dressYards(ctx, scene, layout);
   // First every building decides its masses, so that the shadow volume knows all of them.
@@ -708,7 +723,7 @@ export function buildBuildings(
   }
   scene.later(() => {
     const names = { cursor: 0 };
-    for (const plan of plans) paintLot(scene, plan, wantsBillboard, requests, out, names);
+    for (const plan of plans) paintLot(scene, plan, wantsBillboard, requests, out, names, style);
   });
 }
 
@@ -772,8 +787,10 @@ function paintLot(
   requests: readonly SignRequest[],
   out: BuildingsOutput,
   names: { cursor: number },
+  style: BuildingStyle,
 ): void {
   const { lot, rnd, kind, parts } = plan;
+  const oldRoofs = style.roofs === 'old';
   const b = BUILDINGS[lot.family]!;
   const request = requests.find((q) => q.lot === lot);
   const solid = new Solid(scene, parts, ROOF_HEAD, 2);
@@ -819,6 +836,7 @@ function paintLot(
       ground: p.ground,
       name: wantsName ? nextName() : '',
       street,
+      escapeRate: style.escapeRate,
     });
     if (!p.windows) {
       // A blank plant floor: louvres instead of windows.
@@ -941,7 +959,20 @@ function paintLot(
     }
 
     // One feature on roomy roofs.
-    if (!hasFeature && minDim >= 50 && area >= 3600) {
+    if (!hasFeature && minDim >= 50 && area >= 3600 && oldRoofs) {
+      // An old roof: a garden or a few panels, otherwise just its tanks and chimneys.
+      const roll = rnd();
+      if (roll < 0.3) {
+        const gw = 26 + ((rnd() * 20) | 0);
+        const gh = 18 + ((rnd() * 12) | 0);
+        const at = place(gw, gh, 6);
+        if (at) add(at, 0, (x, y) => garden(cv, x, y, gw, gh, rnd));
+      } else if (roll < 0.42) {
+        const cols = 2 + ((rnd() * 3) | 0);
+        const at = place(cols * 8, 14, 6);
+        if (at) add(at, 14, (x, y) => solar(cv, x, y, cols, 2));
+      }
+    } else if (!hasFeature && minDim >= 50 && area >= 3600) {
       const roll = rnd();
       if (roll < 0.14 && minDim >= 60) {
         const at = place(42, 42, 6);
@@ -972,7 +1003,12 @@ function paintLot(
 
     // Rooftop neon: common beside the track, rare deeper in the city.
     const nearTrack = lot.roadDist < 70;
-    if (!hasFeature && w >= 34 && d >= 18 && rnd() < (nearTrack ? 0.3 : 0.1)) {
+    if (
+      !hasFeature &&
+      w >= 34 &&
+      d >= 18 &&
+      rnd() < (nearTrack ? (style.neonNear ?? 0.3) : (style.neonFar ?? 0.1))
+    ) {
       const useGlyph = rnd() < 0.42;
       const color = (rnd() * 4) | 0;
       const spec: NeonSignSpec = {

@@ -14,6 +14,10 @@ import type { BiomeChecks, BiomeModule } from './biome.js';
 import { Canvas, col } from './canvas.js';
 import { reduceColors, writeChunks } from './chunks.js';
 import { CITY_BIOME } from './city/index.js';
+import { DESERT_BIOME } from './desert/index.js';
+import { FOREST_BIOME } from './forest/index.js';
+import { SNOW_BIOME } from './snow/index.js';
+import { INDUSTRIAL_BIOME } from './industrial/index.js';
 import { buildCorridorField } from './field.js';
 import { drawMinimap } from './minimap.js';
 import { writePreviews, writeSheet } from './preview.js';
@@ -33,6 +37,10 @@ export const CHUNK_SIZE = 512;
  */
 const BIOMES: Partial<Record<string, BiomeModule>> = {
   [CITY_BIOME.biome]: CITY_BIOME,
+  [DESERT_BIOME.biome]: DESERT_BIOME,
+  [FOREST_BIOME.biome]: FOREST_BIOME,
+  [SNOW_BIOME.biome]: SNOW_BIOME,
+  [INDUSTRIAL_BIOME.biome]: INDUSTRIAL_BIOME,
 };
 
 export function biomeModule(biome: string): BiomeModule | undefined {
@@ -126,9 +134,22 @@ export function bakeTerrainWithReport(opts: BakeOptions): BakeReport {
   for (const art of out.animated) {
     const first = art.frames[0];
     if (!first) continue;
-    const strip = new Canvas(first.w * art.frames.length, first.h);
+    // One row, or a grid `columns` frames wide (read row by row, like any sprite sheet).
+    const across =
+      art.columns !== undefined && art.columns > 0 && art.columns < art.frames.length
+        ? art.columns
+        : art.frames.length;
+    const strip = new Canvas(first.w * across, first.h * Math.ceil(art.frames.length / across));
     art.frames.forEach((frame, k) =>
-      strip.buf.copyFrom(frame.buf, 0, 0, first.w, first.h, k * first.w, 0),
+      strip.buf.copyFrom(
+        frame.buf,
+        0,
+        0,
+        first.w,
+        first.h,
+        (k % across) * first.w,
+        Math.floor(k / across) * first.h,
+      ),
     );
     reduceColors(strip.buf, 256);
     const file = `anim_${art.id}.png`;

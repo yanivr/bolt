@@ -33,7 +33,8 @@ type LoadState =
  * and `scenario=<id>` plays a showcase scenario in the page with both cars scripted.
  */
 function driveOptions(): DriveOptions {
-  const options: DriveOptions = {};
+  // The AI's difficulty is the player's choice on the preview, not a debug switch.
+  const options: DriveOptions = { difficulty: useApp.getState().difficulty };
   if (!debugEnabled()) return options;
   const query = new URLSearchParams(window.location.search);
   const rival = query.get('rival');

@@ -61,12 +61,25 @@ export function orientedRect(
 export const LAMP_SPACING = 172;
 export const LAMP_RADII: readonly number[] = [40, 74];
 
+/**
+ * Street furniture choices a track other than Neon Cut can make. Defaults are Neon Cut's.
+ */
+export type StreetOptions = {
+  /** Draws the track's obstacles; by default each is a gold alley bollard. */
+  obstacles?: (scene: Scene) => void;
+  /** Tints of the lantern pools laid along each shortcut, alternating; [] for none. */
+  alleyTints?: readonly number[];
+  /** Arc-length ranges of the main line with no lamps (the track lights them itself). */
+  noLamps?: ReadonlyArray<readonly [number, number]>;
+};
+
 export function paintStreet(
   ctx: BakeContext,
   scene: Scene,
   layout: CityLayout,
   plan: RoadPlan,
   out: LightOut,
+  opts: StreetOptions = {},
 ): void {
   const { world, field, track } = ctx;
   const main = track.main;
@@ -170,6 +183,7 @@ export function paintStreet(
     const s = (track.startS + lampStep * 0.5 + k * lampStep) % L;
     // The grid has its own floodlights.
     if (Math.min(Math.abs(s - track.startS), L - Math.abs(s - track.startS)) < 150) continue;
+    if (opts.noLamps?.some(([a, b]) => s >= a && s <= b)) continue;
     let done = false;
     for (const side of k % 2 === 0 ? [-1, 1] : [1, -1]) {
       if (done) break;
@@ -399,19 +413,22 @@ export function paintStreet(
   }
 
   // --- Shortcut dressing: the bollards that stand in the lane, lantern glow on the stones ---
-  for (const ob of track.obstacles) {
-    const x = Math.round(ob.x);
-    const y = Math.round(ob.y);
-    const sp = bollardSprite(true);
-    scene.place(sp, x, y + 3);
-    scene.shadeDisc(x + 2, y + 4, 3);
-  }
+  if (opts.obstacles) opts.obstacles(scene);
+  else
+    for (const ob of track.obstacles) {
+      const x = Math.round(ob.x);
+      const y = Math.round(ob.y);
+      const sp = bollardSprite(true);
+      scene.place(sp, x, y + 3);
+      scene.shadeDisc(x + 2, y + 4, 3);
+    }
+  const alleyTints = opts.alleyTints ?? [TINT_GOLD, TINT_CORAL];
   for (const branch of track.branches) {
-    if (branch.index === 0) continue;
+    if (branch.index === 0 || alleyTints.length === 0) continue;
     let n = 0;
     for (let s = 56; s < branch.length - 40; s += 30) {
       const p = sampleBranch(branch, s);
-      const tint = n++ % 2 === 0 ? TINT_GOLD : TINT_CORAL;
+      const tint = alleyTints[n++ % alleyTints.length]!;
       out.pools.push({ x: p.x, y: p.y, radii: [16, 30], tint });
       out.lights.push({
         x: Math.round(p.x),

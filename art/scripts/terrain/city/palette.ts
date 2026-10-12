@@ -196,25 +196,30 @@ export type BuildingRamp = {
   deep: Color;
 };
 
-export const BUILDINGS: readonly BuildingRamp[] = ROOFS.map((r) => ({
-  roof: mixc(r.par, r.hi, 0.2),
-  roofAlt: mixc(r.par, r.hi, 0.06),
-  roofLine: mixc(r.alt, r.par, 0.5),
-  rim: mixc(r.hi, col('#F2EEDC'), 0.18),
-  rimLow: mixc(r.hi, r.par, 0.4),
-  inner: r.dark,
-  west: mixc(r.alt, r.par, 0.4),
-  westAlt: mixc(r.alt, r.par, 0.16),
-  westLine: mixc(r.base, r.dark, 0.3),
-  edge: mixc(r.par, r.hi, 0.55),
-  wall: mixc(r.dark, r.base, 0.62),
-  wallAlt: mixc(r.dark, r.base, 0.3),
-  wallLow: mixc(r.deep, r.dark, 0.5),
-  pier: mixc(r.base, r.alt, 0.7),
-  line: r.deep,
-  trim: mixc(r.alt, r.par, 0.75),
-  deep: mixc(r.deep, col('#0E1124'), 0.3),
-}));
+/** The three planes of a building, derived from a roof family's six tones. */
+export function rampToBuilding(r: RoofRamp): BuildingRamp {
+  return {
+    roof: mixc(r.par, r.hi, 0.2),
+    roofAlt: mixc(r.par, r.hi, 0.06),
+    roofLine: mixc(r.alt, r.par, 0.5),
+    rim: mixc(r.hi, col('#F2EEDC'), 0.18),
+    rimLow: mixc(r.hi, r.par, 0.4),
+    inner: r.dark,
+    west: mixc(r.alt, r.par, 0.4),
+    westAlt: mixc(r.alt, r.par, 0.16),
+    westLine: mixc(r.base, r.dark, 0.3),
+    edge: mixc(r.par, r.hi, 0.55),
+    wall: mixc(r.dark, r.base, 0.62),
+    wallAlt: mixc(r.dark, r.base, 0.3),
+    wallLow: mixc(r.deep, r.dark, 0.5),
+    pier: mixc(r.base, r.alt, 0.7),
+    line: r.deep,
+    trim: mixc(r.alt, r.par, 0.75),
+    deep: mixc(r.deep, col('#0E1124'), 0.3),
+  };
+}
+
+export const BUILDINGS: readonly BuildingRamp[] = ROOFS.map(rampToBuilding);
 
 /** Slate and concrete dominate; the saturated families are accents. */
 export const ROOF_WEIGHTS: readonly number[] = [
@@ -337,4 +342,40 @@ export function litNight(c: Color, step: number, tint: number): Color {
   const ng = Math.min(255, Math.round(gr * (1 + k * t[1]) + l * t[1]));
   const nb = Math.min(255, Math.round(b * (1 + k * t[2]) + l * t[2]));
   return (nr << 16) | (ng << 8) | nb;
+}
+
+/**
+ * A city look other than Neon Cut's night: replacement colors for the shared palette, the six
+ * roof families and how often each is built. Painters read `PAL`, `ROOFS`, `BUILDINGS` and
+ * `ROOF_WEIGHTS` when they draw, so a style is applied by swapping their contents for the
+ * duration of one bake (`withCityStyle`) and restoring them afterwards. Neon Cut never applies
+ * one, so its bake is untouched.
+ */
+export type CityStyle = {
+  pal: Partial<Record<keyof typeof PAL, Color>>;
+  roofs: readonly RoofRamp[];
+  weights: readonly number[];
+};
+
+export { ramp as roofRamp };
+
+export function withCityStyle<T>(style: CityStyle, fn: () => T): T {
+  const pal = PAL as unknown as Record<string, Color>;
+  const savedPal = { ...pal };
+  const roofs = ROOFS as RoofRamp[];
+  const buildings = BUILDINGS as BuildingRamp[];
+  const weights = ROOF_WEIGHTS as number[];
+  const saved = { roofs: roofs.slice(), buildings: buildings.slice(), weights: weights.slice() };
+  try {
+    Object.assign(pal, style.pal);
+    roofs.splice(0, roofs.length, ...style.roofs);
+    buildings.splice(0, buildings.length, ...style.roofs.map(rampToBuilding));
+    weights.splice(0, weights.length, ...style.weights);
+    return fn();
+  } finally {
+    Object.assign(pal, savedPal);
+    roofs.splice(0, roofs.length, ...saved.roofs);
+    buildings.splice(0, buildings.length, ...saved.buildings);
+    weights.splice(0, weights.length, ...saved.weights);
+  }
 }

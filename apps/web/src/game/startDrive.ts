@@ -1,8 +1,8 @@
 import {
   BASELINE_BLUEPRINT,
   conditionsFor,
+  createAiRace,
   createScenarioRace,
-  createSparringRace,
   defaultRaceSeed,
   environmentFor,
   getScenario,
@@ -10,6 +10,7 @@ import {
   resolveBuild,
 } from '@bolt/content';
 import type {
+  AiDifficulty,
   BuildConditions,
   ControlInput,
   DriveSession,
@@ -64,6 +65,8 @@ export type DriveSetupError = 'version' | 'server' | 'content';
 
 /** Debug and test options (ignored in production unless `?debug=1`). */
 export type DriveOptions = {
+  /** How good the AI rival is (a player choice, Section 3.1). Racer when not given. */
+  difficulty?: AiDifficulty;
   /** Shipped template id of the rival to race. */
   rivalTemplateId?: string;
   seed?: number;
@@ -184,6 +187,7 @@ export async function startDrive(
           trackId,
           weatherPresetId,
           blueprint: raced,
+          ...(options.difficulty !== undefined ? { difficulty: options.difficulty } : {}),
           ...(options.rivalTemplateId !== undefined
             ? { rivalTemplateId: options.rivalTemplateId }
             : {}),
@@ -203,18 +207,25 @@ export async function startDrive(
   }
 
   const seed = options.seed ?? defaultRaceSeed(resolved.buildHash, trackId);
-  const sparring = createSparringRace(
+  // The same AI race the server would set up for this blueprint, course, difficulty and seed.
+  const ai = createAiRace(
     track,
+    weatherPresetId,
     env,
     conditions,
     { build: resolved.build, params: resolved.params, buildHash: resolved.buildHash },
     seed,
-    options.rivalTemplateId,
+    {
+      ...(options.difficulty !== undefined ? { difficulty: options.difficulty } : {}),
+      ...(options.rivalTemplateId !== undefined
+        ? { rivalTemplateId: options.rivalTemplateId }
+        : {}),
+    },
   );
-  if (!sparring) return { error: 'content' };
-  const rivalEntry = sparring.race.cars[1];
+  if (!ai) return { error: 'content' };
+  const rivalEntry = ai.race.cars[1];
   return setup(
-    new OfflineLink(sparring.race, sparring.brains),
+    new OfflineLink(ai.race, ai.brains),
     rivalEntry ? { blueprint: rivalEntry.build.blueprint, params: rivalEntry.baseParams } : null,
   );
 }

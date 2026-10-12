@@ -297,3 +297,74 @@ export function vfxFrameRect(
     h: anim.frameHeight,
   };
 }
+
+// --- Weather and environment atlas -------------------------------------------------------------
+
+/**
+ * Draw layer of a weather or environment sprite (`vfx_weather`), lowest first. Each is one
+ * batch in the race view. `wet` holds marks on the road; `shine` is additive light on the
+ * ground (reflections, light shafts, glints); `ground` is what lies or drifts on the ground
+ * (splashes, mist, dust bands) and the far plane of falling rain or snow; `kick` is what the
+ * wheels throw up, drawn under the cars; `air` and `glow` are above the cars (the middle plane
+ * of rain and snow, leaves, steam, embers); `near` is the plane nearest the camera, above the
+ * foreground art; `screen` is fixed to the screen (visibility haze, the frost vignette).
+ */
+export const WEATHER_LAYERS = [
+  'wet',
+  'shine',
+  'ground',
+  'kick',
+  'air',
+  'glow',
+  'near',
+  'screen',
+] as const;
+export type WeatherLayer = (typeof WEATHER_LAYERS)[number];
+
+/**
+ * One animation of the weather atlas: the same frame grid as a combat effect
+ * (`VfxAnimManifest`), with a weather layer and no reduced-flash fallback (nothing in it is a
+ * flash). A directional strip holds `directions` headings of `frames / directions` frames.
+ */
+export type WeatherAnimManifest = {
+  id: string;
+  x: number;
+  y: number;
+  frameWidth: number;
+  frameHeight: number;
+  frames: number;
+  columns: number;
+  fps: number;
+  loop: boolean;
+  anchorX: number;
+  anchorY: number;
+  layer: WeatherLayer;
+  blend: 'normal' | 'add';
+  directions: number;
+};
+
+export type WeatherAtlasManifest = {
+  version: 1;
+  /** File name relative to the manifest. */
+  file: string;
+  width: number;
+  height: number;
+  padding: number;
+  anims: Record<string, WeatherAnimManifest>;
+};
+
+/** Position of frame `index` of a weather animation, in atlas pixels (as `vfxFrameRect`). */
+export function weatherFrameRect(
+  anim: WeatherAnimManifest,
+  index: number,
+  padding: number,
+): { x: number; y: number; w: number; h: number } {
+  const col = index % anim.columns;
+  const row = Math.floor(index / anim.columns);
+  return {
+    x: anim.x + col * (anim.frameWidth + padding),
+    y: anim.y + row * (anim.frameHeight + padding),
+    w: anim.frameWidth,
+    h: anim.frameHeight,
+  };
+}

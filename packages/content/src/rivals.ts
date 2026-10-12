@@ -1,4 +1,7 @@
 import type {
+  AiBrain,
+  AiDifficulty,
+  AiStyle,
   BuildConditions,
   RaceBrain,
   RaceEntry,
@@ -7,7 +10,16 @@ import type {
   TrackRuntime,
   VehicleBlueprint,
 } from '@bolt/shared';
-import { createRace, createSparringBrain, hashString, mulberry32 } from '@bolt/shared';
+import {
+  DEFAULT_DIFFICULTY,
+  createAiBrain,
+  createRace,
+  createSparringBrain,
+  hashString,
+  mulberry32,
+} from '@bolt/shared';
+import type { AiBuildPick, AiStrategy } from './aiLoadouts.js';
+import { AI_STRATEGY_TABLE, pickAiBuild } from './aiLoadouts.js';
 import { CATALOG } from './catalog.js';
 import { resolveBuild } from './loadout.js';
 import type { BlueprintTemplate } from './templates.js';
@@ -75,4 +87,79 @@ export function createSparringRace(
   if (!entry) return null;
   const race = createRace(track, env, [player, entry], { seed, conditions, catalog: CATALOG });
   return { race, brains: [null, createSparringBrain(seed ^ 0x2545f491)], rival, seed };
+}
+
+export type AiRaceOptions = {
+  /** Rookie, Racer or Ace (Section 3.1). Racer when not given. */
+  difficulty?: AiDifficulty;
+  /** Aggressive or tactical. Chosen by seed when not given. */
+  style?: AiStyle;
+  /** The strategy the AI builds for. Chosen by seed when not given. */
+  strategy?: AiStrategy;
+  /** Debug and tests: race a named shipped template instead of an AI build. */
+  rivalTemplateId?: string;
+};
+
+export type AiRace = SparringRace & {
+  difficulty: AiDifficulty;
+  style: AiStyle;
+  /** The strategy pick, or null when a named template was raced. */
+  pick: AiBuildPick | null;
+  brain: AiBrain;
+};
+
+/** Seed of the AI's own choices, apart from the race's. */
+export const AI_BRAIN_SEED_SALT = 0x2545f491;
+
+/**
+ * The Milestone D race: the player's car on the first grid slot against the AI on the second.
+ * The AI builds from the same catalog, budget and validator as the player, for the course and
+ * its weather (`pickAiBuild`), or races a named shipped template (a debug and test option).
+ * The server room and the offline link both build theirs here, so the same blueprint, course,
+ * difficulty and seed give the same race in both.
+ */
+export function createAiRace(
+  track: TrackRuntime,
+  presetId: string,
+  env: RaceEnvironment,
+  conditions: BuildConditions,
+  player: RaceEntry,
+  seed: number,
+  options: AiRaceOptions = {},
+): AiRace | null {
+  let rival: BlueprintTemplate | undefined;
+  let pick: AiBuildPick | null = null;
+  if (options.rivalTemplateId !== undefined) rival = getTemplate(options.rivalTemplateId);
+  else {
+    pick = pickAiBuild(track.def.id, presetId, seed, options.strategy);
+    if (pick)
+      rival = {
+        id: `ai_${pick.frame}`,
+        group: 'example',
+        name: AI_STRATEGY_TABLE[pick.strategy].frames.find((f) => f.id === pick!.frame)!.name,
+        description: AI_STRATEGY_TABLE[pick.strategy].plan,
+        blueprint: pick.blueprint,
+      };
+  }
+  if (!rival) return null;
+  const entry = raceEntry(rival.blueprint, conditions);
+  if (!entry) return null;
+  const race = createRace(track, env, [player, entry], { seed, conditions, catalog: CATALOG });
+  const brain = createAiBrain({
+    seed: seed ^ AI_BRAIN_SEED_SALT,
+    difficulty: options.difficulty ?? DEFAULT_DIFFICULTY,
+    ...(options.style ? { style: options.style } : {}),
+  });
+  // The plan of the route is worked out now, at the join, not on the first tick of the race.
+  brain.prepare(race, 1);
+  return {
+    race,
+    brains: [null, brain],
+    rival,
+    seed,
+    difficulty: brain.difficulty,
+    style: brain.style,
+    pick,
+    brain,
+  };
 }

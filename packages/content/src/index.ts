@@ -1,4 +1,5 @@
 export * from './catalog.js';
+export * from './aiLoadouts.js';
 export * from './chassis.js';
 export * from './defenses.js';
 export * from './engines.js';

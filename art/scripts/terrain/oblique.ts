@@ -276,9 +276,12 @@ export class Scene {
     this.deferred.push(fn);
   }
 
-  /** Casts the shadow volume of every registered mass, then runs the queued painters. */
-  resolve(): void {
-    this.shade = shadowVolume(this.w, this.h, this.height, SHADOW_DROP);
+  /**
+   * Casts the shadow volume of every registered mass, then runs the queued painters. `drop`
+   * (optional) is how fast a shadow sinks; a low sun casts longer shadows with a smaller one.
+   */
+  resolve(drop: number = SHADOW_DROP): void {
+    this.shade = shadowVolume(this.w, this.h, this.height, drop);
     for (const fn of this.deferred) fn();
     this.deferred.length = 0;
   }

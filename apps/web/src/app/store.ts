@@ -1,6 +1,11 @@
 import { BASELINE_BLUEPRINT, CATALOG } from '@bolt/content';
-import type { MatchPhase, VehicleBlueprint } from '@bolt/shared';
-import { serializeBlueprint, validateUntrustedBlueprint } from '@bolt/shared';
+import type { AiDifficulty, MatchPhase, VehicleBlueprint } from '@bolt/shared';
+import {
+  DEFAULT_DIFFICULTY,
+  isDifficulty,
+  serializeBlueprint,
+  validateUntrustedBlueprint,
+} from '@bolt/shared';
 import type { Course } from './course.js';
 import { DEFAULT_COURSE } from './course.js';
 import { BLUEPRINT_KEY, restoreBlueprint } from './savedBlueprint.js';
@@ -70,6 +75,18 @@ const SETTINGS_KEY = 'bolt.settings.v1';
 const MILESTONES_KEY = 'bolt.tutorial.v1';
 /** The last track and weather chosen on the preview, a convenience for the next visit. */
 const COURSE_KEY = 'bolt.course.v1';
+/** The AI rival's difficulty chosen on the preview (Section 3.1). */
+const DIFFICULTY_KEY = 'bolt.difficulty.v1';
+
+function loadDifficulty(): AiDifficulty {
+  try {
+    const raw = window.localStorage.getItem(DIFFICULTY_KEY);
+    if (isDifficulty(raw)) return raw;
+  } catch {
+    // Storage is unavailable: the default.
+  }
+  return DEFAULT_DIFFICULTY;
+}
 
 function loadCourse(): Course {
   try {
@@ -164,6 +181,9 @@ type AppState = {
   /** The track and weather chosen on the preview; the garage stats and the race use it. */
   course: Course;
   setCourse: (course: Course) => void;
+  /** How good the AI rival is: chosen on the preview, sent with the join. */
+  difficulty: AiDifficulty;
+  setDifficulty: (difficulty: AiDifficulty) => void;
   setScreen: (screen: Screen) => void;
   openGarageWith: (draft: VehicleBlueprint) => void;
   takeGarageDraft: () => VehicleBlueprint | null;
@@ -189,6 +209,15 @@ export const useApp = create<AppState>((set, get) => ({
   garageDraft: null,
   paused: false,
   course: loadCourse(),
+  difficulty: loadDifficulty(),
+  setDifficulty: (difficulty) => {
+    try {
+      window.localStorage.setItem(DIFFICULTY_KEY, difficulty);
+    } catch {
+      // The choice still applies for this session.
+    }
+    set({ difficulty });
+  },
   setCourse: (course) => {
     try {
       window.localStorage.setItem(COURSE_KEY, JSON.stringify(course));

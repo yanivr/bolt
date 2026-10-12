@@ -53,6 +53,9 @@ export const STRINGS = {
     nextTrack: 'Next track',
     trackCount: '{index} of {count}',
     chooseWeather: 'Weather',
+    /** The AI rival's difficulty (Section 3.1). */
+    chooseRival: 'Rival',
+    rivalLevels: { rookie: 'Rookie', racer: 'Racer', ace: 'Ace' },
     artInProgress: 'Track art in progress',
     weatherArtInProgress: 'Weather art in progress',
     surfaceNames: {

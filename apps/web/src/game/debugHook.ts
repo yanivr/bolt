@@ -15,6 +15,8 @@ export type RaceDebugHook = {
   /** Middle of the two cars on the page, in CSS pixels: where a capture should look. */
   focus(): { x: number; y: number };
   setQuality(value: 'auto' | 'high' | 'low'): void;
+  /** The local car on the page, in CSS pixels (weather captures crop round it). */
+  ownCar?(): { x: number; y: number };
   /**
    * The view as drawn: the `Camera` setting, the whole-number world scale, the canvas size,
    * the world pixels it shows, where it is, and the terrain chunks it touches right now.

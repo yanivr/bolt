@@ -482,6 +482,31 @@ against a running server, `tests/visual/out/tracks`).
 | Production course | Without `?debug=1` the preview shows Neon Cut with its map, no picker and no art note |
 | Picker and layout view | With `?debug=1` the picker shows `1 of 8`, steps forward and back round the list keeping the weather slot, marks an unbaked track `Track art in progress`, keeps the choice over a reload, and the chosen course is raced on the server with the layout view's badge and a running clock |
 
+## Automated coverage added with the weather and environment layer (Milestone D)
+
+`tests/unit/weather.test.ts` (33 tests), driving the real `WeatherStage` with the real atlas
+manifest, real tracks and the combat stage's two cars (`tests/helpers/weather.ts`). Review
+tools: `npx tsx tests/visual/weather.ts <url> <outDir> [track_preset ...]` (all 16 courses at
+870 x 390 on a manual clock, offline race: both cars close, a full frame, a six-frame burst;
+Reduced Motion and low-tier variants for heavy rain, sandstorm and snowfall; `--tour=<ticks>`
+for full frames every three seconds; `--stress` for the stress scenario in heavy rain at both
+tiers with and without the layer), `npx tsx tests/tools/weatherBench.ts [frames]` (the stage's
+cost per frame in Node per course), `npx tsx art/scripts/vfx/weatherBake.ts [--check]`.
+
+| Area | What is asserted |
+| :-- | :-- |
+| Atlas | The committed `vfx_weather` is what the pipeline bakes, byte for byte; the runtime names exactly its strips; every frame is inside the sheet; every animation's blend matches its layer (additive only on `shine` and `glow`); under 256 colors |
+| Layers per course | All 16 courses have a defined, non-empty set; rain presets have rain, splashes, spray, wet tracks, reflections and exactly three rain planes; lightning only in heavy rain; snowfall has three snow planes, frost and grooves; clear frost has glints, frost and diamond dust; the sandstorm and the crosswind have streaks and bands; dry heat has heat haze; forests have leaves; Steel Circuit has vent steam, smelter sparks and embers; the haze exactly where visibility is below 0.97, never above 0.48; every layer id is used except fireflies |
+| Every course runs | 240 frames of every course with both cars driving: something drawn on every course with weather, nothing dropped |
+| Caps | Heavy rain with both cars spraying flat out for 1,200 frames: live particles never above each layer's cap (half at low), the draw list never above its capacity, nothing dropped; the widest camera step (1,740 x 740) drops nothing in snowfall, heavy rain or the sandstorm; low and Reduced Motion draw under three quarters of high |
+| Steady state | 3,000 frames of the stress case do not grow the heap past 1.5 MB |
+| Cost | The stage alone in the stress case stays under 4 ms a frame mean (a generous bound for a shared machine) |
+| Cosmetic seeds | Two stages with the same course and frames give identical draw lists; the near plane of rain and of snow is identical after 4 s at 60 Hz and at 30 Hz; another seed differs |
+| Readability guard | In the sandstorm, heavy rain, snowfall, clear frost and crosswind, with the rival close and far: the screen layer (haze, frost) composited from the real atlas pixels stays under 2 percent alpha everywhere in the protected zone; the layers over the cars cover under 8 percent of the car and the road ahead on average; the zone contains the car, 280 px of road ahead and the rival |
+| Vents | Steam over a vent follows its timetable: some when quiet, more than twice that in the warning, more again in the blast |
+| Lightning | Over five simulated minutes of heavy rain: 6 to 15 flashes, each at least 20 s after the last, never above 16 percent, never white; none with Reduce Flashes, with Reduced Motion, or in ordinary rain |
+| Foreground fade | Every marked overlay kind fades to 28 percent under the local car's body (including just below the overlay, for the tilt), to 50 percent under the rival, not at all elsewhere or when unmarked; the easing settles exactly on its target |
+
 ## Cannot be verified from this repository
 
 These are requirements, not optional extras, and they stay open in the release checklist
@@ -506,6 +531,11 @@ until someone does them:
   and whether each weapon can be named from its effect at racing speed by someone who did not
   draw it. The stress scenario (`?debug=1&vfxStress=1`) and `window.__boltRace.stats()` are
   there for the first; nothing here can stand in for the other two.
+- Weather on hardware (Section 19.7: "Wet road reflections, rain spray, sand dust and forest
+  ambience work on real phones"): the frame rate in heavy rain and the sandstorm on a mid phone,
+  whether the additive reflections and light shafts look right on a real panel, whether the
+  haze reads as weather and not as a dirty screen, and whether the near plane of rain is
+  comfortable over three minutes. Nothing here can stand in for that.
 - Playtesting with people who have not seen the game (Milestone F gate).
 
 Headless Chromium here renders with software GL at 10 to 35 frames per second, so automated

@@ -302,5 +302,200 @@ Worked round on the client; none needed a change to the simulation.
 See the report of Milestone C part 2 and `docs/ART_GUIDE.md`. In short: the mortar's column is
 a thin trunk under a cap and does not yet read as massive; the boomerang is small; the saw's
 teeth are four pixels of highlight; charge lights are two-pixel cells; the tesla bolt is short
-at the ranges the weapon works at. The wet road scenario is drawn on the clear-night bake:
-there is no rain bake, so there are no reflections and no rain.
+at the ranges the weapon works at. The wet road scenario is still drawn on the clear-night
+bake (there is no rain bake of Neon Cut yet), but it now has rain, spray and reflections from
+the weather layer below.
+
+## Weather (Milestone D)
+
+The moving weather and environment layer: what falls, blows, splashes, drifts and glints over
+the terrain the artists bake. Cosmetic only. The simulation applies grip, cooling, wind and
+visibility by itself and never reads any of this; the layer reads the published preset, the
+track data and the two cars as the combat stage draws them, and writes nothing back. The bakes
+are static (wet ground, puddles, drifts); everything here moves.
+
+### Where things are
+
+| File | What it holds |
+| :-- | :-- |
+| `art/scripts/vfx/weather.ts` | The strips of `vfx_weather`: 66 animations, 622 frames |
+| `art/scripts/vfx/weatherBake.ts` | Bake entry (also run by `pnpm art` and `pnpm art:check` after the combat atlas) |
+| `packages/shared/src/assets.ts` | `WEATHER_LAYERS`, `WeatherAnimManifest`, `WeatherAtlasManifest`, `weatherFrameRect` |
+| `apps/web/src/game/weather/plan.ts` | `planWeather(preset, track)`: the layers a course gets and their numbers |
+| `apps/web/src/game/weather/field.ts` | Rain, snow, sand, grit and leaf planes: stateless, a pure function of time and camera |
+| `apps/web/src/game/weather/pool.ts` | `WeatherPool` (particles with a life) and `DrawList` (what is drawn this frame) |
+| `apps/web/src/game/weather/stage.ts` | `WeatherStage`: every emitter, reflections, haze, frost, lightning. No Phaser |
+| `apps/web/src/game/weather/readability.ts` | `ProtectedZone`: where nothing may cover the picture |
+| `apps/web/src/game/weather/overlayFade.ts` | Foreground fade for every overlay the bakes mark `fadeNearPlayer` |
+| `apps/web/src/game/weather/lights.ts` | The combat stage's flashes, as lights to reflect |
+| `apps/web/src/game/weather/view.ts` | `WeatherView`: the only Phaser in it, one Blitter per layer and one Graphics |
+| `apps/web/src/game/weather/motion.ts` | Reduced Motion (the system preference; `?debug=1&motion=reduce` forces it) |
+
+Wiring in `RaceScene.ts` is marked `Weather layer (Milestone D)`: the atlas loads beside the
+combat one, the stage runs right after the combat stage each frame (so it sees the rival where
+it is drawn and the flashes that are on screen) and the overlay fade replaced the old one.
+
+### Layers
+
+| Layer | Depth | Blend | Holds | Sprites | Particles (high) |
+| :-- | --: | :-- | :-- | --: | --: |
+| `wet` | 10 | normal | Wet lines, snow grooves, sand and mud ruts | 288 | 256 |
+| `shine` | 13 | add | Reflections, light shafts, ice glints, heat shimmer | 112 | 48 |
+| `ground` | 17 | normal | The far plane of rain and snow, splashes, dust bands, mist, cold fog, tumbleweeds, dust devils | 896 | 160 |
+| `kick` | 31 | normal | What the wheels throw up: spray, rooster tails, dust, mud, gravel, snow, ice chips, sparks, tailpipe steam | 352 | 288 |
+| `air` | 61 | normal | The middle plane of rain, snow and sand, grit, leaves, steam, smoke, drips, the veil | 896 | 160 |
+| `glow` | 62 | add | Embers, pollen, diamond dust, fireflies | 128 | 96 |
+| `near` | 71 | normal | The nearest plane of rain, snow and sand, over the foreground art | 256 | 16 |
+| `screen` | 72 | normal | Visibility haze, the frost vignette | 224 | 0 |
+| sky | 73 | add | The storm's flash (one Graphics rectangle) | | |
+
+Section 12.4's order: marks and light on the road go under the ground effects; what the wheels
+throw up is drawn with the tire smoke, under the cars, so spray never hides a car; one plane of
+weather is over the cars; the nearest plane is over the bridges and canopies; the screen layer
+is last. All of it is one texture: eight batches and one Graphics on top of the combat ones.
+
+Sprites are created up front (3,152 in all, sized for the `Far` view's 2.4 times the area). **Particles** (`WeatherPool`) have a life: when a layer's cap is
+reached the oldest gives way, and one born outside the view is not born. **Planes**
+(`field.ts`) have no state: drop `i` of a plane is born again every `life` seconds at a hash of
+(seed, plane, i, birth), moves at the plane's velocity, and is wrapped into a box one view and
+a margin wide after the camera's scroll times the plane's parallax is taken off. Parallax 1 is
+on the ground (the far plane; its drops end in a splash where they land); the middle plane
+slides at 1.1 and the near plane at 1.3. The **draw list** is rebuilt every frame from the
+pool, the planes and the per-frame sprites (reflections, haze, frost, tumbleweeds, shafts), and
+is capped per layer too. Nothing is allocated per frame after warm-up (unit tested).
+
+**On the pixel grid.** Everything on the ground or in the world snaps to whole world pixels,
+the ground's own grid. A plane that slides with parallax, and the screen layer, snap to whole
+world pixels of the screen. The view then puts every sprite on the device grid like the combat
+view does. Nothing is rotated or scaled: streaks are baked in 32 directions, ribbons and marks
+in 16. This holds at every camera step (`Close`, `Medium`, `Far`): counts follow the view's
+area (up to 2.4 times the reference 870 x 370), sprites do not change size.
+
+### Layers per course
+
+Every course also has `surface_particles`. The numbers are particles per reference view at
+high quality.
+
+| Track | Preset | Layers | Planes |
+| :-- | :-- | :-- | :-- |
+| Neon Cut | `city_clear_night` | (surface only: the bake has the neon) | none |
+| Neon Cut | `city_rain_night` | rain, splashes, spray, wet_tracks, reflections, visibility_haze | rain_far 138, rain_mid 84, rain_near 22, veil 103 |
+| Backstreet Blitz | `city_clear_day` | (surface only: gravel off the cobbles) | none |
+| Backstreet Blitz | `city_rain_day` | rain, splashes, spray, wet_tracks, reflections, visibility_haze | rain_far 127, rain_mid 77, rain_near 20, veil 124 |
+| Dust Devil | `desert_clear` | sand_tracks, grit, tumbleweeds, dust_devils, heat_haze | grit 22 |
+| Dust Devil | `desert_crosswind` | sand_tracks, grit, sand_streaks, dust_bands, tumbleweeds, dust_devils, heat_haze, visibility_haze | sand_mid 99, sand_near 27, grit 50 |
+| Canyon Switch | `desert_dry_heat` | sand_tracks, grit, heat_haze, visibility_haze | grit 14 |
+| Canyon Switch | `desert_sandstorm` | sand_streaks, grit, dust_bands, sand_tracks, visibility_haze | sand_mid 220, sand_near 60, grit 100 |
+| Moss Run | `forest_clear` | leaves, light_shafts, pollen, mist | leaves 18 |
+| Moss Run | `forest_rain` | rain, splashes, spray, wet_tracks, reflections, canopy_drips, runoff, leaves, mist, visibility_haze | rain 150, 91, 23, leaves 8, veil 155 |
+| Timber Dash | `forest_clear` | leaves, light_shafts, chimney_smoke | leaves 18 |
+| Timber Dash | `forest_heavy_rain` | rain, splashes, spray, wet_tracks, reflections, lightning, canopy_drips, leaves, mist, chimney_smoke, visibility_haze | rain 230, 140, 36, leaves 12, veil 311 |
+| Whiteout Pass | `snow_clear_frost` | snow_tracks, diamond_dust, frost_vignette, cold_fog, ice_glints, snow_guns, tailpipe_vapor, chimney_smoke | diamond_dust 26 |
+| Whiteout Pass | `snow_snowfall` | spray, wet_tracks, snow, snow_tracks, frost_vignette, cold_fog, ice_glints, snow_guns, tailpipe_vapor, chimney_smoke, visibility_haze | snow 280, 182, 63, veil 290 |
+| Steel Circuit | `industrial_dry_night` | steam_vents, smelter_sparks, embers, chimney_smoke | none |
+| Steel Circuit | `industrial_factory_rain` | rain, splashes, spray, wet_tracks, reflections, steam_vents, smelter_sparks, embers, chimney_smoke, visibility_haze | rain 138, 84, 22, veil 145 |
+
+What each draws:
+
+- **Rain** (three planes, Section 13.5): far dashes on the ground that end in a ring splash, a
+  mud crown on dirt and mud, or a puddle splash (about one in ten when wet), and nothing on
+  sand, snow or inside a wall; a clean middle plane over the cars; long near streaks with a
+  bright head over the foreground art. Lean from the wind (`WIND_GAIN` 4).
+- **Spray** off each rear wheel of both cars on wet asphalt, cobble, metal, ice and wet dirt,
+  in proportion to speed and wetness: mist puffs, droplets, and over 150 px/s a rooster tail
+  pointing back along the car's line. Brown on dirt.
+- **Wet tracks** every 9 px a rear wheel travels on wet ground, fading in four steps over
+  2.4 s; **snow grooves** with their bright ridge (4.5 s), sand and mud ruts (3 s).
+- **Reflections** on wet ground only: both cars' headlights, brake lights, tail lights at
+  night; the 16 largest flashes the combat stage is showing; one baked lamp in three. Short
+  blocky additive streaks down the screen that swap between two frames.
+- **Lightning** (heavy rain only): a blue-violet additive wash of at most 16 percent in two
+  pulses over a quarter second, at least 20 s apart (20 to 36). Never with Reduce Flashes or
+  Reduced Motion; never white.
+- **Snow**: stepped crystal flakes in three planes with sway, each with a blue-violet shadow
+  pixel so it reads on white; snow kicked up behind wheels with ice chips; grooves; ice glints
+  on the ice zones; snow guns blowing plumes downwind; cold fog at the drifts; breath-like
+  tailpipe steam below 2 degrees; diamond dust in clear frost; the frost vignette.
+- **Sand and wind**: streaks and grit along the wind; ribbons of sand blowing across the road
+  on a world lattice; plumes behind cars on sand (blown along the wind in the storm);
+  tumbleweeds rolling downwind from their anchors; dust devils at theirs; heat shimmer
+  (dry heat: over the road 200 to 440 px ahead; otherwise at the `heat_haze` anchors), a few
+  broken rows that slide a pixel, additive and pixel-crisp: no warping anywhere.
+- **Forest**: falling leaves (needles on Timber Dash), leaf showers at the `leaves` anchors,
+  light shafts in clear weather (faint additive bands that breathe in three steps), pollen at
+  the `glow` and `canopy` anchors, fireflies on a dusk or night forest (none ships yet), mist
+  pockets at the `mist` anchors (and at the water in rain), drips under the canopy and the trees
+  in rain, runoff at the waterfall.
+- **Industry**: steam on each vent's own timetable (`hazardState`): a lazy wisp while quiet,
+  growing puffs and a low cloud through the warning (part of the telegraph, so never thinned),
+  then the blast; spark showers that bounce at the `sparks` anchor; embers; chimney smoke.
+- **Every surface** under each rear wheel (`locate` and `groundAt`, the physics' own lookup):
+  sand plumes, dirt puffs, mud flecks that fall and bounce, gravel off cobbles when sliding,
+  snow, ice chips, sparks when sliding on metal.
+
+### Readability first
+
+`ProtectedZone` is a disc of 76 px round the local car, a capsule ahead of it along its
+velocity as long as 1.15 s of driving (110 to 380 px), and a disc of 64 px round the rival.
+Anything laid over the picture (the haze, the frost, the veil of rain and snow) is cut to
+nothing within 6 px of the zone and ramps in over 110 px. The haze is strongest in the corners
+and nothing in the middle third; its alpha is at most `(1 - visibility) x 1.15`, capped at 0.48
+(the sandstorm), in steps of 0.06. Rain and snow show visibility as a thicker curtain of drops
+far from the cars, not a tint. Spray, dust and mist are under the cars. Unit tests composite
+the real atlas pixels: the screen layer stays under 2 percent alpha everywhere in the zone, and
+the layers over the cars cover under 8 percent of the car and the road ahead on average in the
+sandstorm, heavy rain, snowfall, clear frost and crosswind.
+
+Foreground art: every overlay a bake marks `fadeNearPlayer`, whatever its kind (the forest
+canopies and cliff ledges included), fades to 28 percent while the local car's body is under
+it and to 50 percent while the rival's is, so the rival stays readable too. The test is the
+car's body plus a margin, taller upward because the sprites are tilted.
+
+### Quality tiers and settings
+
+- `low` (the governor's, `?vfx=low`): every plane and every emitter at half, every particle cap
+  halved, and the far rain plane down to 35 percent (Section 19.5: distant rain first). Vent
+  steam is not thinned.
+- Reduced Motion (the system's `prefers-reduced-motion`, as the garage uses; the game has no
+  setting of its own): half as many particles, 60 percent of the speed, the haze and the dust
+  bands do not drift, shafts do not breathe, tumbleweeds do not bounce, no lightning.
+- Reduce Flashes: no lightning, reflections of flashes at half.
+- `?debug=1&weather=0` leaves the layer out (to measure it); `?debug=1&vfxStress=1` runs the
+  stress scenario in heavy rain with both cars spraying at full.
+
+### What it uses from the bakes, and what it does not have
+
+Used: the terrain manifest's `lights` (reflected on wet road), `overlays` and their
+`fadeNearPlayer` flag. From the track data: surfaces and zones (`locate`, `groundAt`,
+`zoneSurfaceAt`), the vents' timetables, tree obstacles, and the anchors `mist`, `canopy`,
+`glow`, `leaves`, `water`, `waterfall`, `tumbleweed`, `dust_devil`, `heat_haze`, `snow_gun`,
+`snow_drift`, `chimney`, `sparks`.
+
+Not supplied, and worked round: a wetness or puddle mask (the surface type decides where water
+lies and what reflects); reflection anchors for signs and neon (only lamps and live lights are
+reflected); a canopy mask (drips use canopy anchors and tree obstacles); `heat_haze` anchors on
+Canyon Switch (the shimmer is placed on the road ahead instead); a dusk forest (fireflies are
+ready and unused).
+
+### Adding a weather effect
+
+1. Draw the strip in `art/scripts/vfx/weather.ts` and give it its layer (`wx(layer, ...)`);
+   additive only on `shine` and `glow` (a test checks the blend against the layer).
+2. `npx tsx art/scripts/vfx/weatherBake.ts`, then look at `art/preview/vfx/weather_<n>.png`
+   (every strip on dark road, sand and snow).
+3. Add its name to `WEATHER_ANIMS` in `weather/atlas.ts` (a strip the runtime does not name, or
+   a name not in the atlas, fails a test).
+4. Decide which courses get it in `planWeather` (a new layer id goes in `WEATHER_LAYER_IDS`; a
+   test fails if one is never used) and emit it from `WeatherStage`: `pool.spawn` for a particle,
+   `put` or `putScreen` for a per-frame sprite, a `FieldPlane` for anything that falls or blows.
+   Use the stage's generator, never `Math.random`; never allocate per frame.
+5. Anything over the cars or the screen goes through `zone.allowance`.
+6. Review it: `npx tsx tests/visual/weather.ts <baseUrl> <outDir> <track_preset>`.
+
+### Reviewing
+
+`tests/visual/weather.ts` (see its header) races the autopilot offline on a manual clock at
+870 x 390 for every course and saves `close.png` (both cars just after GO), `full.png` (ten
+seconds in), `burst.png` (six frames two 60 Hz frames apart round the car) and the stats; the
+heavy rain, the sandstorm and the snowfall also with Reduced Motion and at the low tier.
+`--stress` runs the stress scenario in heavy rain at both tiers, with and without the layer.

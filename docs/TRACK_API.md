@@ -251,16 +251,14 @@ fast straights run east and west (Neon Cut's harbor and billboard rows, Backstre
 boulevard, Canyon Switch's plateau, Timber Dash's two straights, Whiteout Pass's sprint lane,
 Dust Devil's southern arc); north-south runs are short or end in a signed bend.
 
-**Known problem, open: heavy builds stall on sand.** Rolling resistance on sand is a fixed
-42 px/s² for every car (`SURFACE_ROLLING_DECEL`, unchanged since Milestone A). Three shipped
-builds have less drive than that to spare at low speed: Packhorse and Longlegs (V6, Street
-Tires, 742 kg and similar) reach about 46 px/s on sand after 10 s and fall back as the engine
-heats, and Iron Mule (Four-Cylinder, Armored Tires) does not move on sand at all. On asphalt
-each passes 120 px/s in 5 s. So none of the three finishes Dust Devil, nor Canyon Switch in
-Dry Heat, and they get stuck if they leave the road on either desert track (the off-road
-ground there is sand). Every other build, and the default car, is fine. Measured and held by
-`tests/balance/tracks.test.ts`; the numbers and the options are in
-`docs/BALANCE_CHANGELOG.md` 0.7.0. It is a tuning decision for the owner, not taken here.
+**Resolved: heavy builds stalled on sand.** Rolling resistance on sand is a fixed 42 px/s² for
+every car, and three shipped builds had less drive than that to spare at low speed (the numbers
+are in `docs/BALANCE_CHANGELOG.md` 0.7.0). Since the crawl floor (`LOOSE_CREEP`, BALANCE_CHANGELOG
+"the loose-ground crawl floor") loose ground and shoulders never take more than 70 percent of a
+car's own drive below 30 px/s, fading out by 70 px/s, so any car creeps forward; and the two
+starters among the three, Packhorse and Longlegs, race on the Trail Engine. Every course finishes
+all 110 harness races (`docs/evidence/balance/tracks-0.7.0-crawl.md`); `tests/balance/tracks.test.ts`
+holds a minimum sand speed for every shipped build.
 
 ## For the AI engineer
 
@@ -284,9 +282,12 @@ What a planner can read, all of it from the runtime and identical on the server 
   off-road, oil, drag, heat, magnet bonus, wind exposure. `exposureAt` for wind alone.
 - **Solids.** `wallDepth` and `obstacleDepth` for a circle at a point; `pointSolid` and
   `lineClear` (combat geometry) for line of sight. Closed crossings do not block shots.
-- **What is not there yet.** No racing line beyond the centerline; no per-track tire or build
-  advice for the bot (the tire study in `docs/evidence/balance/tracks-0.7.0.md` is the evidence
-  to start from); the sparring brain never takes a shortcut.
+- **What the AI built on these.** `packages/shared/src/ai/route.ts` turns the branches into
+  composite routes (the main line with a set of shortcuts spliced in), scans each for ground and
+  clearance, and works out a racing line and speed limits per car; `aiLoadouts.ts` in content
+  holds per-course surface profiles and the kits worth trying. The AI drives shortcuts when its
+  own estimate says they pay, reading `scheduleState` for the crossings. See `docs/AI_GUIDE.md`.
+  The sparring brain still never takes a shortcut.
 
 ## The terrain baker
 

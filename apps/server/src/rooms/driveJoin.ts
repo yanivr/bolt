@@ -8,6 +8,7 @@ import {
   getTrack,
 } from '@bolt/content';
 import type {
+  AiDifficulty,
   BlueprintIssue,
   BuildConditions,
   RaceEnvironment,
@@ -159,6 +160,8 @@ export type DriveAuth = {
   trackId: string;
   weatherPresetId: string;
   blueprint: VehicleBlueprint;
+  /** How good the AI rival is. A player choice; Racer when not given. */
+  difficulty?: AiDifficulty;
   /** Debug and test options: which shipped template to race, and the seed for its choices. */
   rivalTemplateId?: string;
   seed?: number;

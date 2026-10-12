@@ -46,6 +46,8 @@ export type FacadeSpec = {
   name: string;
   /** How busy the ground floor should be: 1 beside the track, lower in the back streets. */
   street: number;
+  /** Chance a block of flats wears a fire escape (default 0.45). */
+  escapeRate?: number;
 };
 
 export type FacadeResult = { glows: FacadeGlow[]; decals: FacadeDecal[] };
@@ -127,7 +129,8 @@ function awning(cv: Canvas, x: number, y: number, w: number, a: Color, bcol: Col
   cv.mapRect(x + 1, y + 5, w, 2, (c) => darker(c, 0.42));
 }
 
-const AWNINGS: ReadonlyArray<readonly [Color, Color]> = [
+/** Awning stripes, read from the palette when a wall is painted (a city style may recolor). */
+const awnings = (): ReadonlyArray<readonly [Color, Color]> => [
   [PAL.kerbCoral, PAL.kerbIvory],
   [PAL.cyanDim, PAL.kerbIvory],
   [PAL.mintDim, PAL.kerbIvory],
@@ -216,7 +219,7 @@ export function paintFacade(
 
   // --- Upper storeys --------------------------------------------------------------------
   const escape =
-    spec.kind === 'flats' && upper >= 2 && bays >= 3 && rnd() < 0.45
+    spec.kind === 'flats' && upper >= 2 && bays >= 3 && rnd() < (spec.escapeRate ?? 0.45)
       ? 1 + ((rnd() * (bays - 2)) | 0)
       : -1;
   for (let f = 0; f < upper; f++) {
@@ -382,7 +385,8 @@ export function paintFacade(
   const doorBay = (rnd() * bays) | 0;
   const shop = spec.kind === 'shop';
   const neon = NEON[(rnd() * NEON.length) | 0]!;
-  const [stripeA, stripeB] = AWNINGS[(rnd() * AWNINGS.length) | 0]!;
+  const stripes = awnings();
+  const [stripeA, stripeB] = stripes[(rnd() * stripes.length) | 0]!;
   const warm = rnd() < 0.8;
   for (let k = 0; k < bays; k++) {
     const x0 = bayX(k);

@@ -22,8 +22,9 @@ Snapshots are 15 a second.
 | `combat/systems.ts` | Utilities, burn, shields, tether, capacitor, stuck detection, car against car |
 | `combat/geometry.ts` | Hull and arc tests, swept hits, line of sight, car contact |
 | `ai/brain.ts`, `ai/sparring.ts` | The `RaceBrain` seam and the sparring rival |
+| `ai/racer.ts` and `ai/observe.ts`, `route.ts`, `pilot.ts`, `tactics.ts`, `combat.ts`, `profile.ts` | The AI rival of Milestone D (`docs/AI_GUIDE.md`) |
 | `scenario.ts`, `content/scenarios.ts` | Scripted showcase scenarios |
-| `protocol.ts` | Input sample, events, snapshots: the wire contract. `PROTOCOL_VERSION` is 6 (6: the eight tracks and their weathers, Milestone D phase 0) |
+| `protocol.ts` | Input sample, events, snapshots: the wire contract. `PROTOCOL_VERSION` is 7 (6: the eight tracks and their weathers, Milestone D phase 0; 7: the loose-ground crawl floor and the join's `difficulty`) |
 
 ## The step
 
@@ -289,7 +290,7 @@ more top speed, more the further back it is. Inside fighting range it has exactl
 final approach and the pass are driving, the build and weapons alone. The car ahead is never
 slowed, never told apart from any other car and never changed in any way (asserted to the bit:
 a leader that is never caught drives the same race with the tow on and off). The rule is the
-same for the player, the sparring rival and any later driver, and it is part of `stepRace`, so
+same for the player, the sparring rival and the AI rival, and it is part of `stepRace`, so
 the server, the offline link, the harness and the tests all run it. It reaches the physics only
 through `VehicleEffects.tow`, and `stepVehicle` reads it only when it is above zero, so a car
 with no tow drives exactly as it did before the tow existed.
@@ -348,7 +349,9 @@ has none at all: the 33 combat scenarios, and tests of other things.
 
 **The sparring rival** never reads the tow (asserted: its every control is the same when every
 number of the tow is replaced with nonsense), so it cannot hang back to collect it. It drives
-its fastest line every lap.
+its fastest line every lap. **The AI rival** does not observe the tow either, its own or the
+other car's (the same kind of assertion, in `tests/unit/ai.test.ts`), and a test races two AI
+cars with the tow on: the trailing car is towed and the leader never is.
 
 **The table** (`TOW` in `packages/shared/src/balance.ts`; nothing else holds a number of the tow):
 
@@ -475,13 +478,23 @@ and a missing one fails at race creation.
 ## The rival
 
 `RaceBrain.control(race, index)` returns the same control sample a human sends, and that is
-the only way a brain acts. `SparringBrain` follows the centerline with the Milestone A speed
-planner, moves over to pass or to avoid a trap it has been shown, fires a weapon when the
-target is inside its arc and range (after a seeded reaction time of 4 to 10 ticks, and
-letting 12 percent of chances go), drops traps for a car close behind, repairs what is
-critical, and uses nitro on straights. It has no difficulty levels, no racing line, no plan,
-and does not choose a build. `createSparringRace` picks its car from the eleven starter and
-example templates by seed. Milestone D replaces it by implementing `RaceBrain`.
+the only way a brain acts. The room and the offline link race the **AI rival** (`AiBrain`,
+`packages/shared/src/ai/racer.ts`; `docs/AI_GUIDE.md`): `createAiRace` in
+`packages/content/src/rivals.ts` picks a near-optimal legal build for the course from six
+strategies by seed, creates the race and prepares the brain. Difficulty (`rookie`, `racer`,
+`ace`, from the join, Racer by default) changes only its planning depth, line error and
+reaction delay; the style (aggressive or tactical) is chosen by seed. It sees only what
+`observe()` copies, which is what a player could see (Section 7.5): never the rival's heat,
+energy, ammunition, cooldowns or tow. A debug join with `rivalTemplateId` races a named
+shipped template, driven by the AI.
+
+`SparringBrain` (`ai/sparring.ts`) is kept as the reference driver of the balance reports and
+the "before" of the tournament. It follows the centerline with the Milestone A speed planner,
+moves over to pass or to avoid a trap it has been shown, fires a weapon when the target is
+inside its arc and range (after a seeded reaction time of 4 to 10 ticks, and letting 12
+percent of chances go), drops traps for a car close behind, repairs what is critical, and uses
+nitro on straights. `createSparringRace` picks its car from the eleven starter and example
+templates by seed.
 
 ## Scenarios
 

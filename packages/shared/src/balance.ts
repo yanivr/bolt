@@ -240,6 +240,23 @@ export const IDLE_THROTTLE = 0.55;
 export const SHOULDER_ROLLING_DECEL = 34;
 export const SHOULDER_GRIP_FACTOR = 0.88;
 
+/**
+ * The crawl floor on loose ground (Section 9.3: a valid return path, no instant failure off
+ * the road). Rolling resistance on a loose surface (sand, dirt, mud, snow), on a shoulder or
+ * off the road, and a deep-mud zone's drag on top of it, is held to at most `driveShare` of
+ * the car's own full-throttle drive at its present speed while it is creeping (below
+ * `fullBelow` px/s), easing back to the whole resistance by `fadeTo`. A car whose drive is
+ * weaker than the ground can therefore always crawl, and a car with drive to spare is not
+ * touched at all: the floor only acts where the resistance exceeds that share. Above `fadeTo`
+ * the whole resistance applies as before, so the wrong tires on sand stay a real penalty.
+ * docs/BALANCE_CHANGELOG.md, the loose-ground crawl floor.
+ */
+export const LOOSE_CREEP = {
+  driveShare: 0.7,
+  fullBelow: 30,
+  fadeTo: 70,
+};
+
 export const WALL_RESTITUTION = 0.18;
 /** Closing speeds below this are grazes and cost nothing beyond friction. */
 export const WALL_FORGIVE_SPEED = 26;
@@ -701,7 +718,11 @@ export const DIRECTION_REVERSE_SPEED = 30;
 
 // --- Network ----------------------------------------------------------------------------------
 
-export const PROTOCOL_VERSION = 6;
+/**
+ * 7: the loose-ground crawl floor changed the physics a client predicts, and the join may name
+ * the AI's difficulty (Milestone D).
+ */
+export const PROTOCOL_VERSION = 7;
 export const MAX_QUEUED_INPUTS = 8;
 export const MAX_INPUTS_PER_PACKET = 6;
 export const REMOTE_INTERP_DELAY_MS = 120;

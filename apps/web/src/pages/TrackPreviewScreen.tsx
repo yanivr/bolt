@@ -1,5 +1,5 @@
 import { STRINGS, getTrack, getWeatherPreset } from '@bolt/content';
-import { buildTrack } from '@bolt/shared';
+import { AI_DIFFICULTIES, buildTrack } from '@bolt/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { courseAssets, courseOptions, getManifests } from '../app/App.js';
 import { settleCourse } from '../app/course.js';
@@ -54,6 +54,8 @@ export function TrackPreviewScreen() {
   const setScreen = useApp((s) => s.setScreen);
   const wanted = useApp((s) => s.course);
   const setCourse = useApp((s) => s.setCourse);
+  const difficulty = useApp((s) => s.difficulty);
+  const setDifficulty = useApp((s) => s.setDifficulty);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const viewport = useViewport();
   const compact = viewport.width < 740 || viewport.height < 380;
@@ -214,6 +216,25 @@ export function TrackPreviewScreen() {
               <span>{preset.displayName}</span>
             </p>
           )}
+        </div>
+        <div
+          className="preview-pick-weather preview-pick-rival"
+          role="radiogroup"
+          aria-label={STRINGS.preview.chooseRival}
+          data-testid="rival-difficulty"
+        >
+          <span className="preview-pick-label">{STRINGS.preview.chooseRival}</span>
+          {AI_DIFFICULTIES.map((level) => (
+            <button
+              key={level}
+              role="radio"
+              aria-checked={level === difficulty}
+              className={`weather-badge weather-choice${level === difficulty ? ' is-on' : ''}`}
+              onClick={() => setDifficulty(level)}
+            >
+              <span>{STRINGS.preview.rivalLevels[level]}</span>
+            </button>
+          ))}
         </div>
         <dl className="preview-facts">
           <div>

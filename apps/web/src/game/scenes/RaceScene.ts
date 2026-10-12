@@ -11,8 +11,9 @@ import type {
   TerrainOverlay,
   VehicleLoadout,
   VehicleParams,
+  WeatherAtlasManifest,
 } from '@bolt/shared';
-import { CATALOG } from '@bolt/content';
+import { CATALOG, getWeatherPreset } from '@bolt/content';
 import {
   MAX_INPUTS_PER_PACKET,
   MPH_PER_WORLD_SPEED,
@@ -56,6 +57,13 @@ import { runStress } from '../combat/stress.js';
 import { FxAtlas } from '../vfx/atlas.js';
 import { QualityGovernor, setVfxQuality, vfxQualitySetting } from '../vfx/quality.js';
 import type { RivalSprites } from './rivalSheets.js';
+// Weather and environment layer (Milestone D): cosmetic, see docs/VFX_GUIDE.md "Weather".
+import { WeatherAtlas } from '../weather/atlas.js';
+import { collectCombatLights } from '../weather/lights.js';
+import { reducedMotionPreferred } from '../weather/motion.js';
+import { easeOverlay, overlayTarget } from '../weather/overlayFade.js';
+import { LightList, WeatherStage } from '../weather/stage.js';
+import { WX_MANIFEST, WX_TEXTURE, WeatherView } from '../weather/view.js';
 import { carTextureKeys, rivalSheets } from './rivalSheets.js';
 
 export type RaceSceneConfig = {
@@ -152,6 +160,12 @@ export class RaceScene extends Phaser.Scene {
   private readonly control: ControlInput = { steer: 0, brake: 0, coast: true, fire: 0, use: 0 };
   private eventCount = 0;
   private lastEvent = '';
+  // --- Weather layer (Milestone D) ---
+  private weather: WeatherStage | null = null;
+  private weatherView: WeatherView | null = null;
+  private readonly wxLights = new LightList();
+  private readonly fadeOwn = { present: true, x: 0, y: 0 };
+  private readonly fadeRival = { present: false, x: 0, y: 0 };
 
   constructor() {
     super('race');
@@ -206,6 +220,11 @@ export class RaceScene extends Phaser.Scene {
       sheet(`vfx:${strip.id}`, manifests.vfxBase, strip);
     // Every combat effect is in one atlas: one texture, one batch per layer.
     this.load.image(FX_TEXTURE, `${manifests.fxBase}/${manifests.fx.file}`);
+    // Weather layer (Milestone D): its atlas sits beside the combat one. A missing atlas only
+    // means no weather is drawn; it is not a load error for the race.
+    const wxBase = manifests.fxBase.replace(/vfx_combat$/, 'vfx_weather');
+    this.load.json(WX_MANIFEST, `${wxBase}/manifest.json`);
+    this.load.image(WX_TEXTURE, `${wxBase}/atlas.png`);
     if (manifests.damage) {
       const wanted = new Set([loadout.chassisId, this.cfg.rival?.loadout.chassisId]);
       for (const id of wanted) {
@@ -312,6 +331,20 @@ export class RaceScene extends Phaser.Scene {
     this.stage.setCar(0, this.cfg.build);
     const views: Array<CarView | null> = [this.car, rivalView];
     this.combat = new CombatView(this, this.stage, views, [cone(), rivalView ? cone() : null]);
+    // --- Weather layer (Milestone D) ---
+    const wxManifest = this.cache.json.get(WX_MANIFEST) as WeatherAtlasManifest | undefined;
+    // The Section 19.5 stress scenario runs in the heaviest weather there is.
+    const wxStress = debug && query.get('vfxStress') === '1';
+    const preset = getWeatherPreset(wxStress ? 'forest_heavy_rain' : manifests.course.presetId);
+    // `?debug=1&weather=0` leaves the layer out, to measure what it costs.
+    const wxOff = debug && query.get('weather') === '0';
+    if (wxManifest && preset && !wxOff && this.textures.exists(WX_TEXTURE)) {
+      this.weather = new WeatherStage(new WeatherAtlas(wxManifest), session.track, preset, {
+        lamps: manifests.terrain.lights,
+        reducedMotion: reducedMotionPreferred(),
+      });
+      this.weatherView = new WeatherView(this, this.weather);
+    }
     if (debug) {
       this.manual = query.get('manual') === '1';
       this.stress = query.get('vfxStress') === '1';
@@ -334,6 +367,10 @@ export class RaceScene extends Phaser.Scene {
         tick: () => this.stage.latestTick,
         stats: () => ({
           ...this.stage.stats(),
+          ...(this.weather?.stats() ?? {}),
+          wxDrawn: this.weatherView?.drawn ?? 0,
+          wxPreset: this.weather?.preset.id ?? '',
+          wxLayers: this.weather ? [...this.weather.plan.layers].join(' ') : '',
           drawn: this.combat?.drawn ?? 0,
           quality: this.stage.quality,
           setting: vfxQualitySetting(),
@@ -356,6 +393,15 @@ export class RaceScene extends Phaser.Scene {
           };
         },
         setQuality: (value) => setVfxQuality(value),
+        ownCar: () => {
+          const a = this.stage.cars[this.stage.you]!;
+          const cam = this.cameras.main;
+          const css = this.scale.displayScale;
+          return {
+            x: ((a.x - cam.scrollX) * cam.zoom) / css.x,
+            y: ((a.y - cam.scrollY) * cam.zoom) / css.y,
+          };
+        },
         view: () => {
           const scale = Math.max(1, Math.round(this.cfg.view.scale));
           const cam = this.cameras.main;
@@ -420,6 +466,9 @@ export class RaceScene extends Phaser.Scene {
       this.cfg.link.onStatus = null;
       this.combat?.destroy();
       this.combat = null;
+      this.weatherView?.destroy();
+      this.weatherView = null;
+      this.weather = null;
       if (window.__boltRace) delete window.__boltRace;
     });
     this.cfg.onReady();
@@ -543,6 +592,7 @@ export class RaceScene extends Phaser.Scene {
     this.outbox.length = 0;
     this.effects.clear();
     this.stage.clear();
+    this.weather?.clear();
     raceFeed.reset();
     this.race = null;
     this.cfg.link.resetCar();
@@ -638,12 +688,43 @@ export class RaceScene extends Phaser.Scene {
     stage.frame(frozen ? 0 : dt, own, alpha);
     this.combat?.sync();
 
+    // --- Weather layer (Milestone D): after the combat stage, which places the rival. ---
+    const viewW = this.scale.width / scale;
+    const viewH = this.scale.height / scale;
+    if (this.weather && this.weatherView) {
+      collectCombatLights(stage.pool, stage.atlas, this.wxLights);
+      this.weather.frame(
+        {
+          dt: frozen ? 0 : dt,
+          clockTicks: session.raceTicks,
+          viewX: view.scrollX,
+          viewY: view.scrollY,
+          viewW,
+          viewH,
+          you: stage.you,
+          reduceFlashes: settings.reduceFlashes,
+          low: stage.quality === 'low',
+          stress: this.stress,
+        },
+        stage.cars,
+        this.wxLights,
+      );
+      this.weatherView.sync(scale, view.scrollX, view.scrollY, viewW, viewH);
+    }
+
+    // Foreground occlusion (Section 9.1), for every overlay kind the bakes mark: fades under
+    // the local car and, less, under the rival (weather/overlayFade.ts).
+    const rivalCar = stage.cars[stage.you === 0 ? 1 : 0]!;
+    this.fadeOwn.x = x;
+    this.fadeOwn.y = y;
+    this.fadeRival.present = rivalCar.present;
+    this.fadeRival.x = rivalCar.x;
+    this.fadeRival.y = rivalCar.y;
     for (const { def, image } of this.overlays) {
       if (!def.fadeNearPlayer) continue;
-      const near =
-        x > def.x - 26 && x < def.x + def.w + 26 && y > def.y - 26 && y < def.y + def.h + 26;
-      const target = near ? 0.28 : 1;
-      image.setAlpha(image.alpha + (target - image.alpha) * Math.min(1, dt * 9));
+      const target = overlayTarget(def, this.fadeOwn, this.fadeRival);
+      const next = easeOverlay(image.alpha, target, dt);
+      if (next !== image.alpha) image.setAlpha(next);
     }
 
     this.cfg.audio.setVolumes(settings.engineVolume, settings.effectsVolume, settings.muted);

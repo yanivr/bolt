@@ -14,6 +14,7 @@ import {
   HEAT_WARNING,
   IDLE_THROTTLE,
   KINETIC_GRIP_FACTOR,
+  LOOSE_CREEP,
   MAX_COMBINED_GRIP,
   PARTIAL_LOAD_THROTTLE,
   REVERSE_ACCEL,
@@ -335,6 +336,28 @@ export function rollingDecel(
   return rolling + (params.rollingAdd[surface] ?? 0);
 }
 
+/**
+ * How much of the ground's resistance the crawl floor (`LOOSE_CREEP`) takes away this step:
+ * zero unless the ground is loose, a shoulder or off-road, the car is creeping, and the
+ * resistance `ground` exceeds `driveShare` of `fullDrive` (the car's own full-throttle drive
+ * at this speed, after heat, damage and traction). Subtracted from the total, so whenever it is
+ * zero the step is bit-identical to one without the floor.
+ */
+export function creepRelief(
+  surface: SurfaceId,
+  onShoulder: boolean,
+  ground: number,
+  fullDrive: number,
+  forwardSpeed: number,
+): number {
+  if (!onShoulder && !isLoose(surface)) return 0;
+  const excess = ground - LOOSE_CREEP.driveShare * Math.max(0, fullDrive);
+  if (!(excess > 0)) return 0;
+  const v = Math.abs(forwardSpeed);
+  if (v >= LOOSE_CREEP.fadeTo) return 0;
+  return excess * (1 - smoothstep(LOOSE_CREEP.fullBelow, LOOSE_CREEP.fadeTo, v));
+}
+
 /** Wheel force available at a given forward speed with full throttle. */
 export function driveForceAt(params: VehicleParams, forwardSpeed: number): number {
   const v = Math.max(0, forwardSpeed);
@@ -628,7 +651,19 @@ export function stepStraight(
       (params.dragQuadratic * speed * speed) / (speedScale * speedScale)) /
     params.massKg;
   let v = speed + (drive - drag) * dt;
-  v = Math.max(0, v - rollingDecel(params, surface, false) * dt);
+  let rolling = rollingDecel(params, surface, false);
+  const relief = creepRelief(
+    surface,
+    false,
+    rolling,
+    Math.min(
+      tractionLimit,
+      (out.output * driveForceAt(params, speed / (speedScale * out.revScale))) / params.massKg,
+    ),
+    speed,
+  );
+  if (relief > 0) rolling -= relief;
+  v = Math.max(0, v - rolling * dt);
   telemetry.grip = grip;
   return v;
 }
@@ -843,8 +878,24 @@ export function stepVehicle(
     ((params.dragLinear * vf) / speedScale +
       (params.dragQuadratic * vf * Math.abs(vf)) / (speedScale * speedScale)) /
     params.massKg;
-  let rolling = rollingDecel(params, ground.surface, ground.onShoulder) + effects.rollingAdd;
+  const groundRolling = rollingDecel(params, ground.surface, ground.onShoulder);
+  let rolling = groundRolling + effects.rollingAdd;
   if (ground.drag > 0) rolling += ground.drag;
+  // The crawl floor: on loose ground a creeping car always keeps a share of its own drive.
+  if (!air && !state.reversing && (ground.onShoulder || isLoose(ground.surface))) {
+    const fullDrive = Math.min(
+      tractionLimit,
+      (power.output * driveForceAt(params, vf / (speedScale * power.revScale))) / params.massKg,
+    );
+    const relief = creepRelief(
+      ground.surface,
+      ground.onShoulder,
+      groundRolling + ground.drag,
+      fullDrive,
+      vf,
+    );
+    if (relief > 0) rolling -= relief;
+  }
   const vfIn = vf;
 
   if (air) {

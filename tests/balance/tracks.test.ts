@@ -64,15 +64,20 @@ function speedAfter(
   return v;
 }
 
-describe('finding: heavy builds on street or armored tires stall on sand', () => {
-  it('lists the shipped builds that cannot reach 60 px/s on Dust Devil sand in ten seconds', () => {
-    const stalled = RIVAL_TEMPLATES.filter(
-      (t) => speedAfter(t.id, 'desert_01', 'desert_clear', 'sand', 10) < 60,
-    ).map((t) => t.id);
-    // Rolling resistance on sand is a fixed 42 px/s^2 for every car; these three have less
-    // drive than that to spare at low speed. On asphalt each of them passes 120 px/s in 5 s.
-    expect(stalled).toEqual(['starter_packhorse', 'starter_longlegs', 'example_iron_mule']);
-    for (const id of stalled)
-      expect(speedAfter(id, 'desert_01', 'desert_clear', 'asphalt', 5)).toBeGreaterThan(120);
+describe('nobody stalls on sand (the crawl floor, docs/BALANCE_CHANGELOG.md)', () => {
+  it('gets every shipped build moving on Dust Devil sand, the weakest at a crawl', () => {
+    // Before the crawl floor Iron Mule did not move at all on sand and Packhorse and Longlegs
+    // crept to 46 px/s; they now carry the Trail Engine (templates.ts).
+    const tenSeconds = RIVAL_TEMPLATES.map(
+      (t) => [t.id, speedAfter(t.id, 'desert_01', 'desert_clear', 'sand', 10)] as const,
+    );
+    for (const [id, v] of tenSeconds) expect(v, id).toBeGreaterThan(35);
+    const slow = tenSeconds.filter(([, v]) => v < 60).map(([id]) => id);
+    expect(slow).toEqual(['example_iron_mule']);
+    // The dry-heat course, where the heat protection used to bring the V6 cars to a stop.
+    for (const t of RIVAL_TEMPLATES)
+      expect(speedAfter(t.id, 'desert_02', 'desert_dry_heat', 'sand', 40), t.id).toBeGreaterThan(
+        30,
+      );
   });
 });

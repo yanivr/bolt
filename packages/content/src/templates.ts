@@ -110,19 +110,29 @@ export const TEMPLATES: BlueprintTemplate[] = [
     group: 'starter',
     name: 'Packhorse',
     description: 'A Pickup with tools on the rack, a sentry on the rail and room in the bed.',
-    blueprint: build('Packhorse', 'chassis_pickup', 'engine_v6', 'tires_street', 'paint_sunflare', [
-      { part: 'utility_repair', mount: 'bed_front', offset: [-5, 0] },
-      { part: 'utility_battery', mount: 'bed_front', offset: [5, 0] },
-      { part: 'weapon_rear_mg', mount: 'left_bed', turn: 2 },
-      { part: 'defense_rear_bumper', mount: 'rear_center', turn: 2 },
-    ]),
+    // Trail Engine, not the V6 (October 12, 2026): a starter must be able to finish every
+    // launch course, and with the V6 this car crawls across sand (docs/BALANCE_CHANGELOG.md).
+    blueprint: build(
+      'Packhorse',
+      'chassis_pickup',
+      'engine_offroad',
+      'tires_street',
+      'paint_sunflare',
+      [
+        { part: 'utility_repair', mount: 'bed_front', offset: [-5, 0] },
+        { part: 'utility_battery', mount: 'bed_front', offset: [5, 0] },
+        { part: 'weapon_rear_mg', mount: 'left_bed', turn: 2 },
+        { part: 'defense_rear_bumper', mount: 'rear_center', turn: 2 },
+      ],
+    ),
   },
   {
     id: 'starter_longlegs',
     group: 'starter',
     name: 'Longlegs',
     description: 'A Spider that will not tip, with a gun on the roof and a plate on each flank.',
-    blueprint: build('Longlegs', 'chassis_spider', 'engine_v6', 'tires_street', 'paint_mint', [
+    // Trail Engine, not the V6 (October 12, 2026), for the same reason as the Packhorse.
+    blueprint: build('Longlegs', 'chassis_spider', 'engine_offroad', 'tires_street', 'paint_mint', [
       { part: 'weapon_front_mg', mount: 'roof_front', fire: 0 },
       { part: 'defense_light_plate', mount: 'left_front', turn: 3 },
       { part: 'defense_light_plate', mount: 'right_front', turn: 1 },

@@ -1,0 +1,1331 @@
+{
+  "version": 1,
+  "trackId": "snow_01",
+  "presetId": "snow_snowfall",
+  "worldWidth": 3520,
+  "worldHeight": 2496,
+  "chunkSize": 512,
+  "cols": 7,
+  "rows": 5,
+  "ground": [
+    {
+      "col": 0,
+      "row": 0,
+      "file": "ground_0_0.png",
+      "x": 0,
+      "y": 0,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 1,
+      "row": 0,
+      "file": "ground_1_0.png",
+      "x": 512,
+      "y": 0,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 2,
+      "row": 0,
+      "file": "ground_2_0.png",
+      "x": 1024,
+      "y": 0,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 3,
+      "row": 0,
+      "file": "ground_3_0.png",
+      "x": 1536,
+      "y": 0,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 4,
+      "row": 0,
+      "file": "ground_4_0.png",
+      "x": 2048,
+      "y": 0,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 5,
+      "row": 0,
+      "file": "ground_5_0.png",
+      "x": 2560,
+      "y": 0,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 6,
+      "row": 0,
+      "file": "ground_6_0.png",
+      "x": 3072,
+      "y": 0,
+      "w": 448,
+      "h": 512
+    },
+    {
+      "col": 0,
+      "row": 1,
+      "file": "ground_0_1.png",
+      "x": 0,
+      "y": 512,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 1,
+      "row": 1,
+      "file": "ground_1_1.png",
+      "x": 512,
+      "y": 512,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 2,
+      "row": 1,
+      "file": "ground_2_1.png",
+      "x": 1024,
+      "y": 512,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 3,
+      "row": 1,
+      "file": "ground_3_1.png",
+      "x": 1536,
+      "y": 512,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 4,
+      "row": 1,
+      "file": "ground_4_1.png",
+      "x": 2048,
+      "y": 512,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 5,
+      "row": 1,
+      "file": "ground_5_1.png",
+      "x": 2560,
+      "y": 512,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 6,
+      "row": 1,
+      "file": "ground_6_1.png",
+      "x": 3072,
+      "y": 512,
+      "w": 448,
+      "h": 512
+    },
+    {
+      "col": 0,
+      "row": 2,
+      "file": "ground_0_2.png",
+      "x": 0,
+      "y": 1024,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 1,
+      "row": 2,
+      "file": "ground_1_2.png",
+      "x": 512,
+      "y": 1024,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 2,
+      "row": 2,
+      "file": "ground_2_2.png",
+      "x": 1024,
+      "y": 1024,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 3,
+      "row": 2,
+      "file": "ground_3_2.png",
+      "x": 1536,
+      "y": 1024,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 4,
+      "row": 2,
+      "file": "ground_4_2.png",
+      "x": 2048,
+      "y": 1024,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 5,
+      "row": 2,
+      "file": "ground_5_2.png",
+      "x": 2560,
+      "y": 1024,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 6,
+      "row": 2,
+      "file": "ground_6_2.png",
+      "x": 3072,
+      "y": 1024,
+      "w": 448,
+      "h": 512
+    },
+    {
+      "col": 0,
+      "row": 3,
+      "file": "ground_0_3.png",
+      "x": 0,
+      "y": 1536,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 1,
+      "row": 3,
+      "file": "ground_1_3.png",
+      "x": 512,
+      "y": 1536,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 2,
+      "row": 3,
+      "file": "ground_2_3.png",
+      "x": 1024,
+      "y": 1536,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 3,
+      "row": 3,
+      "file": "ground_3_3.png",
+      "x": 1536,
+      "y": 1536,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 4,
+      "row": 3,
+      "file": "ground_4_3.png",
+      "x": 2048,
+      "y": 1536,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 5,
+      "row": 3,
+      "file": "ground_5_3.png",
+      "x": 2560,
+      "y": 1536,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 6,
+      "row": 3,
+      "file": "ground_6_3.png",
+      "x": 3072,
+      "y": 1536,
+      "w": 448,
+      "h": 512
+    },
+    {
+      "col": 0,
+      "row": 4,
+      "file": "ground_0_4.png",
+      "x": 0,
+      "y": 2048,
+      "w": 512,
+      "h": 448
+    },
+    {
+      "col": 1,
+      "row": 4,
+      "file": "ground_1_4.png",
+      "x": 512,
+      "y": 2048,
+      "w": 512,
+      "h": 448
+    },
+    {
+      "col": 2,
+      "row": 4,
+      "file": "ground_2_4.png",
+      "x": 1024,
+      "y": 2048,
+      "w": 512,
+      "h": 448
+    },
+    {
+      "col": 3,
+      "row": 4,
+      "file": "ground_3_4.png",
+      "x": 1536,
+      "y": 2048,
+      "w": 512,
+      "h": 448
+    },
+    {
+      "col": 4,
+      "row": 4,
+      "file": "ground_4_4.png",
+      "x": 2048,
+      "y": 2048,
+      "w": 512,
+      "h": 448
+    },
+    {
+      "col": 5,
+      "row": 4,
+      "file": "ground_5_4.png",
+      "x": 2560,
+      "y": 2048,
+      "w": 512,
+      "h": 448
+    },
+    {
+      "col": 6,
+      "row": 4,
+      "file": "ground_6_4.png",
+      "x": 3072,
+      "y": 2048,
+      "w": 448,
+      "h": 448
+    }
+  ],
+  "overlays": [
+    {
+      "id": "snowbank_2_676",
+      "kind": "snowbank",
+      "file": "over_snowbank_2_676.png",
+      "x": 676,
+      "y": 429,
+      "w": 110,
+      "h": 69,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "snowbank_2_786",
+      "kind": "snowbank",
+      "file": "over_snowbank_2_786.png",
+      "x": 786,
+      "y": 417,
+      "w": 110,
+      "h": 34,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "snowbank_2_896",
+      "kind": "snowbank",
+      "file": "over_snowbank_2_896.png",
+      "x": 896,
+      "y": 411,
+      "w": 110,
+      "h": 31,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "snowbank_2_1006",
+      "kind": "snowbank",
+      "file": "over_snowbank_2_1006.png",
+      "x": 1006,
+      "y": 409,
+      "w": 110,
+      "h": 29,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "snowbank_2_1116",
+      "kind": "snowbank",
+      "file": "over_snowbank_2_1116.png",
+      "x": 1116,
+      "y": 405,
+      "w": 110,
+      "h": 30,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "snowbank_2_1226",
+      "kind": "snowbank",
+      "file": "over_snowbank_2_1226.png",
+      "x": 1226,
+      "y": 403,
+      "w": 110,
+      "h": 28,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "snowbank_2_1336",
+      "kind": "snowbank",
+      "file": "over_snowbank_2_1336.png",
+      "x": 1336,
+      "y": 400,
+      "w": 110,
+      "h": 27,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "snowbank_2_1446",
+      "kind": "snowbank",
+      "file": "over_snowbank_2_1446.png",
+      "x": 1446,
+      "y": 397,
+      "w": 57,
+      "h": 32,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_12_4",
+      "kind": "canopy",
+      "file": "over_canopy_n_12_4.png",
+      "x": 2139,
+      "y": 780,
+      "w": 187,
+      "h": 122,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_11_5",
+      "kind": "canopy",
+      "file": "over_canopy_n_11_5.png",
+      "x": 2016,
+      "y": 892,
+      "w": 69,
+      "h": 104,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_11_6",
+      "kind": "canopy",
+      "file": "over_canopy_n_11_6.png",
+      "x": 1952,
+      "y": 1030,
+      "w": 63,
+      "h": 92,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_11_7",
+      "kind": "canopy",
+      "file": "over_canopy_n_11_7.png",
+      "x": 2018,
+      "y": 1238,
+      "w": 65,
+      "h": 98,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_12_8",
+      "kind": "canopy",
+      "file": "over_canopy_n_12_8.png",
+      "x": 2111,
+      "y": 1409,
+      "w": 180,
+      "h": 113,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_3_9",
+      "kind": "canopy",
+      "file": "over_canopy_n_3_9.png",
+      "x": 497,
+      "y": 1585,
+      "w": 137,
+      "h": 196,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_3_8",
+      "kind": "canopy",
+      "file": "over_canopy_n_3_8.png",
+      "x": 527,
+      "y": 1406,
+      "w": 78,
+      "h": 202,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_3_7",
+      "kind": "canopy",
+      "file": "over_canopy_n_3_7.png",
+      "x": 536,
+      "y": 1195,
+      "w": 144,
+      "h": 216,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_3_6",
+      "kind": "canopy",
+      "file": "over_canopy_n_3_6.png",
+      "x": 497,
+      "y": 1023,
+      "w": 96,
+      "h": 214,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_2_6",
+      "kind": "canopy",
+      "file": "over_canopy_n_2_6.png",
+      "x": 451,
+      "y": 975,
+      "w": 75,
+      "h": 109,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_f_1_2",
+      "kind": "canopy",
+      "file": "over_canopy_f_1_2.png",
+      "x": 974,
+      "y": 1510,
+      "w": 69,
+      "h": 218,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_5_9",
+      "kind": "canopy",
+      "file": "over_canopy_n_5_9.png",
+      "x": 953,
+      "y": 1581,
+      "w": 68,
+      "h": 102,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_5_8",
+      "kind": "canopy",
+      "file": "over_canopy_n_5_8.png",
+      "x": 970,
+      "y": 1358,
+      "w": 83,
+      "h": 167,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_5_7",
+      "kind": "canopy",
+      "file": "over_canopy_n_5_7.png",
+      "x": 980,
+      "y": 1191,
+      "w": 81,
+      "h": 120,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_5_6",
+      "kind": "canopy",
+      "file": "over_canopy_n_5_6.png",
+      "x": 946,
+      "y": 1081,
+      "w": 75,
+      "h": 103,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_f_1_1",
+      "kind": "canopy",
+      "file": "over_canopy_f_1_1.png",
+      "x": 953,
+      "y": 1001,
+      "w": 74,
+      "h": 112,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_15_5",
+      "kind": "canopy",
+      "file": "over_canopy_n_15_5.png",
+      "x": 2637,
+      "y": 859,
+      "w": 190,
+      "h": 195,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_16_5",
+      "kind": "canopy",
+      "file": "over_canopy_n_16_5.png",
+      "x": 2830,
+      "y": 959,
+      "w": 64,
+      "h": 102,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_16_6",
+      "kind": "canopy",
+      "file": "over_canopy_n_16_6.png",
+      "x": 2867,
+      "y": 1013,
+      "w": 132,
+      "h": 236,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_16_7",
+      "kind": "canopy",
+      "file": "over_canopy_n_16_7.png",
+      "x": 2854,
+      "y": 1226,
+      "w": 129,
+      "h": 209,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_16_8",
+      "kind": "canopy",
+      "file": "over_canopy_n_16_8.png",
+      "x": 2810,
+      "y": 1339,
+      "w": 161,
+      "h": 193,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_15_8",
+      "kind": "canopy",
+      "file": "over_canopy_n_15_8.png",
+      "x": 2757,
+      "y": 1472,
+      "w": 80,
+      "h": 121,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_15_3",
+      "kind": "canopy",
+      "file": "over_canopy_n_15_3.png",
+      "x": 2692,
+      "y": 594,
+      "w": 81,
+      "h": 115,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_15_4",
+      "kind": "canopy",
+      "file": "over_canopy_n_15_4.png",
+      "x": 2763,
+      "y": 620,
+      "w": 70,
+      "h": 108,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_16_4",
+      "kind": "canopy",
+      "file": "over_canopy_n_16_4.png",
+      "x": 2819,
+      "y": 682,
+      "w": 207,
+      "h": 154,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_17_4",
+      "kind": "canopy",
+      "file": "over_canopy_n_17_4.png",
+      "x": 3038,
+      "y": 780,
+      "w": 72,
+      "h": 114,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_17_5",
+      "kind": "canopy",
+      "file": "over_canopy_n_17_5.png",
+      "x": 3103,
+      "y": 947,
+      "w": 86,
+      "h": 112,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_18_6",
+      "kind": "canopy",
+      "file": "over_canopy_n_18_6.png",
+      "x": 3168,
+      "y": 1062,
+      "w": 76,
+      "h": 110,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_17_6",
+      "kind": "canopy",
+      "file": "over_canopy_n_17_6.png",
+      "x": 3128,
+      "y": 1164,
+      "w": 72,
+      "h": 101,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_18_7",
+      "kind": "canopy",
+      "file": "over_canopy_n_18_7.png",
+      "x": 3140,
+      "y": 1224,
+      "w": 77,
+      "h": 109,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_17_7",
+      "kind": "canopy",
+      "file": "over_canopy_n_17_7.png",
+      "x": 3126,
+      "y": 1286,
+      "w": 63,
+      "h": 94,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_17_8",
+      "kind": "canopy",
+      "file": "over_canopy_n_17_8.png",
+      "x": 3030,
+      "y": 1414,
+      "w": 124,
+      "h": 203,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_17_9",
+      "kind": "canopy",
+      "file": "over_canopy_n_17_9.png",
+      "x": 3034,
+      "y": 1605,
+      "w": 60,
+      "h": 91,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_16_9",
+      "kind": "canopy",
+      "file": "over_canopy_n_16_9.png",
+      "x": 2908,
+      "y": 1617,
+      "w": 78,
+      "h": 117,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_11_2",
+      "kind": "canopy",
+      "file": "over_canopy_n_11_2.png",
+      "x": 2046,
+      "y": 285,
+      "w": 65,
+      "h": 108,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_12_2",
+      "kind": "canopy",
+      "file": "over_canopy_n_12_2.png",
+      "x": 2128,
+      "y": 331,
+      "w": 157,
+      "h": 165,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_13_2",
+      "kind": "canopy",
+      "file": "over_canopy_n_13_2.png",
+      "x": 2315,
+      "y": 381,
+      "w": 135,
+      "h": 143,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_14_2",
+      "kind": "canopy",
+      "file": "over_canopy_n_14_2.png",
+      "x": 2426,
+      "y": 450,
+      "w": 87,
+      "h": 113,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_n_14_3",
+      "kind": "canopy",
+      "file": "over_canopy_n_14_3.png",
+      "x": 2529,
+      "y": 512,
+      "w": 75,
+      "h": 105,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_f_3_0",
+      "kind": "canopy",
+      "file": "over_canopy_f_3_0.png",
+      "x": 1972,
+      "y": 0,
+      "w": 309,
+      "h": 85,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_f_5_0",
+      "kind": "canopy",
+      "file": "over_canopy_f_5_0.png",
+      "x": 3215,
+      "y": 0,
+      "w": 282,
+      "h": 342,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_f_5_1",
+      "kind": "canopy",
+      "file": "over_canopy_f_5_1.png",
+      "x": 3430,
+      "y": 682,
+      "w": 72,
+      "h": 100,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_f_0_1",
+      "kind": "canopy",
+      "file": "over_canopy_f_0_1.png",
+      "x": 8,
+      "y": 1152,
+      "w": 75,
+      "h": 73,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_f_0_2",
+      "kind": "canopy",
+      "file": "over_canopy_f_0_2.png",
+      "x": 2,
+      "y": 1284,
+      "w": 89,
+      "h": 324,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_f_5_2",
+      "kind": "canopy",
+      "file": "over_canopy_f_5_2.png",
+      "x": 3424,
+      "y": 1283,
+      "w": 81,
+      "h": 586,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_f_5_3",
+      "kind": "canopy",
+      "file": "over_canopy_f_5_3.png",
+      "x": 3206,
+      "y": 2141,
+      "w": 302,
+      "h": 273,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_f_0_3",
+      "kind": "canopy",
+      "file": "over_canopy_f_0_3.png",
+      "x": 10,
+      "y": 2256,
+      "w": 617,
+      "h": 158,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_f_1_3",
+      "kind": "canopy",
+      "file": "over_canopy_f_1_3.png",
+      "x": 629,
+      "y": 2359,
+      "w": 628,
+      "h": 55,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_f_2_3",
+      "kind": "canopy",
+      "file": "over_canopy_f_2_3.png",
+      "x": 1286,
+      "y": 2365,
+      "w": 606,
+      "h": 49,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_f_3_3",
+      "kind": "canopy",
+      "file": "over_canopy_f_3_3.png",
+      "x": 1909,
+      "y": 2370,
+      "w": 660,
+      "h": 44,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "canopy_f_4_3",
+      "kind": "canopy",
+      "file": "over_canopy_f_4_3.png",
+      "x": 2563,
+      "y": 2355,
+      "w": 642,
+      "h": 59,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "snow_gun_0",
+      "kind": "snow_gun",
+      "file": "over_snow_gun_0.png",
+      "x": 726,
+      "y": 441,
+      "w": 13,
+      "h": 29,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "snow_gun_1",
+      "kind": "snow_gun",
+      "file": "over_snow_gun_1.png",
+      "x": 1031,
+      "y": 407,
+      "w": 13,
+      "h": 30,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "snow_gun_2",
+      "kind": "snow_gun",
+      "file": "over_snow_gun_2.png",
+      "x": 1290,
+      "y": 399,
+      "w": 13,
+      "h": 30,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "warming_hut",
+      "kind": "hut",
+      "file": "over_warming_hut.png",
+      "x": 1138,
+      "y": 415,
+      "w": 55,
+      "h": 19,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "plow_pole_0",
+      "kind": "pole",
+      "file": "over_plow_pole_0.png",
+      "x": 833,
+      "y": 652,
+      "w": 4,
+      "h": 8,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "plow_pole_1",
+      "kind": "pole",
+      "file": "over_plow_pole_1.png",
+      "x": 985,
+      "y": 644,
+      "w": 4,
+      "h": 9,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "plow_pole_2",
+      "kind": "pole",
+      "file": "over_plow_pole_2.png",
+      "x": 1191,
+      "y": 638,
+      "w": 4,
+      "h": 9,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "plow_pole_3",
+      "kind": "pole",
+      "file": "over_plow_pole_3.png",
+      "x": 1404,
+      "y": 630,
+      "w": 4,
+      "h": 9,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "radio_relay",
+      "kind": "mast",
+      "file": "over_radio_relay.png",
+      "x": 2908,
+      "y": 323,
+      "w": 32,
+      "h": 78,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "lift_pylon_0",
+      "kind": "pylon",
+      "file": "over_lift_pylon_0.png",
+      "x": 1458,
+      "y": 929,
+      "w": 34,
+      "h": 57,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "lift_pylon_1",
+      "kind": "pylon",
+      "file": "over_lift_pylon_1.png",
+      "x": 1668,
+      "y": 809,
+      "w": 34,
+      "h": 57,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "lift_pylon_2",
+      "kind": "pylon",
+      "file": "over_lift_pylon_2.png",
+      "x": 1878,
+      "y": 689,
+      "w": 34,
+      "h": 57,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "lift_cable_0_w",
+      "kind": "cable",
+      "file": "over_lift_cable_0_w.png",
+      "x": 1464,
+      "y": 812,
+      "w": 211,
+      "h": 121,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "lift_cable_0_e",
+      "kind": "cable",
+      "file": "over_lift_cable_0_e.png",
+      "x": 1488,
+      "y": 812,
+      "w": 211,
+      "h": 121,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "lift_cable_1_w",
+      "kind": "cable",
+      "file": "over_lift_cable_1_w.png",
+      "x": 1674,
+      "y": 692,
+      "w": 211,
+      "h": 121,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "lift_cable_1_e",
+      "kind": "cable",
+      "file": "over_lift_cable_1_e.png",
+      "x": 1698,
+      "y": 692,
+      "w": 211,
+      "h": 121,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "sign_pond_wind",
+      "kind": "sign",
+      "file": "over_sign_pond_wind.png",
+      "x": 994,
+      "y": 1744,
+      "w": 63,
+      "h": 19,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "sign_main_sign_1",
+      "kind": "corner_sign",
+      "file": "over_sign_main_sign_1.png",
+      "x": 622,
+      "y": 1058,
+      "w": 10,
+      "h": 18,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "sign_main_sign_2",
+      "kind": "corner_sign",
+      "file": "over_sign_main_sign_2.png",
+      "x": 2296,
+      "y": 564,
+      "w": 18,
+      "h": 18,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "sign_main_sign_3",
+      "kind": "corner_sign",
+      "file": "over_sign_main_sign_3.png",
+      "x": 2358,
+      "y": 912,
+      "w": 18,
+      "h": 18,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "sign_main_sign_4",
+      "kind": "corner_sign",
+      "file": "over_sign_main_sign_4.png",
+      "x": 2402,
+      "y": 1274,
+      "w": 18,
+      "h": 18,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "sign_main_sign_5",
+      "kind": "corner_sign",
+      "file": "over_sign_main_sign_5.png",
+      "x": 2589,
+      "y": 1754,
+      "w": 18,
+      "h": 18,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "sign_main_sign_6",
+      "kind": "corner_sign",
+      "file": "over_sign_main_sign_6.png",
+      "x": 1151,
+      "y": 2034,
+      "w": 18,
+      "h": 18,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "sign_snowmobile_trail_sign_1",
+      "kind": "corner_sign",
+      "file": "over_sign_snowmobile_trail_sign_1.png",
+      "x": 2828,
+      "y": 801,
+      "w": 10,
+      "h": 18,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "sign_snowmobile_trail_sign_2",
+      "kind": "corner_sign",
+      "file": "over_sign_snowmobile_trail_sign_2.png",
+      "x": 3110,
+      "y": 1175,
+      "w": 10,
+      "h": 18,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "sign_snowmobile_trail_sign_3",
+      "kind": "corner_sign",
+      "file": "over_sign_snowmobile_trail_sign_3.png",
+      "x": 2986,
+      "y": 1570,
+      "w": 26,
+      "h": 18,
+      "fadeNearPlayer": true
+    }
+  ],
+  "animated": [
+    {
+      "id": "hut_smoke",
+      "kind": "chimney_smoke",
+      "file": "anim_hut_smoke.png",
+      "x": 1165,
+      "y": 363,
+      "frameWidth": 40,
+      "frameHeight": 52,
+      "frameCount": 10,
+      "fps": 8,
+      "above": true,
+      "blend": "normal"
+    },
+    {
+      "id": "snow_gun_light_0",
+      "kind": "snow_gun_light",
+      "file": "anim_snow_gun_light_0.png",
+      "x": 731,
+      "y": 448,
+      "frameWidth": 5,
+      "frameHeight": 5,
+      "frameCount": 4,
+      "fps": 3,
+      "above": true,
+      "blend": "normal"
+    },
+    {
+      "id": "snow_gun_light_1",
+      "kind": "snow_gun_light",
+      "file": "anim_snow_gun_light_1.png",
+      "x": 1036,
+      "y": 414,
+      "frameWidth": 5,
+      "frameHeight": 5,
+      "frameCount": 4,
+      "fps": 3,
+      "above": true,
+      "blend": "normal"
+    },
+    {
+      "id": "snow_gun_light_2",
+      "kind": "snow_gun_light",
+      "file": "anim_snow_gun_light_2.png",
+      "x": 1295,
+      "y": 406,
+      "frameWidth": 5,
+      "frameHeight": 5,
+      "frameCount": 4,
+      "fps": 3,
+      "above": true,
+      "blend": "normal"
+    },
+    {
+      "id": "pond_blowing_snow",
+      "kind": "blowing_snow",
+      "file": "anim_pond_blowing_snow.png",
+      "x": 1422,
+      "y": 1894,
+      "frameWidth": 360,
+      "frameHeight": 150,
+      "frameCount": 10,
+      "fps": 10,
+      "above": true,
+      "blend": "normal"
+    },
+    {
+      "id": "ice_glint",
+      "kind": "ice_sparkle",
+      "file": "anim_ice_glint.png",
+      "x": 1402,
+      "y": 1899,
+      "frameWidth": 400,
+      "frameHeight": 140,
+      "frameCount": 8,
+      "fps": 8,
+      "above": false,
+      "blend": "normal"
+    },
+    {
+      "id": "branch_snow_0",
+      "kind": "branch_snow",
+      "file": "anim_branch_snow_0.png",
+      "x": 2273,
+      "y": 789,
+      "frameWidth": 20,
+      "frameHeight": 40,
+      "frameCount": 12,
+      "fps": 8,
+      "above": true,
+      "blend": "normal"
+    },
+    {
+      "id": "branch_snow_1",
+      "kind": "branch_snow",
+      "file": "anim_branch_snow_1.png",
+      "x": 524,
+      "y": 1129,
+      "frameWidth": 20,
+      "frameHeight": 40,
+      "frameCount": 12,
+      "fps": 8,
+      "above": true,
+      "blend": "normal"
+    },
+    {
+      "id": "branch_snow_2",
+      "kind": "branch_snow",
+      "file": "anim_branch_snow_2.png",
+      "x": 2925,
+      "y": 1030,
+      "frameWidth": 20,
+      "frameHeight": 40,
+      "frameCount": 12,
+      "fps": 8,
+      "above": true,
+      "blend": "normal"
+    },
+    {
+      "id": "branch_snow_3",
+      "kind": "branch_snow",
+      "file": "anim_branch_snow_3.png",
+      "x": 3136,
+      "y": 947,
+      "frameWidth": 20,
+      "frameHeight": 40,
+      "frameCount": 12,
+      "fps": 8,
+      "above": true,
+      "blend": "normal"
+    },
+    {
+      "id": "pass_birds",
+      "kind": "birds",
+      "file": "anim_pass_birds.png",
+      "x": 2264,
+      "y": 680,
+      "frameWidth": 72,
+      "frameHeight": 40,
+      "frameCount": 12,
+      "fps": 10,
+      "above": true,
+      "blend": "normal"
+    }
+  ],
+  "lights": [],
+  "minimap": {
+    "file": "minimap.png",
+    "width": 240,
+    "height": 170,
+    "worldScale": 0.06818181818181818
+  }
+}

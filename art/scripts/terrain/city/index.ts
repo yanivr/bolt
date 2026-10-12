@@ -1,4 +1,4 @@
-import { createLocation, locate } from '@bolt/shared';
+import { createLocation, hashString, locate } from '@bolt/shared';
 import type { TerrainLight } from '@bolt/shared';
 import type { BakeContext, BiomeModule, BiomeOutput } from '../biome.js';
 import { accumulatePools, applyLight, applyShadows, castShadows } from '../lighting.js';
@@ -14,6 +14,8 @@ import { buildOverlays } from './overlays.js';
 import { litNight, shadeNight, shadeRoad, shadeRoadDeep } from './palette.js';
 import { paintBarrier, paintRoad, placeChevrons, planRoad } from './road.js';
 import { paintStreet } from './street.js';
+import { WET_NIGHT, wetLoops, wetOverlays, wetPass } from './wet.js';
+import { paintBackstreet } from './blitz/index.js';
 
 /** Arc length range of Billboard Row on the main line. */
 const BILLBOARD_ROW: readonly [number, number] = [4150, 5260];
@@ -24,7 +26,10 @@ const BILLBOARD_ROW: readonly [number, number] = [4150, 5260];
  * shadows fall. The ground is shadowed and lit, and only then is the scene painted over it,
  * north to south, in the oblique view.
  */
-export function paintCity(ctx: BakeContext): BiomeOutput {
+export function paintCity(bake: BakeContext): BiomeOutput {
+  // Every weather of a track shares one city plan: the seed of the track's first weather.
+  // (For Neon Cut's clear night this is the bake's own seed, so that bake is unchanged.)
+  const ctx: BakeContext = { ...bake, seed: citySeed(bake) };
   const { world, field } = ctx;
   const pools: LightPool[] = [];
   const lights: TerrainLight[] = [];
@@ -109,6 +114,23 @@ export function paintCity(ctx: BakeContext): BiomeOutput {
   }
 
   const animated = buildAnimated(landmarks.sites, signs, signals);
+  const overlays = scene.overlays();
+  if (ctx.preset.wetness > 0) {
+    const wet = wetPass({
+      world,
+      field,
+      drive: scene.drive,
+      raised: scene.raised,
+      lights,
+      seed: bake.seed,
+      style: WET_NIGHT,
+    });
+    wetLoops(WET_NIGHT, world, animated);
+    wetOverlays(WET_NIGHT, overlays);
+    console.log(
+      `  wet      ${wet.puddlePixels} px of puddles, ${wet.reflectedPixels} px of reflections`,
+    );
+  }
   const checks = {
     coveredDrivable: Math.max(covered, scene.violations()),
     animatedMismatch: animatedMismatch(world, animated),
@@ -118,7 +140,7 @@ export function paintCity(ctx: BakeContext): BiomeOutput {
   );
 
   return {
-    overlays: scene.overlays(),
+    overlays,
     animated,
     lights,
     checks,
@@ -154,13 +176,19 @@ export function paintCity(ctx: BakeContext): BiomeOutput {
   };
 }
 
+/** Seed of a track's city plan: the one its first weather is baked with. */
+export function citySeed(ctx: BakeContext): number {
+  return hashString(`${ctx.def.id}:${ctx.def.weatherPresetIds[0] ?? ctx.presetId}`);
+}
+
 /**
- * The city biome module. It was written for Neon Cut and still places Neon Cut's landmarks by
- * name (`def.props`) and paints only the clear night; Backstreet Blitz needs its own landmarks
- * and the day presets before it can be baked (docs/TRACK_API.md, "What the art must provide").
+ * The city biome module. Neon Cut's painter places Neon Cut's landmarks by name (`def.props`)
+ * and paints its clear and rainy nights; Backstreet Blitz has its own painter (`blitz/`) for
+ * its golden-hour clear and its rain (docs/art/tracks/).
  */
 export const CITY_BIOME: BiomeModule = {
   biome: 'city',
-  paint: paintCity,
-  presets: ['city_clear_night'],
+  // Backstreet Blitz has its own plan, landmarks and look; Neon Cut is the original painter.
+  paint: (ctx) => (ctx.def.id === 'city_02' ? paintBackstreet(ctx, citySeed(ctx)) : paintCity(ctx)),
+  presets: ['city_clear_night', 'city_rain_night', 'city_clear_day', 'city_rain_day'],
 };

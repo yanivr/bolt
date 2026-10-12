@@ -6,6 +6,7 @@ import { PixelBuffer, encodePng, hex, readPng } from './lib/pixels.js';
 import { bakeDamageOverlays } from './vfx/damage.js';
 import { buildCombatVfx } from './vfx/index.js';
 import { packAtlas } from './vfx/pack.js';
+import { bakeWeatherVfx } from './vfx/weatherBake.js';
 
 /**
  * Bakes the combat effects atlas (Milestone C part 2).
@@ -59,6 +60,8 @@ export function bakeCombatVfx(check = false): void {
   const started = performance.now();
   mkdirSync(MANIFEST_DIR, { recursive: true });
   bakeDamage(check);
+  // The weather and environment atlas (Milestone D) bakes with the effects.
+  bakeWeatherVfx(check);
   const strips = buildCombatVfx();
   const { image, manifest } = packAtlas(strips, 'atlas.png');
   const png = encodePng(image);

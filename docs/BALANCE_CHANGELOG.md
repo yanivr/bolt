@@ -4,6 +4,76 @@ Catalog and balance data use semantic versions (`CATALOG_VERSION` in
 `packages/content/src/catalog.ts`). Every change to a price, mass, coefficient or track is
 listed here with the measurement that motivated it.
 
+## 0.7.0, physics: the loose-ground crawl floor, and two starters on the Trail Engine (Milestone D, October 12, 2026)
+
+**The change.** No part's parameters changed and `CATALOG_VERSION` stays 0.7.0; protocol 6 to 7.
+
+- **Crawl floor.** On loose ground (sand, mud, snow, dirt) and on shoulders, rolling resistance
+  plus ground drag is capped at 70 percent of the car's own drive at that speed, in full below
+  30 px/s and fading out by 70 px/s (`LOOSE_CREEP` in `packages/shared/src/balance.ts`,
+  `creepRelief` in `physics.ts`). Above the creeping speed, and for any car whose drive the
+  ground takes less than 70 percent of, nothing changes: every shipped build is bit-identical
+  on paved ground, and strong cars are bit-identical on sand (`tests/unit/crawl.test.ts`).
+- **Packhorse and Longlegs on the Trail Engine** (`engine_offroad`, 175 credits, the price of
+  the V6 it replaces), because the floor alone did not get them home: with the floor, the three
+  slow pairings of the 0.7.0 report still ran to the time limit on Dust Devil, and so they did
+  with the floor at 60 percent and 140 px/s. With the Trail Engine their six pairings finish in
+  128 to 150 s. Iron Mule, an example and not a starter, keeps its Four-Cylinder; on sand it now
+  crawls at about 47 px/s where it stood still.
+
+**Measured.** Before: `docs/evidence/balance/tracks-0.7.0.md`. After:
+`docs/evidence/balance/tracks-0.7.0-crawl.md` (the same command, `npx tsx
+tests/balance/tracksReport.ts 1`, the same seed).
+
+| Course | Finished before | Finished after | Mean race s before | Mean race s after |
+| :-- | :-- | :-- | --: | --: |
+| Neon Cut, Clear Night | 110 of 110 | 110 of 110 | 118.8 | 119.9 |
+| Neon Cut, Rainy Night | 110 of 110 | 110 of 110 | 125.3 | 126.3 |
+| Backstreet Blitz, Clear | 110 of 110 | 110 of 110 | 110.8 | 111.0 |
+| Backstreet Blitz, Rain | 110 of 110 | 110 of 110 | 123.1 | 123.4 |
+| Dust Devil, Clear | 104 of 110 | 110 of 110 | 134.1 | 130.0 |
+| Dust Devil, Crosswind | 104 of 110 | 110 of 110 | 133.7 | 129.6 |
+| Canyon Switch, Dry Heat | 104 of 110 | 110 of 110 | 130.6 | 126.7 |
+| Canyon Switch, Sandstorm | 110 of 110 | 110 of 110 | 127.3 | 124.5 |
+| Moss Run, Clear | 110 of 110 | 110 of 110 | 102.0 | 100.3 |
+| Moss Run, Rain | 110 of 110 | 110 of 110 | 108.8 | 107.2 |
+| Timber Dash, Clear | 110 of 110 | 110 of 110 | 126.1 | 125.1 |
+| Timber Dash, Heavy Rain | 110 of 110 | 110 of 110 | 141.1 | 139.9 |
+| Whiteout Pass, Clear Frost | 110 of 110 | 110 of 110 | 105.1 | 104.5 |
+| Whiteout Pass, Snowfall | 110 of 110 | 110 of 110 | 111.8 | 111.1 |
+| Steel Circuit, Dry Night | 110 of 110 | 110 of 110 | 113.0 | 113.3 |
+| Steel Circuit, Factory Rain | 110 of 110 | 110 of 110 | 122.3 | 122.4 |
+
+Mean race times move for two reasons, both measured: on the desert the timeouts at 180 s are
+gone (and the starters are quicker on sand), and on paved courses Packhorse and Longlegs are
+slower on the Trail Engine, by about 8 s a race on Neon Cut (rows below).
+
+- **The fastest kit on every course is unchanged** (the bold column of the tire study, both
+  reports): Sand Paddles on all four sand courses, Mud Claws on Moss Run clear, Rain Runners in
+  the wet, Slicks or Micro Wheels in the dry. The default car's kit times are identical off sand;
+  on Dust Devil the kits slow enough to use the floor gain a little (Armored Tires 153.9 to 153.7 s,
+  Half Tracks 174.5 to 174.0, Magnetic Rollers 155.7 to 155.3). Full Tracks still do not finish the
+  desert in the limit; they crawl now instead of stalling.
+- `tests/balance/tracks.test.ts` no longer lists builds that stall; it asserts that every
+  shipped build is over 35 px/s after 10 s on Dust Devil's sand (only Iron Mule under 60), and
+  over 30 px/s after 40 s in Canyon Switch's dry heat.
+- `tests/balance/balance.test.ts`: the tow's combat bound moved from 1.15 to 1.10 (measured
+  1.13 with the starters re-engined; the tow itself did not change).
+- For the owner: the Trail Engine costs the two starters pace on paved courses. Keeping the V6
+  there and the Trail Engine on loose courses would need per-course starters, which do not exist.
+
+The two starters on Neon Cut with the centerline driver (`npx tsx tests/feel/buildsReport.ts`;
+`tests/unit/docs.test.ts` checks these rows; the other builds are unchanged from the 0.4.0 table):
+
+| Build | Cost | Mass kg | Stability | Dry race s | Dry best lap s | Dry top MPH | 0 to 60 s | Rain race s | Rain top MPH | Peak slip dry / rain | Peak heat dry | Low power s dry | Walls dry / rain |
+| :-- | --: | --: | --: | --: | --: | --: | --: | --: | --: | :-- | --: | --: | :-- |
+| Packhorse | 710 | 747 | 80 | 129.8 | 41.7 | 79.8 | 6.47 | 134.9 | 79.6 | 10.0 / 9.2 | 63 | 0.0 | 0 / 0 |
+| Longlegs | 735 | 761 | 100 | 130.6 | 41.9 | 79.4 | 6.63 | 135.6 | 79.2 | 9.9 / 9.0 | 63 | 0.0 | 0 / 0 |
+
+On the V6 (the 0.4.0 table below): Packhorse 742 kg, 121.5 s dry, 88.1 MPH, 5.93 s to 60, 127.6 s in rain;
+Longlegs 756 kg, 122.2 s, 87.6 MPH, 6.07 s, 128.3 s. The Trail Engine is 5 kg heavier, slower on
+asphalt and runs cooler (peak heat 63 against 73).
+
 ## 0.7.0 (magazines for the three bullet guns, and the eight tracks, Milestone D phase 0, October 12, 2026)
 
 **The change (approved by the product owner).** Each of the three bullet guns now carries a

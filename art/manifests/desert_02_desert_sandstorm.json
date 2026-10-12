@@ -1,0 +1,1372 @@
+{
+  "version": 1,
+  "trackId": "desert_02",
+  "presetId": "desert_sandstorm",
+  "worldWidth": 4480,
+  "worldHeight": 3072,
+  "chunkSize": 512,
+  "cols": 9,
+  "rows": 6,
+  "ground": [
+    {
+      "col": 0,
+      "row": 0,
+      "file": "ground_0_0.png",
+      "x": 0,
+      "y": 0,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 1,
+      "row": 0,
+      "file": "ground_1_0.png",
+      "x": 512,
+      "y": 0,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 2,
+      "row": 0,
+      "file": "ground_2_0.png",
+      "x": 1024,
+      "y": 0,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 3,
+      "row": 0,
+      "file": "ground_3_0.png",
+      "x": 1536,
+      "y": 0,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 4,
+      "row": 0,
+      "file": "ground_4_0.png",
+      "x": 2048,
+      "y": 0,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 5,
+      "row": 0,
+      "file": "ground_5_0.png",
+      "x": 2560,
+      "y": 0,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 6,
+      "row": 0,
+      "file": "ground_6_0.png",
+      "x": 3072,
+      "y": 0,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 7,
+      "row": 0,
+      "file": "ground_7_0.png",
+      "x": 3584,
+      "y": 0,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 8,
+      "row": 0,
+      "file": "ground_8_0.png",
+      "x": 4096,
+      "y": 0,
+      "w": 384,
+      "h": 512
+    },
+    {
+      "col": 0,
+      "row": 1,
+      "file": "ground_0_1.png",
+      "x": 0,
+      "y": 512,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 1,
+      "row": 1,
+      "file": "ground_1_1.png",
+      "x": 512,
+      "y": 512,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 2,
+      "row": 1,
+      "file": "ground_2_1.png",
+      "x": 1024,
+      "y": 512,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 3,
+      "row": 1,
+      "file": "ground_3_1.png",
+      "x": 1536,
+      "y": 512,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 4,
+      "row": 1,
+      "file": "ground_4_1.png",
+      "x": 2048,
+      "y": 512,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 5,
+      "row": 1,
+      "file": "ground_5_1.png",
+      "x": 2560,
+      "y": 512,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 6,
+      "row": 1,
+      "file": "ground_6_1.png",
+      "x": 3072,
+      "y": 512,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 7,
+      "row": 1,
+      "file": "ground_7_1.png",
+      "x": 3584,
+      "y": 512,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 8,
+      "row": 1,
+      "file": "ground_8_1.png",
+      "x": 4096,
+      "y": 512,
+      "w": 384,
+      "h": 512
+    },
+    {
+      "col": 0,
+      "row": 2,
+      "file": "ground_0_2.png",
+      "x": 0,
+      "y": 1024,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 1,
+      "row": 2,
+      "file": "ground_1_2.png",
+      "x": 512,
+      "y": 1024,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 2,
+      "row": 2,
+      "file": "ground_2_2.png",
+      "x": 1024,
+      "y": 1024,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 3,
+      "row": 2,
+      "file": "ground_3_2.png",
+      "x": 1536,
+      "y": 1024,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 4,
+      "row": 2,
+      "file": "ground_4_2.png",
+      "x": 2048,
+      "y": 1024,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 5,
+      "row": 2,
+      "file": "ground_5_2.png",
+      "x": 2560,
+      "y": 1024,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 6,
+      "row": 2,
+      "file": "ground_6_2.png",
+      "x": 3072,
+      "y": 1024,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 7,
+      "row": 2,
+      "file": "ground_7_2.png",
+      "x": 3584,
+      "y": 1024,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 8,
+      "row": 2,
+      "file": "ground_8_2.png",
+      "x": 4096,
+      "y": 1024,
+      "w": 384,
+      "h": 512
+    },
+    {
+      "col": 0,
+      "row": 3,
+      "file": "ground_0_3.png",
+      "x": 0,
+      "y": 1536,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 1,
+      "row": 3,
+      "file": "ground_1_3.png",
+      "x": 512,
+      "y": 1536,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 2,
+      "row": 3,
+      "file": "ground_2_3.png",
+      "x": 1024,
+      "y": 1536,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 3,
+      "row": 3,
+      "file": "ground_3_3.png",
+      "x": 1536,
+      "y": 1536,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 4,
+      "row": 3,
+      "file": "ground_4_3.png",
+      "x": 2048,
+      "y": 1536,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 5,
+      "row": 3,
+      "file": "ground_5_3.png",
+      "x": 2560,
+      "y": 1536,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 6,
+      "row": 3,
+      "file": "ground_6_3.png",
+      "x": 3072,
+      "y": 1536,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 7,
+      "row": 3,
+      "file": "ground_7_3.png",
+      "x": 3584,
+      "y": 1536,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 8,
+      "row": 3,
+      "file": "ground_8_3.png",
+      "x": 4096,
+      "y": 1536,
+      "w": 384,
+      "h": 512
+    },
+    {
+      "col": 0,
+      "row": 4,
+      "file": "ground_0_4.png",
+      "x": 0,
+      "y": 2048,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 1,
+      "row": 4,
+      "file": "ground_1_4.png",
+      "x": 512,
+      "y": 2048,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 2,
+      "row": 4,
+      "file": "ground_2_4.png",
+      "x": 1024,
+      "y": 2048,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 3,
+      "row": 4,
+      "file": "ground_3_4.png",
+      "x": 1536,
+      "y": 2048,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 4,
+      "row": 4,
+      "file": "ground_4_4.png",
+      "x": 2048,
+      "y": 2048,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 5,
+      "row": 4,
+      "file": "ground_5_4.png",
+      "x": 2560,
+      "y": 2048,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 6,
+      "row": 4,
+      "file": "ground_6_4.png",
+      "x": 3072,
+      "y": 2048,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 7,
+      "row": 4,
+      "file": "ground_7_4.png",
+      "x": 3584,
+      "y": 2048,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 8,
+      "row": 4,
+      "file": "ground_8_4.png",
+      "x": 4096,
+      "y": 2048,
+      "w": 384,
+      "h": 512
+    },
+    {
+      "col": 0,
+      "row": 5,
+      "file": "ground_0_5.png",
+      "x": 0,
+      "y": 2560,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 1,
+      "row": 5,
+      "file": "ground_1_5.png",
+      "x": 512,
+      "y": 2560,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 2,
+      "row": 5,
+      "file": "ground_2_5.png",
+      "x": 1024,
+      "y": 2560,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 3,
+      "row": 5,
+      "file": "ground_3_5.png",
+      "x": 1536,
+      "y": 2560,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 4,
+      "row": 5,
+      "file": "ground_4_5.png",
+      "x": 2048,
+      "y": 2560,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 5,
+      "row": 5,
+      "file": "ground_5_5.png",
+      "x": 2560,
+      "y": 2560,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 6,
+      "row": 5,
+      "file": "ground_6_5.png",
+      "x": 3072,
+      "y": 2560,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 7,
+      "row": 5,
+      "file": "ground_7_5.png",
+      "x": 3584,
+      "y": 2560,
+      "w": 512,
+      "h": 512
+    },
+    {
+      "col": 8,
+      "row": 5,
+      "file": "ground_8_5.png",
+      "x": 4096,
+      "y": 2560,
+      "w": 384,
+      "h": 512
+    }
+  ],
+  "overlays": [
+    {
+      "id": "fg001_prop",
+      "kind": "desert_prop",
+      "file": "over_fg001_prop.png",
+      "x": 2563,
+      "y": 265,
+      "w": 1,
+      "h": 1,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg002_prop",
+      "kind": "desert_prop",
+      "file": "over_fg002_prop.png",
+      "x": 2592,
+      "y": 262,
+      "w": 4,
+      "h": 6,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg003_rock",
+      "kind": "desert_rock",
+      "file": "over_fg003_rock.png",
+      "x": 2364,
+      "y": 435,
+      "w": 18,
+      "h": 109,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg004_rock",
+      "kind": "desert_rock",
+      "file": "over_fg004_rock.png",
+      "x": 2365,
+      "y": 544,
+      "w": 18,
+      "h": 116,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg005_tower",
+      "kind": "desert_tower",
+      "file": "over_fg005_tower.png",
+      "x": 2433,
+      "y": 625,
+      "w": 119,
+      "h": 174,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg006_sign",
+      "kind": "desert_sign",
+      "file": "over_fg006_sign.png",
+      "x": 3463,
+      "y": 1016,
+      "w": 28,
+      "h": 25,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg007_rock",
+      "kind": "desert_rock",
+      "file": "over_fg007_rock.png",
+      "x": 3403,
+      "y": 1360,
+      "w": 53,
+      "h": 24,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg008_rock",
+      "kind": "desert_rock",
+      "file": "over_fg008_rock.png",
+      "x": 3456,
+      "y": 1381,
+      "w": 64,
+      "h": 23,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg009_rock",
+      "kind": "desert_rock",
+      "file": "over_fg009_rock.png",
+      "x": 3520,
+      "y": 1402,
+      "w": 64,
+      "h": 24,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg010_rock",
+      "kind": "desert_rock",
+      "file": "over_fg010_rock.png",
+      "x": 3584,
+      "y": 1423,
+      "w": 80,
+      "h": 29,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg011_rock",
+      "kind": "desert_rock",
+      "file": "over_fg011_rock.png",
+      "x": 3664,
+      "y": 1450,
+      "w": 64,
+      "h": 23,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg012_rock",
+      "kind": "desert_rock",
+      "file": "over_fg012_rock.png",
+      "x": 3728,
+      "y": 1470,
+      "w": 64,
+      "h": 29,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg013_rock",
+      "kind": "desert_rock",
+      "file": "over_fg013_rock.png",
+      "x": 3792,
+      "y": 1497,
+      "w": 13,
+      "h": 7,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg014_rock",
+      "kind": "desert_rock",
+      "file": "over_fg014_rock.png",
+      "x": 3801,
+      "y": 1504,
+      "w": 23,
+      "h": 14,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg015_rock",
+      "kind": "desert_rock",
+      "file": "over_fg015_rock.png",
+      "x": 3824,
+      "y": 1515,
+      "w": 32,
+      "h": 27,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg016_rock",
+      "kind": "desert_rock",
+      "file": "over_fg016_rock.png",
+      "x": 3856,
+      "y": 1541,
+      "w": 26,
+      "h": 27,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg017_rock",
+      "kind": "desert_rock",
+      "file": "over_fg017_rock.png",
+      "x": 3881,
+      "y": 1568,
+      "w": 7,
+      "h": 8,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg018_rock",
+      "kind": "desert_rock",
+      "file": "over_fg018_rock.png",
+      "x": 3888,
+      "y": 1575,
+      "w": 18,
+      "h": 25,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg019_rock",
+      "kind": "desert_rock",
+      "file": "over_fg019_rock.png",
+      "x": 3905,
+      "y": 1600,
+      "w": 24,
+      "h": 43,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg020_tower",
+      "kind": "desert_tower",
+      "file": "over_fg020_tower.png",
+      "x": 2467,
+      "y": 1551,
+      "w": 48,
+      "h": 54,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg021_sign",
+      "kind": "desert_sign",
+      "file": "over_fg021_sign.png",
+      "x": 3547,
+      "y": 1634,
+      "w": 28,
+      "h": 25,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg022_tower",
+      "kind": "desert_tower",
+      "file": "over_fg022_tower.png",
+      "x": 3663,
+      "y": 1692,
+      "w": 34,
+      "h": 61,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg023_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg023_cliff.png",
+      "x": 1213,
+      "y": 2078,
+      "w": 115,
+      "h": 82,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg024_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg024_cliff.png",
+      "x": 1209,
+      "y": 2160,
+      "w": 55,
+      "h": 26,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg025_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg025_cliff.png",
+      "x": 1264,
+      "y": 2160,
+      "w": 64,
+      "h": 57,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg026_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg026_cliff.png",
+      "x": 1328,
+      "y": 2105,
+      "w": 144,
+      "h": 151,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg027_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg027_cliff.png",
+      "x": 1640,
+      "y": 1993,
+      "w": 104,
+      "h": 71,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg028_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg028_cliff.png",
+      "x": 1485,
+      "y": 2091,
+      "w": 115,
+      "h": 69,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg029_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg029_cliff.png",
+      "x": 1472,
+      "y": 2160,
+      "w": 64,
+      "h": 79,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg030_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg030_cliff.png",
+      "x": 1536,
+      "y": 2160,
+      "w": 53,
+      "h": 36,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg031_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg031_cliff.png",
+      "x": 1600,
+      "y": 2064,
+      "w": 64,
+      "h": 89,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg032_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg032_cliff.png",
+      "x": 1664,
+      "y": 2064,
+      "w": 68,
+      "h": 46,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg033_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg033_cliff.png",
+      "x": 1774,
+      "y": 1899,
+      "w": 98,
+      "h": 69,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg034_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg034_cliff.png",
+      "x": 1744,
+      "y": 1968,
+      "w": 64,
+      "h": 89,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg035_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg035_cliff.png",
+      "x": 1808,
+      "y": 1968,
+      "w": 64,
+      "h": 56,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg036_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg036_cliff.png",
+      "x": 1872,
+      "y": 1898,
+      "w": 144,
+      "h": 166,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg037_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg037_cliff.png",
+      "x": 1919,
+      "y": 2064,
+      "w": 93,
+      "h": 26,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg038_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg038_cliff.png",
+      "x": 2016,
+      "y": 1899,
+      "w": 134,
+      "h": 69,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg039_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg039_cliff.png",
+      "x": 2016,
+      "y": 1968,
+      "w": 64,
+      "h": 48,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg040_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg040_cliff.png",
+      "x": 2016,
+      "y": 2026,
+      "w": 14,
+      "h": 6,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg041_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg041_cliff.png",
+      "x": 2016,
+      "y": 2032,
+      "w": 13,
+      "h": 22,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg042_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg042_cliff.png",
+      "x": 2055,
+      "y": 2016,
+      "w": 25,
+      "h": 10,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg043_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg043_cliff.png",
+      "x": 2080,
+      "y": 1968,
+      "w": 80,
+      "h": 96,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg044_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg044_cliff.png",
+      "x": 2160,
+      "y": 1973,
+      "w": 144,
+      "h": 91,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg045_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg045_cliff.png",
+      "x": 2150,
+      "y": 2064,
+      "w": 10,
+      "h": 7,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg046_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg046_cliff.png",
+      "x": 2160,
+      "y": 2064,
+      "w": 64,
+      "h": 50,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg047_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg047_cliff.png",
+      "x": 2224,
+      "y": 2064,
+      "w": 80,
+      "h": 96,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg048_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg048_cliff.png",
+      "x": 2293,
+      "y": 2160,
+      "w": 11,
+      "h": 8,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg049_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg049_cliff.png",
+      "x": 2304,
+      "y": 2060,
+      "w": 6,
+      "h": 4,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg050_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg050_cliff.png",
+      "x": 2304,
+      "y": 2064,
+      "w": 128,
+      "h": 96,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg051_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg051_cliff.png",
+      "x": 2304,
+      "y": 2160,
+      "w": 64,
+      "h": 51,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg052_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg052_cliff.png",
+      "x": 2368,
+      "y": 2160,
+      "w": 64,
+      "h": 83,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg053_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg053_cliff.png",
+      "x": 2432,
+      "y": 2100,
+      "w": 144,
+      "h": 60,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg054_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg054_cliff.png",
+      "x": 2432,
+      "y": 2160,
+      "w": 64,
+      "h": 83,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg055_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg055_cliff.png",
+      "x": 2496,
+      "y": 2160,
+      "w": 80,
+      "h": 48,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg056_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg056_cliff.png",
+      "x": 2496,
+      "y": 2208,
+      "w": 12,
+      "h": 8,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg057_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg057_cliff.png",
+      "x": 2639,
+      "y": 2021,
+      "w": 65,
+      "h": 43,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg058_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg058_cliff.png",
+      "x": 2763,
+      "y": 1918,
+      "w": 85,
+      "h": 50,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg059_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg059_cliff.png",
+      "x": 2704,
+      "y": 1968,
+      "w": 64,
+      "h": 96,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg060_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg060_cliff.png",
+      "x": 2768,
+      "y": 1968,
+      "w": 80,
+      "h": 66,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg061_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg061_cliff.png",
+      "x": 2576,
+      "y": 2064,
+      "w": 64,
+      "h": 96,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg062_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg062_cliff.png",
+      "x": 2640,
+      "y": 2064,
+      "w": 64,
+      "h": 56,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg063_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg063_cliff.png",
+      "x": 2576,
+      "y": 2160,
+      "w": 3,
+      "h": 2,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg064_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg064_cliff.png",
+      "x": 2704,
+      "y": 2064,
+      "w": 18,
+      "h": 13,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg065_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg065_cliff.png",
+      "x": 2848,
+      "y": 1888,
+      "w": 128,
+      "h": 107,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg066_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg066_cliff.png",
+      "x": 2976,
+      "y": 1894,
+      "w": 144,
+      "h": 111,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg067_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg067_cliff.png",
+      "x": 3120,
+      "y": 1926,
+      "w": 144,
+      "h": 124,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg068_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg068_cliff.png",
+      "x": 3264,
+      "y": 1952,
+      "w": 139,
+      "h": 112,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg069_cliff",
+      "kind": "desert_cliff",
+      "file": "over_fg069_cliff.png",
+      "x": 3313,
+      "y": 2064,
+      "w": 70,
+      "h": 26,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg070_sign",
+      "kind": "desert_sign",
+      "file": "over_fg070_sign.png",
+      "x": 1233,
+      "y": 2439,
+      "w": 47,
+      "h": 22,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg071_sign",
+      "kind": "desert_sign",
+      "file": "over_fg071_sign.png",
+      "x": 1630,
+      "y": 2452,
+      "w": 23,
+      "h": 34,
+      "fadeNearPlayer": true
+    },
+    {
+      "id": "fg072_sign",
+      "kind": "desert_sign",
+      "file": "over_fg072_sign.png",
+      "x": 2077,
+      "y": 2587,
+      "w": 40,
+      "h": 25,
+      "fadeNearPlayer": true
+    }
+  ],
+  "animated": [
+    {
+      "id": "mast_lamp_1",
+      "kind": "beacon",
+      "file": "anim_mast_lamp_1.png",
+      "x": 2490,
+      "y": 623,
+      "frameWidth": 7,
+      "frameHeight": 7,
+      "frameCount": 6,
+      "fps": 4,
+      "above": true,
+      "blend": "normal"
+    },
+    {
+      "id": "mast_lamp_2",
+      "kind": "beacon",
+      "file": "anim_mast_lamp_2.png",
+      "x": 2490,
+      "y": 701,
+      "frameWidth": 7,
+      "frameHeight": 7,
+      "frameCount": 6,
+      "fps": 4,
+      "above": true,
+      "blend": "normal"
+    },
+    {
+      "id": "plateau_flag_1",
+      "kind": "flag",
+      "file": "anim_plateau_flag_1.png",
+      "x": 3273,
+      "y": 698,
+      "frameWidth": 34,
+      "frameHeight": 40,
+      "frameCount": 6,
+      "fps": 12,
+      "above": true,
+      "blend": "normal"
+    },
+    {
+      "id": "plateau_flag_2",
+      "kind": "flag",
+      "file": "anim_plateau_flag_2.png",
+      "x": 2998,
+      "y": 660,
+      "frameWidth": 34,
+      "frameHeight": 40,
+      "frameCount": 6,
+      "fps": 12,
+      "above": true,
+      "blend": "normal"
+    },
+    {
+      "id": "plateau_flag_3",
+      "kind": "flag",
+      "file": "anim_plateau_flag_3.png",
+      "x": 2593,
+      "y": 666,
+      "frameWidth": 34,
+      "frameHeight": 40,
+      "frameCount": 6,
+      "fps": 12,
+      "above": true,
+      "blend": "normal"
+    },
+    {
+      "id": "plateau_flag_4",
+      "kind": "flag",
+      "file": "anim_plateau_flag_4.png",
+      "x": 2187,
+      "y": 670,
+      "frameWidth": 34,
+      "frameHeight": 40,
+      "frameCount": 6,
+      "fps": 12,
+      "above": true,
+      "blend": "normal"
+    },
+    {
+      "id": "plateau_flag_5",
+      "kind": "flag",
+      "file": "anim_plateau_flag_5.png",
+      "x": 1781,
+      "y": 673,
+      "frameWidth": 34,
+      "frameHeight": 40,
+      "frameCount": 6,
+      "fps": 12,
+      "above": true,
+      "blend": "normal"
+    },
+    {
+      "id": "plateau_flag_6",
+      "kind": "flag",
+      "file": "anim_plateau_flag_6.png",
+      "x": 1377,
+      "y": 675,
+      "frameWidth": 34,
+      "frameHeight": 40,
+      "frameCount": 6,
+      "fps": 12,
+      "above": true,
+      "blend": "normal"
+    },
+    {
+      "id": "blowing_sand_1",
+      "kind": "blowing_sand",
+      "file": "anim_blowing_sand_1.png",
+      "x": 1165,
+      "y": 429,
+      "frameWidth": 246,
+      "frameHeight": 120,
+      "frameCount": 12,
+      "fps": 12,
+      "above": false,
+      "blend": "normal"
+    },
+    {
+      "id": "blowing_sand_2",
+      "kind": "blowing_sand",
+      "file": "anim_blowing_sand_2.png",
+      "x": 3145,
+      "y": 484,
+      "frameWidth": 246,
+      "frameHeight": 120,
+      "frameCount": 12,
+      "fps": 12,
+      "above": false,
+      "blend": "normal"
+    },
+    {
+      "id": "wind_sock_crest",
+      "kind": "wind_sock",
+      "file": "anim_wind_sock_crest.png",
+      "x": 3142,
+      "y": 1141,
+      "frameWidth": 56,
+      "frameHeight": 54,
+      "frameCount": 6,
+      "fps": 12,
+      "above": true,
+      "blend": "normal"
+    }
+  ],
+  "lights": [],
+  "minimap": {
+    "file": "minimap.png",
+    "width": 240,
+    "height": 165,
+    "worldScale": 0.05357142857142857
+  }
+}

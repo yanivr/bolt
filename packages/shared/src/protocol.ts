@@ -80,6 +80,11 @@ export const driveJoinOptionsSchema = z
     /** Seed for the rival's choices. Omitted, the room derives one. */
     seed: z.number().int().min(0).max(0x7fffffff).optional(),
     /**
+     * How good the AI rival is (Section 3.1): Rookie, Racer or Ace. A player choice, not a
+     * debug option. Omitted, Racer.
+     */
+    difficulty: z.enum(['rookie', 'racer', 'ace']).optional(),
+    /**
      * A showcase scenario to host instead of a race: both cars come from the scenario and
      * follow its lanes; the joining client supplies only the first car's buttons.
      */

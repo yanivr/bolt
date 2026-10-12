@@ -50,6 +50,12 @@ export type AnimatedArt = {
   fps: number;
   above: boolean;
   blend: 'normal' | 'add';
+  /**
+   * Optional: pack the frames in a grid this many frames wide instead of one row, so a long
+   * loop (a hazard timetable) stays inside mobile texture limits. The client slices a sheet row
+   * by row, so the manifest entry is unchanged. Omitted, the frames are one horizontal strip.
+   */
+  columns?: number;
 };
 
 export type PreviewSpot = { name: string; x: number; y: number };

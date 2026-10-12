@@ -85,12 +85,47 @@ export function floorsForRise(rise: number): number {
   return Math.max(0, Math.floor((rise - CORNICE - FLOOR_0) / FLOOR_N) + 1);
 }
 
+/**
+ * How a city is cut up. Every field is optional and defaults to Neon Cut's plan: a denser,
+ * older quarter asks for narrower streets, smaller lots and fewer towers.
+ */
+export type LayoutOptions = {
+  /** Width of every side street, as a share of the default. */
+  streetScale?: number;
+  /** A region longer than this is always cut by a street; one longer than `regionMay` may be. */
+  regionMax?: number;
+  regionMay?: number;
+  /** A lot longer than this is always split; so is one more than `lotSquare` both ways. */
+  lotMax?: number;
+  lotSquare?: number;
+  /** Share of roomy blocks laid out as a park, a car park, a plaza. */
+  parkRate?: number;
+  parkingRate?: number;
+  plazaRate?: number;
+  /** Chance a roomy tall lot carries a tower shaft. */
+  towerRate?: number;
+  /** Storeys added to (or taken from) every roll. */
+  floorBias?: number;
+};
+
 export function buildLayout(
   ctx: BakeContext,
   scene: Scene,
   reserves: readonly Reserve[],
   fixed: readonly FixedLot[],
+  opts: LayoutOptions = {},
 ): CityLayout {
+  const regionMax = opts.regionMax ?? 300;
+  const regionMay = opts.regionMay ?? 210;
+  const lotMax = opts.lotMax ?? 150;
+  const lotSquare = opts.lotSquare ?? 96;
+  const parkRate = opts.parkRate ?? 0.085;
+  const parkingRate = opts.parkingRate ?? 0.16;
+  const plazaRate = opts.plazaRate ?? 0.185;
+  const towerRate = opts.towerRate ?? 0.1;
+  const floorBias = opts.floorBias ?? 0;
+  const streetGap = (g: number): number =>
+    opts.streetScale === undefined ? g : Math.max(12, Math.round((g * opts.streetScale) / 2) * 2);
   const { field } = ctx;
   const { w, h } = field;
   const rnd = mulberry32(ctx.seed ^ 0xc17a);
@@ -168,7 +203,7 @@ export function buildLayout(
   const splitLot = (r: Rect, family: number, depth: number): void => {
     const big = Math.max(r.w, r.h);
     const small = Math.min(r.w, r.h);
-    const mustSplit = big > 150 || (big > 96 && small > 96);
+    const mustSplit = big > lotMax || (big > lotSquare && small > lotSquare);
     const maySplit = big >= 60 && r.w * r.h > 2800 && rnd() < 0.7;
     if ((mustSplit || maySplit) && big >= 56) {
       const horizontal = r.w === r.h ? rnd() < 0.5 : r.w > r.h;
@@ -196,9 +231,9 @@ export function buildLayout(
     const roomy = r.w >= 110 && r.h >= 96;
     let kind = G_YARD;
     if (!hitsReserve && roomy) {
-      if (roll < 0.085) kind = G_PARK;
-      else if (roll < 0.16) kind = G_PARKING;
-      else if (roll < 0.185) kind = G_PLAZA;
+      if (roll < parkRate) kind = G_PARK;
+      else if (roll < parkingRate) kind = G_PARKING;
+      else if (roll < plazaRate) kind = G_PLAZA;
     }
     fillGround(r, kind);
     blocks.push({ ...r, kind, seed: (rnd() * 0x7fffffff) | 0 });
@@ -207,20 +242,12 @@ export function buildLayout(
 
   const splitRegion = (r: Rect, depth: number): void => {
     const big = Math.max(r.w, r.h);
-    if (big > 300 || (big > 210 && rnd() < 0.55)) {
+    if (big > regionMax || (big > regionMay && rnd() < 0.55)) {
       const horizontal = r.w > r.h;
       // East-west streets are wider: the roofs south of them lean over them on screen.
-      const gap = horizontal
-        ? depth < 2
-          ? 30
-          : depth < 4
-            ? 22
-            : 16
-        : depth < 2
-          ? 46
-          : depth < 4
-            ? 38
-            : 30;
+      const gap = streetGap(
+        horizontal ? (depth < 2 ? 30 : depth < 4 ? 22 : 16) : depth < 2 ? 46 : depth < 4 ? 38 : 30,
+      );
       const span = horizontal ? r.w : r.h;
       const cutAt = even(span * (0.36 + rnd() * 0.28));
       if (horizontal)
@@ -419,7 +446,7 @@ export function buildLayout(
       }
     }
     const open = blockedCols * 3 < lot.w * 0.4;
-    const bias = FAMILY_HEIGHT_BIAS[lot.family] ?? 0;
+    const bias = (FAMILY_HEIGHT_BIAS[lot.family] ?? 0) + floorBias;
     const roll = rnd();
     let floors: number;
     if (lot.front <= 12) {
@@ -443,7 +470,7 @@ export function buildLayout(
     // A few lots carry a tower: a slim shaft set back on the main body.
     const roomy = lot.w >= 44 && lot.h >= 40 && area <= 9000;
     const tall = floorsForRise(lot.cap) - floors;
-    if (roomy && floors >= 3 && tall >= 3 && lot.roadDist > 24 && rnd() < 0.1) {
+    if (roomy && floors >= 3 && tall >= 3 && lot.roadDist > 24 && rnd() < towerRate) {
       lot.tower = Math.min(tall, 3 + ((rnd() * 4) | 0));
       lot.rise = riseForFloors(floors + lot.tower);
     }

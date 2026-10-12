@@ -4,6 +4,66 @@
     {
       "trackId": "city_01",
       "presetId": "city_clear_night"
+    },
+    {
+      "trackId": "city_01",
+      "presetId": "city_rain_night"
+    },
+    {
+      "trackId": "city_02",
+      "presetId": "city_clear_day"
+    },
+    {
+      "trackId": "city_02",
+      "presetId": "city_rain_day"
+    },
+    {
+      "trackId": "desert_01",
+      "presetId": "desert_clear"
+    },
+    {
+      "trackId": "desert_01",
+      "presetId": "desert_crosswind"
+    },
+    {
+      "trackId": "desert_02",
+      "presetId": "desert_dry_heat"
+    },
+    {
+      "trackId": "desert_02",
+      "presetId": "desert_sandstorm"
+    },
+    {
+      "trackId": "forest_01",
+      "presetId": "forest_clear"
+    },
+    {
+      "trackId": "forest_01",
+      "presetId": "forest_rain"
+    },
+    {
+      "trackId": "forest_02",
+      "presetId": "forest_clear"
+    },
+    {
+      "trackId": "forest_02",
+      "presetId": "forest_heavy_rain"
+    },
+    {
+      "trackId": "industrial_01",
+      "presetId": "industrial_dry_night"
+    },
+    {
+      "trackId": "industrial_01",
+      "presetId": "industrial_factory_rain"
+    },
+    {
+      "trackId": "snow_01",
+      "presetId": "snow_clear_frost"
+    },
+    {
+      "trackId": "snow_01",
+      "presetId": "snow_snowfall"
     }
   ]
 }

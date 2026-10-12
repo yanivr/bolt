@@ -4,8 +4,8 @@ import { Protocol, Room, ServerError } from '@colyseus/core';
 import type { ScenarioRace, SparringRace } from '@bolt/content';
 import {
   BASELINE_BLUEPRINT,
+  createAiRace,
   createScenarioRace,
-  createSparringRace,
   defaultRaceSeed,
 } from '@bolt/content';
 import type {
@@ -207,6 +207,7 @@ export function createDriveRoom(deps: DriveRoomDeps): new () => Room<DriveState>
           weatherPresetId: join.weatherPresetId,
           blueprint: car.blueprint,
         };
+        if (join.difficulty !== undefined) auth.difficulty = join.difficulty;
         if (join.rivalTemplateId !== undefined) auth.rivalTemplateId = join.rivalTemplateId;
         if (join.seed !== undefined) auth.seed = join.seed;
         if (join.scenarioId !== undefined) auth.scenarioId = join.scenarioId;
@@ -284,6 +285,7 @@ export function createDriveRoom(deps: DriveRoomDeps): new () => Room<DriveState>
       const seed = auth.seed ?? defaultRaceSeed(car.buildHash, auth.trackId);
       let sparring: SparringRace | null;
       let scenario: ScenarioRace | null = null;
+      let aiInfo: { difficulty: string; style: string; strategy: string } | null = null;
       if (auth.scenarioId !== undefined) {
         // A showcase scenario: both cars are the scenario's, on its marks, on its script.
         const def = getScenario(auth.scenarioId);
@@ -297,14 +299,29 @@ export function createDriveRoom(deps: DriveRoomDeps): new () => Room<DriveState>
             }
           : null;
       } else {
-        sparring = createSparringRace(
+        // The AI rival (Milestone D): it builds for this course from the same catalog and
+        // budget, or races a named shipped template when a debug join asks for one.
+        const ai = createAiRace(
           this.track,
+          auth.weatherPresetId,
           course.env,
           car.conditions,
           { build: car.build, params: car.params, buildHash: car.buildHash },
           seed,
-          auth.rivalTemplateId,
+          {
+            ...(auth.difficulty !== undefined ? { difficulty: auth.difficulty } : {}),
+            ...(auth.rivalTemplateId !== undefined
+              ? { rivalTemplateId: auth.rivalTemplateId }
+              : {}),
+          },
         );
+        sparring = ai;
+        if (ai)
+          aiInfo = {
+            difficulty: ai.difficulty,
+            style: ai.style,
+            strategy: ai.pick?.strategy ?? 'template',
+          };
       }
       if (!sparring) throw joinError('BAD_REQUEST', 'That rival is not available.');
       const player = new DrivePlayer(auth.guestId, sparring, scenario);
@@ -320,6 +337,7 @@ export function createDriveRoom(deps: DriveRoomDeps): new () => Room<DriveState>
         totalCost: car.totalCost,
         rival: sparring.rival.id,
         seed,
+        ...(aiInfo ?? {}),
       });
     }
 

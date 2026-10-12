@@ -19,6 +19,8 @@ export default defineConfig({
       'tests/feel/**/*.test.ts',
       // Combat balance: every shipped build against every other, and the weapon bench.
       'tests/balance/**/*.test.ts',
+      // The bot tournament's CI subset (the full run is tests/tournament/run.ts).
+      'tests/tournament/**/*.test.ts',
     ],
     environment: 'node',
     // Colyseus loads @pm2/io, which writes its own messages to the parent IPC channel

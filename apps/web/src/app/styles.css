@@ -1341,6 +1341,28 @@ button:focus-visible,
   box-shadow: none;
 }
 
+.preview-pick-rival {
+  gap: 4px;
+}
+
+.preview-pick-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ivory-dim);
+  margin-right: 2px;
+}
+
+/* The rival's difficulty: the same choice buttons, a row shorter, under the title. */
+.preview-pick-rival .weather-badge.weather-choice {
+  min-height: 36px;
+  font-size: 12px;
+  padding: 2px 9px;
+}
+
+.preview-pick-rival .weather-badge.weather-choice.is-on {
+  font-size: 13px;
+}
+
 .weather-badge.weather-choice:focus-visible {
   outline: 2px solid var(--gold);
   outline-offset: 2px;

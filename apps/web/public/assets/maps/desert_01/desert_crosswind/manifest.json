@@ -1,0 +1,1059 @@
+{
+ "version": 1,
+ "trackId": "desert_01",
+ "presetId": "desert_crosswind",
+ "worldWidth": 4352,
+ "worldHeight": 2944,
+ "chunkSize": 512,
+ "cols": 9,
+ "rows": 6,
+ "ground": [
+  {
+   "col": 0,
+   "row": 0,
+   "file": "ground_0_0.png",
+   "x": 0,
+   "y": 0,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 1,
+   "row": 0,
+   "file": "ground_1_0.png",
+   "x": 512,
+   "y": 0,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 2,
+   "row": 0,
+   "file": "ground_2_0.png",
+   "x": 1024,
+   "y": 0,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 3,
+   "row": 0,
+   "file": "ground_3_0.png",
+   "x": 1536,
+   "y": 0,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 4,
+   "row": 0,
+   "file": "ground_4_0.png",
+   "x": 2048,
+   "y": 0,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 5,
+   "row": 0,
+   "file": "ground_5_0.png",
+   "x": 2560,
+   "y": 0,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 6,
+   "row": 0,
+   "file": "ground_6_0.png",
+   "x": 3072,
+   "y": 0,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 7,
+   "row": 0,
+   "file": "ground_7_0.png",
+   "x": 3584,
+   "y": 0,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 8,
+   "row": 0,
+   "file": "ground_8_0.png",
+   "x": 4096,
+   "y": 0,
+   "w": 256,
+   "h": 512
+  },
+  {
+   "col": 0,
+   "row": 1,
+   "file": "ground_0_1.png",
+   "x": 0,
+   "y": 512,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 1,
+   "row": 1,
+   "file": "ground_1_1.png",
+   "x": 512,
+   "y": 512,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 2,
+   "row": 1,
+   "file": "ground_2_1.png",
+   "x": 1024,
+   "y": 512,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 3,
+   "row": 1,
+   "file": "ground_3_1.png",
+   "x": 1536,
+   "y": 512,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 4,
+   "row": 1,
+   "file": "ground_4_1.png",
+   "x": 2048,
+   "y": 512,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 5,
+   "row": 1,
+   "file": "ground_5_1.png",
+   "x": 2560,
+   "y": 512,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 6,
+   "row": 1,
+   "file": "ground_6_1.png",
+   "x": 3072,
+   "y": 512,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 7,
+   "row": 1,
+   "file": "ground_7_1.png",
+   "x": 3584,
+   "y": 512,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 8,
+   "row": 1,
+   "file": "ground_8_1.png",
+   "x": 4096,
+   "y": 512,
+   "w": 256,
+   "h": 512
+  },
+  {
+   "col": 0,
+   "row": 2,
+   "file": "ground_0_2.png",
+   "x": 0,
+   "y": 1024,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 1,
+   "row": 2,
+   "file": "ground_1_2.png",
+   "x": 512,
+   "y": 1024,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 2,
+   "row": 2,
+   "file": "ground_2_2.png",
+   "x": 1024,
+   "y": 1024,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 3,
+   "row": 2,
+   "file": "ground_3_2.png",
+   "x": 1536,
+   "y": 1024,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 4,
+   "row": 2,
+   "file": "ground_4_2.png",
+   "x": 2048,
+   "y": 1024,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 5,
+   "row": 2,
+   "file": "ground_5_2.png",
+   "x": 2560,
+   "y": 1024,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 6,
+   "row": 2,
+   "file": "ground_6_2.png",
+   "x": 3072,
+   "y": 1024,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 7,
+   "row": 2,
+   "file": "ground_7_2.png",
+   "x": 3584,
+   "y": 1024,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 8,
+   "row": 2,
+   "file": "ground_8_2.png",
+   "x": 4096,
+   "y": 1024,
+   "w": 256,
+   "h": 512
+  },
+  {
+   "col": 0,
+   "row": 3,
+   "file": "ground_0_3.png",
+   "x": 0,
+   "y": 1536,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 1,
+   "row": 3,
+   "file": "ground_1_3.png",
+   "x": 512,
+   "y": 1536,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 2,
+   "row": 3,
+   "file": "ground_2_3.png",
+   "x": 1024,
+   "y": 1536,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 3,
+   "row": 3,
+   "file": "ground_3_3.png",
+   "x": 1536,
+   "y": 1536,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 4,
+   "row": 3,
+   "file": "ground_4_3.png",
+   "x": 2048,
+   "y": 1536,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 5,
+   "row": 3,
+   "file": "ground_5_3.png",
+   "x": 2560,
+   "y": 1536,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 6,
+   "row": 3,
+   "file": "ground_6_3.png",
+   "x": 3072,
+   "y": 1536,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 7,
+   "row": 3,
+   "file": "ground_7_3.png",
+   "x": 3584,
+   "y": 1536,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 8,
+   "row": 3,
+   "file": "ground_8_3.png",
+   "x": 4096,
+   "y": 1536,
+   "w": 256,
+   "h": 512
+  },
+  {
+   "col": 0,
+   "row": 4,
+   "file": "ground_0_4.png",
+   "x": 0,
+   "y": 2048,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 1,
+   "row": 4,
+   "file": "ground_1_4.png",
+   "x": 512,
+   "y": 2048,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 2,
+   "row": 4,
+   "file": "ground_2_4.png",
+   "x": 1024,
+   "y": 2048,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 3,
+   "row": 4,
+   "file": "ground_3_4.png",
+   "x": 1536,
+   "y": 2048,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 4,
+   "row": 4,
+   "file": "ground_4_4.png",
+   "x": 2048,
+   "y": 2048,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 5,
+   "row": 4,
+   "file": "ground_5_4.png",
+   "x": 2560,
+   "y": 2048,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 6,
+   "row": 4,
+   "file": "ground_6_4.png",
+   "x": 3072,
+   "y": 2048,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 7,
+   "row": 4,
+   "file": "ground_7_4.png",
+   "x": 3584,
+   "y": 2048,
+   "w": 512,
+   "h": 512
+  },
+  {
+   "col": 8,
+   "row": 4,
+   "file": "ground_8_4.png",
+   "x": 4096,
+   "y": 2048,
+   "w": 256,
+   "h": 512
+  },
+  {
+   "col": 0,
+   "row": 5,
+   "file": "ground_0_5.png",
+   "x": 0,
+   "y": 2560,
+   "w": 512,
+   "h": 384
+  },
+  {
+   "col": 1,
+   "row": 5,
+   "file": "ground_1_5.png",
+   "x": 512,
+   "y": 2560,
+   "w": 512,
+   "h": 384
+  },
+  {
+   "col": 2,
+   "row": 5,
+   "file": "ground_2_5.png",
+   "x": 1024,
+   "y": 2560,
+   "w": 512,
+   "h": 384
+  },
+  {
+   "col": 3,
+   "row": 5,
+   "file": "ground_3_5.png",
+   "x": 1536,
+   "y": 2560,
+   "w": 512,
+   "h": 384
+  },
+  {
+   "col": 4,
+   "row": 5,
+   "file": "ground_4_5.png",
+   "x": 2048,
+   "y": 2560,
+   "w": 512,
+   "h": 384
+  },
+  {
+   "col": 5,
+   "row": 5,
+   "file": "ground_5_5.png",
+   "x": 2560,
+   "y": 2560,
+   "w": 512,
+   "h": 384
+  },
+  {
+   "col": 6,
+   "row": 5,
+   "file": "ground_6_5.png",
+   "x": 3072,
+   "y": 2560,
+   "w": 512,
+   "h": 384
+  },
+  {
+   "col": 7,
+   "row": 5,
+   "file": "ground_7_5.png",
+   "x": 3584,
+   "y": 2560,
+   "w": 512,
+   "h": 384
+  },
+  {
+   "col": 8,
+   "row": 5,
+   "file": "ground_8_5.png",
+   "x": 4096,
+   "y": 2560,
+   "w": 256,
+   "h": 384
+  }
+ ],
+ "overlays": [
+  {
+   "id": "fg001_tower",
+   "kind": "desert_tower",
+   "file": "over_fg001_tower.png",
+   "x": 2613,
+   "y": 428,
+   "w": 63,
+   "h": 70,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg002_prop",
+   "kind": "desert_prop",
+   "file": "over_fg002_prop.png",
+   "x": 806,
+   "y": 507,
+   "w": 11,
+   "h": 43,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg003_cliff",
+   "kind": "desert_cliff",
+   "file": "over_fg003_cliff.png",
+   "x": 1943,
+   "y": 608,
+   "w": 144,
+   "h": 128,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg004_cliff",
+   "kind": "desert_cliff",
+   "file": "over_fg004_cliff.png",
+   "x": 2053,
+   "y": 736,
+   "w": 46,
+   "h": 120,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg005_sign",
+   "kind": "desert_sign",
+   "file": "over_fg005_sign.png",
+   "x": 1618,
+   "y": 669,
+   "w": 43,
+   "h": 22,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg006_sign",
+   "kind": "desert_sign",
+   "file": "over_fg006_sign.png",
+   "x": 2432,
+   "y": 668,
+   "w": 28,
+   "h": 25,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg007_prop",
+   "kind": "desert_prop",
+   "file": "over_fg007_prop.png",
+   "x": 440,
+   "y": 763,
+   "w": 30,
+   "h": 23,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg008_sign",
+   "kind": "desert_sign",
+   "file": "over_fg008_sign.png",
+   "x": 3397,
+   "y": 899,
+   "w": 28,
+   "h": 25,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg009_sign",
+   "kind": "desert_sign",
+   "file": "over_fg009_sign.png",
+   "x": 1689,
+   "y": 1018,
+   "w": 28,
+   "h": 25,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg010_sign",
+   "kind": "desert_sign",
+   "file": "over_fg010_sign.png",
+   "x": 3591,
+   "y": 1017,
+   "w": 55,
+   "h": 22,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg011_prop",
+   "kind": "desert_prop",
+   "file": "over_fg011_prop.png",
+   "x": 397,
+   "y": 1091,
+   "w": 12,
+   "h": 33,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg012_sign",
+   "kind": "desert_sign",
+   "file": "over_fg012_sign.png",
+   "x": 3649,
+   "y": 1246,
+   "w": 28,
+   "h": 25,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg013_prop",
+   "kind": "desert_prop",
+   "file": "over_fg013_prop.png",
+   "x": 405,
+   "y": 1298,
+   "w": 36,
+   "h": 25,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg014_prop",
+   "kind": "desert_prop",
+   "file": "over_fg014_prop.png",
+   "x": 276,
+   "y": 1546,
+   "w": 17,
+   "h": 38,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg015_prop",
+   "kind": "desert_prop",
+   "file": "over_fg015_prop.png",
+   "x": 858,
+   "y": 2126,
+   "w": 54,
+   "h": 50,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg016_prop",
+   "kind": "desert_prop",
+   "file": "over_fg016_prop.png",
+   "x": 912,
+   "y": 2154,
+   "w": 80,
+   "h": 39,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg017_prop",
+   "kind": "desert_prop",
+   "file": "over_fg017_prop.png",
+   "x": 992,
+   "y": 2189,
+   "w": 49,
+   "h": 19,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg018_prop",
+   "kind": "desert_prop",
+   "file": "over_fg018_prop.png",
+   "x": 1018,
+   "y": 2208,
+   "w": 54,
+   "h": 37,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg019_prop",
+   "kind": "desert_prop",
+   "file": "over_fg019_prop.png",
+   "x": 1072,
+   "y": 2227,
+   "w": 80,
+   "h": 38,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg020_prop",
+   "kind": "desert_prop",
+   "file": "over_fg020_prop.png",
+   "x": 1152,
+   "y": 2261,
+   "w": 64,
+   "h": 43,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg021_prop",
+   "kind": "desert_prop",
+   "file": "over_fg021_prop.png",
+   "x": 1216,
+   "y": 2291,
+   "w": 22,
+   "h": 13,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg022_prop",
+   "kind": "desert_prop",
+   "file": "over_fg022_prop.png",
+   "x": 1173,
+   "y": 2304,
+   "w": 123,
+   "h": 28,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg023_prop",
+   "kind": "desert_prop",
+   "file": "over_fg023_prop.png",
+   "x": 1296,
+   "y": 2328,
+   "w": 80,
+   "h": 58,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg024_prop",
+   "kind": "desert_prop",
+   "file": "over_fg024_prop.png",
+   "x": 1376,
+   "y": 2364,
+   "w": 80,
+   "h": 36,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg025_prop",
+   "kind": "desert_prop",
+   "file": "over_fg025_prop.png",
+   "x": 1444,
+   "y": 2400,
+   "w": 12,
+   "h": 4,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg026_prop",
+   "kind": "desert_prop",
+   "file": "over_fg026_prop.png",
+   "x": 1456,
+   "y": 2400,
+   "w": 64,
+   "h": 59,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg027_prop",
+   "kind": "desert_prop",
+   "file": "over_fg027_prop.png",
+   "x": 1520,
+   "y": 2419,
+   "w": 80,
+   "h": 29,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg028_prop",
+   "kind": "desert_prop",
+   "file": "over_fg028_prop.png",
+   "x": 1600,
+   "y": 2444,
+   "w": 160,
+   "h": 65,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg029_prop",
+   "kind": "desert_prop",
+   "file": "over_fg029_prop.png",
+   "x": 1760,
+   "y": 2451,
+   "w": 160,
+   "h": 50,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg030_prop",
+   "kind": "desert_prop",
+   "file": "over_fg030_prop.png",
+   "x": 1920,
+   "y": 2436,
+   "w": 160,
+   "h": 21,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg031_prop",
+   "kind": "desert_prop",
+   "file": "over_fg031_prop.png",
+   "x": 2080,
+   "y": 2425,
+   "w": 144,
+   "h": 59,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg032_prop",
+   "kind": "desert_prop",
+   "file": "over_fg032_prop.png",
+   "x": 2224,
+   "y": 2410,
+   "w": 160,
+   "h": 57,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg033_prop",
+   "kind": "desert_prop",
+   "file": "over_fg033_prop.png",
+   "x": 2384,
+   "y": 2396,
+   "w": 160,
+   "h": 54,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg034_prop",
+   "kind": "desert_prop",
+   "file": "over_fg034_prop.png",
+   "x": 2544,
+   "y": 2382,
+   "w": 160,
+   "h": 52,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg035_prop",
+   "kind": "desert_prop",
+   "file": "over_fg035_prop.png",
+   "x": 2704,
+   "y": 2368,
+   "w": 144,
+   "h": 50,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg036_prop",
+   "kind": "desert_prop",
+   "file": "over_fg036_prop.png",
+   "x": 2848,
+   "y": 2353,
+   "w": 160,
+   "h": 50,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg037_prop",
+   "kind": "desert_prop",
+   "file": "over_fg037_prop.png",
+   "x": 3293,
+   "y": 2299,
+   "w": 21,
+   "h": 5,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg038_prop",
+   "kind": "desert_prop",
+   "file": "over_fg038_prop.png",
+   "x": 3008,
+   "y": 2334,
+   "w": 160,
+   "h": 53,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg039_prop",
+   "kind": "desert_prop",
+   "file": "over_fg039_prop.png",
+   "x": 3168,
+   "y": 2304,
+   "w": 146,
+   "h": 45,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg040_rock",
+   "kind": "desert_rock",
+   "file": "over_fg040_rock.png",
+   "x": 2381,
+   "y": 2119,
+   "w": 27,
+   "h": 105,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg041_rock",
+   "kind": "desert_rock",
+   "file": "over_fg041_rock.png",
+   "x": 2390,
+   "y": 2224,
+   "w": 29,
+   "h": 128,
+   "fadeNearPlayer": true
+  },
+  {
+   "id": "fg042_prop",
+   "kind": "desert_prop",
+   "file": "over_fg042_prop.png",
+   "x": 1653,
+   "y": 2138,
+   "w": 80,
+   "h": 54,
+   "fadeNearPlayer": true
+  }
+ ],
+ "animated": [
+  {
+   "id": "wind_pump_wheel",
+   "kind": "windmill_wheel",
+   "file": "anim_wind_pump_wheel.png",
+   "x": 2611,
+   "y": 421,
+   "frameWidth": 23,
+   "frameHeight": 23,
+   "frameCount": 4,
+   "fps": 14,
+   "above": true,
+   "blend": "normal"
+  },
+  {
+   "id": "wind_sock_arc",
+   "kind": "wind_sock",
+   "file": "anim_wind_sock_arc.png",
+   "x": 2264,
+   "y": 2104,
+   "frameWidth": 56,
+   "frameHeight": 54,
+   "frameCount": 6,
+   "fps": 12,
+   "above": true,
+   "blend": "normal"
+  },
+  {
+   "id": "wind_sock_rise",
+   "kind": "wind_sock",
+   "file": "anim_wind_sock_rise.png",
+   "x": 3014,
+   "y": 419,
+   "frameWidth": 56,
+   "frameHeight": 54,
+   "frameCount": 6,
+   "fps": 12,
+   "above": true,
+   "blend": "normal"
+  },
+  {
+   "id": "dust_devil_1",
+   "kind": "dust_devil",
+   "file": "anim_dust_devil_1.png",
+   "x": 1645,
+   "y": 1490,
+   "frameWidth": 46,
+   "frameHeight": 78,
+   "frameCount": 12,
+   "fps": 10,
+   "above": true,
+   "blend": "normal"
+  },
+  {
+   "id": "dust_devil_2",
+   "kind": "dust_devil",
+   "file": "anim_dust_devil_2.png",
+   "x": 2493,
+   "y": 1437,
+   "frameWidth": 46,
+   "frameHeight": 78,
+   "frameCount": 12,
+   "fps": 10,
+   "above": true,
+   "blend": "normal"
+  },
+  {
+   "id": "tumbleweed_1",
+   "kind": "tumbleweed",
+   "file": "anim_tumbleweed_1.png",
+   "x": 1369,
+   "y": 1748,
+   "frameWidth": 68,
+   "frameHeight": 308,
+   "frameCount": 27,
+   "fps": 14,
+   "above": false,
+   "blend": "normal"
+  },
+  {
+   "id": "tumbleweed_2",
+   "kind": "tumbleweed",
+   "file": "anim_tumbleweed_2.png",
+   "x": 2376,
+   "y": 1722,
+   "frameWidth": 68,
+   "frameHeight": 308,
+   "frameCount": 27,
+   "fps": 14,
+   "above": false,
+   "blend": "normal"
+  },
+  {
+   "id": "heat_shimmer_1",
+   "kind": "heat_shimmer",
+   "file": "anim_heat_shimmer_1.png",
+   "x": 2750,
+   "y": 2080,
+   "frameWidth": 140,
+   "frameHeight": 12,
+   "frameCount": 8,
+   "fps": 8,
+   "above": false,
+   "blend": "add"
+  },
+  {
+   "id": "heat_shimmer_2",
+   "kind": "heat_shimmer",
+   "file": "anim_heat_shimmer_2.png",
+   "x": 2162,
+   "y": 2136,
+   "frameWidth": 140,
+   "frameHeight": 12,
+   "frameCount": 8,
+   "fps": 8,
+   "above": false,
+   "blend": "add"
+  },
+  {
+   "id": "heat_shimmer_3",
+   "kind": "heat_shimmer",
+   "file": "anim_heat_shimmer_3.png",
+   "x": 1615,
+   "y": 2172,
+   "frameWidth": 140,
+   "frameHeight": 12,
+   "frameCount": 8,
+   "fps": 8,
+   "above": false,
+   "blend": "add"
+  }
+ ],
+ "lights": [],
+ "minimap": {
+  "file": "minimap.png",
+  "width": 240,
+  "height": 162,
+  "worldScale": 0.05514705882352941
+ }
+}
