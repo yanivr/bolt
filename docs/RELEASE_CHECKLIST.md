@@ -98,10 +98,27 @@ Part 1, the simulation (October 11, 2026). Contract for part 2: `docs/COMBAT_API
 - [ ] Track-side repairs (Section 8.2 pit pads) and destructible track objects: no track data for them yet.
 - [ ] Balance review by a person. Not checked on a phone.
 
-### Milestones D to G
+### Milestone D: tracks, weather, AI
 
-Not started. D: seven more
-tracks, weather presets, AI, bot tournament harness. E: two-player rooms, friend links,
+Phase 0, the tracks and their rules (October 12, 2026). Contract: `docs/TRACK_API.md`; decisions 206 to 223; balance `docs/BALANCE_CHANGELOG.md` 0.7.0.
+
+- [x] Magazines for the three bullet guns (Front Machine Gun 12 bursts, Rear Sentry 8, Swivel Turret 8), on the part cards, catalog 0.7.0, measured before and after on the harness.
+- [x] Track format 2 in `packages/shared`: centerline and width profile, ordered checkpoints, shortcuts with their own gates, surface zones on an 8 px grid, open off-road with return paths and no invisible walls, walls and obstacles, timed hazards (tram crossing, oil, steam vents, magnetic strips, crosswind, deep mud and soft sand and snow), spawn grid, camera bounds, art and sound anchors, computed corner signs. Neon Cut moved to it bit for bit (runtime, race and terrain bake).
+- [x] A validator of 15 rules, in the tests and as `npx tsx tests/tools/trackcheck.ts <id>`; all eight tracks pass.
+- [x] Fifteen weather presets on Section 9.2's grip and cooling table exactly, with temperature, rain, wetness, wind and visibility; wind on exposed cars and on projectiles; tire specialization capped at 1.45. Each track publishes its two from Section 9.1.
+- [x] Seven new layouts, tuned in the simulator with the default car to their length class within 10 percent (tested), three laps each; layout drawings in `art/preview/tracks`.
+- [x] Course choice end to end: Track Preview picker, stored, sent on the join, checked by the server and by the offline drive; the garage and the preview read the chosen course. Production offers only courses with baked art (today Neon Cut, Clear Night; tested end to end); development and `?debug=1` offer all eight, unbaked ones drawn in a labelled layout view with a minimap drawn from the runtime.
+- [x] The terrain baker has a biome-module contract; the city module bakes Neon Cut to the same digest.
+- [x] The balance harness on all 16 courses (`docs/evidence/balance/tracks-0.7.0.md`) and a smoke test of it.
+- [ ] **Terrain art for seven tracks and fourteen weather bakes.** Only the city biome has a module, and only Neon Cut, Clear Night is baked. Six tracks need four new biome modules (desert, forest, snow, industrial) and Backstreet Blitz a city bake. Until then a production build offers one course. Launch blocker.
+- [ ] **Three shipped builds stall on sand** (Packhorse, Longlegs, Iron Mule: none finishes Dust Devil; BALANCE_CHANGELOG 0.7.0). Two are starter builds. A tuning decision for the owner.
+- [ ] Nobody has raced the seven new tracks on a phone, or judged them by anything but numbers and layout drawings. The shortcuts are unmeasured in races: the sparring brain never takes one.
+- [ ] Music themes, ambience and weather sound for the seven tracks; rain, snow, sand and wind effects in the race scene.
+- [ ] The AI (difficulty levels, build choice, shortcuts, hazards) and the bot tournament harness. Not started.
+
+### Milestones E to G
+
+Not started. E: two-player rooms, friend links,
 PostgreSQL blueprints and codes. F: VS sequence, results, highlights, daily challenge, full
 settings. G: load, security, Docker deployment, public HTTPS.
 
@@ -123,7 +140,7 @@ settings. G: load, security, Docker deployment, public HTTPS.
 - [ ] Rocket and mortar explosions have layered flashes, fire, debris and smoke.
 - [ ] Wet road reflections, rain spray, sand dust and forest ambience work on real phones.
 - [ ] Damage appears on the correct component and a spare wheel visibly repairs it. _True in the simulation and its events (hit localisation and the spare wheel are tested). Nothing shows it on the car yet._
-- [ ] All launch tracks, weather, checkpoints and shortcuts are operational. _1 of 8 tracks, 1 of its 2 weather presets is baked; the rain preset has physics but no art._
+- [ ] All launch tracks, weather, checkpoints and shortcuts are operational. _All eight tracks and their 16 courses race, with checkpoints, shortcuts, hazards and weather, and pass the validator (Milestone D phase 0). Only Neon Cut, Clear Night has terrain art; the others race in a development layout view, and a production build offers only the baked course._
 - [ ] One authoritative result is shown consistently to both players. _The server produces one `RaceResult` and sends it in the state; there is one human in a room. The results screen shows that result and nothing that contradicts it (the end-to-end test of a whole race compares them)._
 - [ ] Short car codes create, persist, import and validate across browsers.
 - [ ] Rematch, edit build, swap cars and share flows work without an account.
@@ -131,7 +148,7 @@ settings. G: load, security, Docker deployment, public HTTPS.
 - [ ] Low-effects settings preserve readability and touch responsiveness. _Shake amount and reduced flashes exist; the camera no longer rotates or zooms at all; particle quality tiers do not._
 - [ ] Device tests and network stress tests meet documented budgets.
 - [ ] Privacy disclosure, deletion controls, error handling, backups and HTTPS are in place. _Guest tokens carry no personal data and can be cleared locally; no privacy page yet._
-- [ ] Automated tests and clean install and build commands pass on the committed revision. _Locally, on the working tree of October 11, 2026 after Milestone C part 1 (not committed; the directory is not a git repository): `tsc -b` and ESLint are clean, 1,274 Vitest tests in 39 files and 59 Playwright tests pass, and the build succeeds. CI itself has never run._
+- [ ] Automated tests and clean install and build commands pass on the committed revision. _Locally, on the working tree of October 12, 2026 after Milestone D phase 0 (not committed): `tsc -b` and ESLint are clean, 1,727 Vitest tests in 51 files and 88 Playwright tests pass, and the build succeeds. CI itself has never run._
 
 ## Launch blockers known today
 
@@ -142,3 +159,4 @@ settings. G: load, security, Docker deployment, public HTTPS.
    4a. Human listening review. No sound in the game has been heard by a person.
 5. Legal review of child privacy and regional rules before public launch (Section 16).
 6. Trademark check on the working name (document header).
+7. Terrain art for seven of the eight launch tracks (four biome modules and the bakes; Milestone D above). A production build offers only Neon Cut until then.

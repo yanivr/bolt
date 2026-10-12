@@ -9,19 +9,12 @@ import {
   MODULE_DISABLED,
   MODULE_TARGETING,
 } from '../combat/types.js';
-import type { DriverTuning } from '../driver.js';
-import { DEFAULT_DRIVER } from '../driver.js';
+import type { DriverTuning, SpeedPlan } from '../driver.js';
+import { DEFAULT_DRIVER, planSpeed } from '../driver.js';
 import { angleDelta, clamp, headingFromVector, mulberry32, wrapAngle } from '../math.js';
 import type { ControlInput } from '../physics.js';
-import { surfaceGrip } from '../physics.js';
 import type { TrackLocation } from '../track.js';
-import {
-  TRACK_SAMPLE_SPACING,
-  createLocation,
-  lapPosition,
-  locate,
-  sampleBranch,
-} from '../track.js';
+import { createLocation, lapPosition, locate, sampleBranch } from '../track.js';
 import type { RaceBrain } from './brain.js';
 
 /**
@@ -78,6 +71,7 @@ export class SparringBrain implements RaceBrain {
   private slowTicks = 0;
   private reverseTicks = 0;
   private usePulse = 0;
+  private readonly plan: SpeedPlan = { allowed: Infinity, holding: false };
 
   constructor(
     private readonly seed: number,
@@ -178,23 +172,21 @@ export class SparringBrain implements RaceBrain {
     out.steer = clamp(angleDelta(m.headingRad, wanted) * tuning.steerGain, -1, 1);
 
     // The speed plan of `driveCenterline`: the fastest entry speed that still allows braking to
-    // each point's cornering limit, under the grip the car has right now.
+    // each point's cornering limit, under the grip the car has right now, and a stop before a
+    // rail crossing that will be down. The race clock is the one the car's own physics runs on.
     const fx = session.effects;
-    let allowed = Infinity;
-    const horizon = 60 + speed * 1.1;
-    for (let d = 0; d <= horizon; d += TRACK_SAMPLE_SPACING * 2) {
-      const p = sampleBranch(track.main, lapS + d);
-      const surface = track.main.surface[p.index] ?? 'asphalt';
-      const grip = surfaceGrip(params, env, surface, false) * fx.grip;
-      const curvature = Math.max(Math.abs(p.curvature), 1e-5);
-      const cornerSpeed = Math.sqrt(
-        (params.lateralGripAccel * grip * tuning.cornerConfidence) / curvature,
-      );
-      const entry = Math.sqrt(
-        cornerSpeed * cornerSpeed + 2 * params.brakeDecel * grip * tuning.brakeConfidence * d,
-      );
-      if (entry < allowed) allowed = entry;
-    }
+    const plan = planSpeed(
+      track,
+      params,
+      env,
+      lapS,
+      speed,
+      tuning,
+      fx.grip,
+      session.raceTicks,
+      this.plan,
+    );
+    const allowed = plan.allowed;
     let pull = 0;
     if (speed > allowed) {
       const lift = clamp((speed - allowed) / 45, 0.25, 1);
@@ -206,7 +198,9 @@ export class SparringBrain implements RaceBrain {
 
     // Pinned nose-first against something: back out for a moment, as a person would.
     const racing = session.phase === 'RACING';
-    if (racing && speed < 14 && !session.motion.reversing) this.slowTicks++;
+    // Waiting at a crossing is not being stuck.
+    if (plan.holding) this.slowTicks = 0;
+    else if (racing && speed < 14 && !session.motion.reversing) this.slowTicks++;
     else if (speed > 30) this.slowTicks = 0;
     if (this.reverseTicks > 0) {
       this.reverseTicks--;

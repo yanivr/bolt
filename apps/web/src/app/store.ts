@@ -1,6 +1,8 @@
 import { BASELINE_BLUEPRINT, CATALOG } from '@bolt/content';
 import type { MatchPhase, VehicleBlueprint } from '@bolt/shared';
 import { serializeBlueprint, validateUntrustedBlueprint } from '@bolt/shared';
+import type { Course } from './course.js';
+import { DEFAULT_COURSE } from './course.js';
 import { BLUEPRINT_KEY, restoreBlueprint } from './savedBlueprint.js';
 import { create } from 'zustand';
 import type { CameraDistance } from '../game/rendering/frame.js';
@@ -66,6 +68,21 @@ export const DEFAULT_SETTINGS: Settings = {
 
 const SETTINGS_KEY = 'bolt.settings.v1';
 const MILESTONES_KEY = 'bolt.tutorial.v1';
+/** The last track and weather chosen on the preview, a convenience for the next visit. */
+const COURSE_KEY = 'bolt.course.v1';
+
+function loadCourse(): Course {
+  try {
+    const raw = JSON.parse(window.localStorage.getItem(COURSE_KEY) ?? 'null') as unknown;
+    if (typeof raw === 'object' && raw !== null) {
+      const { trackId, presetId } = raw as { trackId?: unknown; presetId?: unknown };
+      if (typeof trackId === 'string' && typeof presetId === 'string') return { trackId, presetId };
+    }
+  } catch {
+    // Storage is unavailable or the entry is not ours: start on the default course.
+  }
+  return { ...DEFAULT_COURSE };
+}
 function loadBlueprint(): VehicleBlueprint {
   try {
     const blueprint = restoreBlueprint(window.localStorage);
@@ -144,6 +161,9 @@ type AppState = {
    */
   garageDraft: VehicleBlueprint | null;
   paused: boolean;
+  /** The track and weather chosen on the preview; the garage stats and the race use it. */
+  course: Course;
+  setCourse: (course: Course) => void;
   setScreen: (screen: Screen) => void;
   openGarageWith: (draft: VehicleBlueprint) => void;
   takeGarageDraft: () => VehicleBlueprint | null;
@@ -168,6 +188,15 @@ export const useApp = create<AppState>((set, get) => ({
   blueprint: loadBlueprint(),
   garageDraft: null,
   paused: false,
+  course: loadCourse(),
+  setCourse: (course) => {
+    try {
+      window.localStorage.setItem(COURSE_KEY, JSON.stringify(course));
+    } catch {
+      // The choice still applies for this session.
+    }
+    set({ course: { trackId: course.trackId, presetId: course.presetId } });
+  },
   setScreen: (screen) => set({ screen, paused: false }),
   openGarageWith: (draft) => set({ garageDraft: draft, screen: 'garage', paused: false }),
   takeGarageDraft: () => {

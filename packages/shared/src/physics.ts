@@ -50,10 +50,15 @@ import {
   WALL_SCRAPE_LOSS_MAX,
   WALL_SCRAPE_LOSS_MIN,
   WET_WEATHER,
+  WIND,
+  REFERENCE_MASS_KG,
 } from './balance.js';
+import type { Ground } from './hazards.js';
+import { createGround } from './hazards.js';
 import { TAU, approach, clamp, expBlend, lerp, smoothstep, wrapAngle } from './math.js';
 import type { TrackLocation, TrackRuntime } from './track.js';
-import { createLocation, locate, surfaceAt } from './track.js';
+import { createLocation, crossingClosed, groundAt, locate } from './track.js';
+import { segmentDistance } from './trackShapes.js';
 import type {
   RaceEnvironment,
   SurfaceId,
@@ -628,9 +633,100 @@ export function stepStraight(
   return v;
 }
 
-export type StepScratch = { loc: TrackLocation; probe: TrackLocation; power: PowertrainOutput };
+export type StepScratch = {
+  loc: TrackLocation;
+  probe: TrackLocation;
+  power: PowertrainOutput;
+  ground: Ground;
+};
 export function createStepScratch(): StepScratch {
-  return { loc: createLocation(), probe: createLocation(), power: createPowertrainOutput() };
+  return {
+    loc: createLocation(),
+    probe: createLocation(),
+    power: createPowertrainOutput(),
+    ground: createGround(),
+  };
+}
+
+/**
+ * Wind on a car's body this step (Section 9.2), as a change of world velocity: the full
+ * component across the car and `WIND.alongShare` of the one along it, scaled by exposure and by
+ * the car's mass. Zero, and skipped, where the track is sheltered or the air is still.
+ */
+export function windAccel(
+  params: VehicleParams,
+  env: RaceEnvironment,
+  exposure: number,
+  headingRad: number,
+  out: { x: number; y: number },
+): { x: number; y: number } {
+  const wx = (env.windX ?? 0) * exposure;
+  const wy = (env.windY ?? 0) * exposure;
+  if (wx === 0 && wy === 0) {
+    out.x = 0;
+    out.y = 0;
+    return out;
+  }
+  const fx = Math.sin(headingRad);
+  const fy = -Math.cos(headingRad);
+  const along = wx * fx + wy * fy;
+  const across = wx * -fy + wy * fx;
+  const mass = clamp(
+    Math.pow(REFERENCE_MASS_KG / Math.max(1, params.massKg), WIND.massExponent),
+    WIND.massFactorMin,
+    WIND.massFactorMax,
+  );
+  const gain = WIND.bodyGain * mass;
+  out.x = gain * (fx * along * WIND.alongShare + -fy * across);
+  out.y = gain * (fy * along * WIND.alongShare + fx * across);
+  return out;
+}
+
+const windScratch = { x: 0, y: 0 };
+
+/** Result of `capsulePush`: the push that clears the circle, and the wall's outward normal. */
+const pushOut = { x: 0, y: 0, nx: 0, ny: 0 };
+
+/**
+ * Pushes a circle of radius `r` at (cx, cy) out of a capsule from A to B of radius `cr`.
+ * Writes `pushOut` and returns true when they overlap.
+ */
+function capsulePush(
+  cx: number,
+  cy: number,
+  r: number,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  cr: number,
+): boolean {
+  const reach = r + cr;
+  const dist = segmentDistance(cx, cy, ax, ay, bx, by);
+  if (dist >= reach) return false;
+  const abx = bx - ax;
+  const aby = by - ay;
+  const len2 = abx * abx + aby * aby;
+  const t = len2 > 1e-12 ? clamp(((cx - ax) * abx + (cy - ay) * aby) / len2, 0, 1) : 0;
+  let nx = cx - (ax + abx * t);
+  let ny = cy - (ay + aby * t);
+  const len = Math.hypot(nx, ny);
+  if (len > 1e-6) {
+    nx /= len;
+    ny /= len;
+  } else {
+    // Dead on the line: push along its normal.
+    const l = Math.sqrt(len2) || 1;
+    nx = -aby / l;
+    ny = abx / l;
+  }
+  const depth = reach - dist;
+  pushOut.x = nx * depth;
+  pushOut.y = ny * depth;
+  // The rest of the step treats the hit normal as pointing into the solid.
+  pushOut.nx = -nx;
+  pushOut.ny = -ny;
+  return true;
 }
 
 export function stepVehicle(
@@ -643,6 +739,8 @@ export function stepVehicle(
   scratch: StepScratch,
   telemetry: VehicleTelemetry,
   effects: VehicleEffects = NEUTRAL_EFFECTS,
+  /** Race clock in ticks since GO, for timed track hazards. */
+  clock = 0,
 ): void {
   // --- 1. Filter the commanded steering -------------------------------------------------------
   let steerTarget = input.coast ? 0 : clamp(Number.isFinite(input.steer) ? input.steer : 0, -1, 1);
@@ -662,7 +760,7 @@ export function stepVehicle(
   // --- 2. Surface under the car --------------------------------------------------------------
   const loc = scratch.loc;
   locate(track, state.x, state.y, loc);
-  const ground = surfaceAt(track, loc);
+  const ground = groundAt(track, loc, state.x, state.y, clock, scratch.ground);
 
   // --- 3. Velocity in the car frame -----------------------------------------------------------
   let fx = Math.sin(state.headingRad);
@@ -699,6 +797,8 @@ export function stepVehicle(
   const speedNow = Math.hypot(vf, vl);
   if (air) throttle = 0;
   stepPowertrain(state, throttle, speedNow, params, env, dt, power, telemetry, effects);
+  // A steam vent heats the engine bay directly.
+  if (ground.heat > 0) state.coreHeat += ground.heat * dt;
 
   // --- 4c. Coefficients for this step (Section 11.8 step 4) ---------------------------------
   let gripRaw = rawSurfaceGrip(params, env, ground.surface, ground.onShoulder, power.gripSupply);
@@ -714,7 +814,12 @@ export function stepVehicle(
     const q = Math.min(1, speedNow / DOWNFORCE_REF_SPEED);
     gripRaw *= 1 + power.downforce * q * q;
   }
-  const grip = Math.min(MAX_COMBINED_GRIP, gripRaw) * effects.grip;
+  // A magnetic strip holds magnetic tires harder, as far as they are powered (Section 11.4).
+  if (ground.magnetBonus > 0 && params.magneticTires)
+    gripRaw *= 1 + ground.magnetBonus * power.gripSupply;
+  let grip = Math.min(MAX_COMBINED_GRIP, gripRaw) * effects.grip;
+  // Oil on the track acts after the tire cap, as oil from a weapon does.
+  if (ground.gripScale !== 1) grip *= ground.gripScale;
   const unstable = instability(params, power.stabilityAdd + effects.stabilityAdd);
   const road = isRoad(ground.surface);
   let speedScale = road ? params.roadSpeedFactor : 1;
@@ -738,7 +843,8 @@ export function stepVehicle(
     ((params.dragLinear * vf) / speedScale +
       (params.dragQuadratic * vf * Math.abs(vf)) / (speedScale * speedScale)) /
     params.massKg;
-  const rolling = rollingDecel(params, ground.surface, ground.onShoulder) + effects.rollingAdd;
+  let rolling = rollingDecel(params, ground.surface, ground.onShoulder) + effects.rollingAdd;
+  if (ground.drag > 0) rolling += ground.drag;
   const vfIn = vf;
 
   if (air) {
@@ -824,6 +930,13 @@ export function stepVehicle(
   vx = fx * vf + rx * vl;
   vy = fy * vf + ry * vl;
 
+  // --- 7b. Wind on an exposed body (Section 9.2) ---------------------------------------------
+  if (ground.exposure > 0 && !air) {
+    const wind = windAccel(params, env, ground.exposure, state.headingRad, windScratch);
+    vx += wind.x * dt;
+    vy += wind.y * dt;
+  }
+
   // --- 8. Integrate position -----------------------------------------------------------------
   state.x += vx * dt;
   state.y += vy * dt;
@@ -852,20 +965,23 @@ export function stepVehicle(
     const cy = state.y + fy * d * sign;
     let px = 0;
     let py = 0;
-    locate(track, cx, cy, probe);
-    const depth = probe.edge + r;
-    if (depth > 0) {
-      let nx = cx - probe.cx;
-      let ny = cy - probe.cy;
-      const len = Math.hypot(nx, ny);
-      if (len > 1e-6) {
-        nx /= len;
-        ny /= len;
-        px -= nx * depth;
-        py -= ny * depth;
-        hitNx += nx;
-        hitNy += ny;
-        hits++;
+    // A walled track's corridor edge is solid; an open track's is not.
+    if (track.walled) {
+      locate(track, cx, cy, probe);
+      const depth = probe.edge + r;
+      if (depth > 0) {
+        let nx = cx - probe.cx;
+        let ny = cy - probe.cy;
+        const len = Math.hypot(nx, ny);
+        if (len > 1e-6) {
+          nx /= len;
+          ny /= len;
+          px -= nx * depth;
+          py -= ny * depth;
+          hitNx += nx;
+          hitNy += ny;
+          hits++;
+        }
       }
     }
     // Obstacles are solid circles inside the corridor.
@@ -888,6 +1004,36 @@ export function stepVehicle(
           hitNy += oy;
           hits++;
         }
+      }
+    }
+    // Walls and barriers: capsules along authored polylines.
+    if (gc >= 0 && gr >= 0 && gc < track.gridCols && gr < track.gridRows) {
+      const bucket = track.wallGrid[gr * track.gridCols + gc]!;
+      const wd = track.walls.data;
+      for (let k = 0; k < bucket.length; k++) {
+        const w = bucket[k]! * 5;
+        const hit = capsulePush(cx, cy, r, wd[w]!, wd[w + 1]!, wd[w + 2]!, wd[w + 3]!, wd[w + 4]!);
+        if (hit) {
+          px += pushOut.x;
+          py += pushOut.y;
+          hitNx += pushOut.nx;
+          hitNy += pushOut.ny;
+          hits++;
+        }
+      }
+    }
+    // A rail crossing's barrier while it is down.
+    for (let k = 0; k < track.crossings.length; k++) {
+      const index = track.crossings[k]!;
+      if (!crossingClosed(track, index, clock)) continue;
+      const h = track.hazards[index]!;
+      if (h.kind !== 'crossing') continue;
+      if (capsulePush(cx, cy, r, h.a.x, h.a.y, h.b.x, h.b.y, h.thickness / 2)) {
+        px += pushOut.x;
+        py += pushOut.y;
+        hitNx += pushOut.nx;
+        hitNy += pushOut.ny;
+        hits++;
       }
     }
     if (c === 0) {

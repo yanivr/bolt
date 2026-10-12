@@ -2087,7 +2087,9 @@ test('the idle Your Car panel shows scores, indicators, a derived summary and ta
   await page.getByRole('button', { name: 'Whole Car' }).tap();
   await expect(panel).toContainText('2 of 5 mounts used');
   const firepower = (await panel.getByTestId('score-firepower').locator('dd').textContent())!;
-  expect(Number(firepower)).toBeGreaterThan(20);
+  // Since catalog 0.7.0 the Turret has eight bursts a race, and Firepower weighs that supply
+  // as it does for every limited weapon (about 9 today, was above 20).
+  expect(Number(firepower)).toBeGreaterThan(4);
   await expect(summary).toContainText('Strongest: Control');
   const rows = panel.locator('.g-equipment-row');
   await expect(rows).toHaveCount(2);

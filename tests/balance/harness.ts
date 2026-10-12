@@ -7,6 +7,7 @@ import {
   WEAPON_LIST,
   conditionsFor,
   environmentFor,
+  getTrack,
   raceEntry,
 } from '@bolt/content';
 import type {
@@ -54,6 +55,25 @@ export function neonCut(): TrackRuntime {
   return neon;
 }
 
+/**
+ * Where a harness race is run. Every function here takes a weather preset id where it used to
+ * mean Neon Cut, and still does; `courseId(trackId, presetId)` names any track and weather as
+ * `track/preset`, so the same harness runs on all eight tracks (Milestone D).
+ */
+export function courseId(trackId: string, presetId: string): string {
+  return `${trackId}/${presetId}`;
+}
+
+export function courseOf(id: string): { track: TrackRuntime; trackId: string; presetId: string } {
+  const slash = id.indexOf('/');
+  if (slash < 0) return { track: neonCut(), trackId: CITY_01.id, presetId: id };
+  const trackId = id.slice(0, slash);
+  const presetId = id.slice(slash + 1);
+  const def = getTrack(trackId);
+  if (!def) throw new Error(`no track ${trackId}`);
+  return { track: buildTrack(def), trackId, presetId };
+}
+
 export type BotMatch = {
   race: RaceSession;
   brains: RaceBrain[];
@@ -81,10 +101,11 @@ export function createBotMatch(
   weatherPresetId = NEON_CLEAR,
   tow = true,
 ): BotMatch {
-  const env = environmentFor(weatherPresetId) as RaceEnvironment;
-  const conditions = conditionsFor(CITY_01.id, weatherPresetId) as BuildConditions;
+  const course = courseOf(weatherPresetId);
+  const env = environmentFor(course.presetId) as RaceEnvironment;
+  const conditions = conditionsFor(course.trackId, course.presetId) as BuildConditions;
   const entries = [a, b].map((car) => ('entry' in car ? car : contenderOf(car)).entry(conditions));
-  const race = createRace(neonCut(), env, entries, { seed, conditions, catalog: CATALOG, tow });
+  const race = createRace(course.track, env, entries, { seed, conditions, catalog: CATALOG, tow });
   return {
     race,
     brains: [createSparringBrain(seed ^ 0x1b873593), createSparringBrain(seed ^ 0x2545f491)],

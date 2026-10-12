@@ -1,4 +1,4 @@
-import { createLocation, locate } from '@bolt/shared';
+import { TRACK_SAMPLE_SPACING, createLocation, locate } from '@bolt/shared';
 import type { SurfaceId, TrackBranch, TrackRuntime } from '@bolt/shared';
 
 /**
@@ -54,6 +54,32 @@ function smooth(branch: TrackBranch, radius: number): Float32Array {
   return out;
 }
 
+/** How far past the road edge an open track's field is sampled, in world pixels. */
+export const OPEN_FIELD_REACH = 480;
+
+function farCells(track: TrackRuntime, cell: number): Uint8Array {
+  const out = new Uint8Array(track.gridCols * track.gridRows);
+  const half = (cell * Math.SQRT2) / 2;
+  for (let r = 0; r < track.gridRows; r++)
+    for (let c = 0; c < track.gridCols; c++) {
+      const cx = (c + 0.5) * cell;
+      const cy = (r + 0.5) * cell;
+      let nearest = Infinity;
+      for (const code of track.grid[r * track.gridCols + c] ?? []) {
+        const b = track.branches[code >> 20]!;
+        const i = code & 0xfffff;
+        const d =
+          Math.hypot(b.x[i]! - cx, b.y[i]! - cy) -
+          b.halfWidth[i]! -
+          b.shoulder[i]! -
+          TRACK_SAMPLE_SPACING;
+        nearest = Math.min(nearest, d);
+      }
+      if (nearest - half > OPEN_FIELD_REACH) out[r * track.gridCols + c] = 1;
+    }
+  return out;
+}
+
 export function buildCorridorField(track: TrackRuntime): CorridorField {
   const w = track.def.worldWidth;
   const h = track.def.worldHeight;
@@ -78,11 +104,16 @@ export function buildCorridorField(track: TrackRuntime): CorridorField {
   const branchSurface = track.branches.map((b) => Uint8Array.from(b.surface.map(surfaceIndex)));
   const loc = createLocation();
   const cell = 96;
+  // On an open track every cell lists segments (so the physics can locate a car anywhere), and
+  // sampling every pixel of a large map would take minutes: cells whose nearest corridor edge
+  // is surely further than `OPEN_FIELD_REACH` are left at `FAR`. Walled tracks are unchanged.
+  const far = track.walled ? null : farCells(track, cell);
   for (let y = 0; y < h; y++) {
     const r = Math.floor(y / cell);
     for (let x = 0; x < w; x++) {
       const bucket = track.grid[r * track.gridCols + Math.floor(x / cell)];
       if (!bucket || bucket.length === 0) continue;
+      if (far && far[r * track.gridCols + Math.floor(x / cell)]) continue;
       locate(track, x + 0.5, y + 0.5, loc);
       const i = y * w + x;
       edge[i] = loc.edge;

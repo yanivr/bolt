@@ -4,6 +4,84 @@ Catalog and balance data use semantic versions (`CATALOG_VERSION` in
 `packages/content/src/catalog.ts`). Every change to a price, mass, coefficient or track is
 listed here with the measurement that motivated it.
 
+## 0.7.0 (magazines for the three bullet guns, and the eight tracks, Milestone D phase 0, October 12, 2026)
+
+**The change (approved by the product owner).** Each of the three bullet guns now carries a
+magazine for the race, through the `charges` mechanic the limited weapons already use: Front
+Machine Gun 12 bursts, Rear Sentry 8, Swivel Turret 8. Nothing else about them changed (price,
+mass, cooldown, rounds a burst, damage a round, range, cone). The part card says so in its
+drawback line ("Twelve bursts a match, ...", "Eight bursts a match, ..."), the HUD's ammunition
+count shows it, and the garage's Firepower score now counts the supply as it does for the other
+limited weapons (a lone Front Machine Gun scores about 6 where it scored above 10).
+`CATALOG_VERSION` 0.6.0 to 0.7.0, so blueprints saved under 0.6.0 are told the catalog moved.
+
+**Why.** The 0.6.0 report and the tow report flagged it: the bullet guns dealt several times
+the median damage per credit, because two cars kept together could empty them all race long.
+
+**Measured, before and after.** Same runs as the tow report: Neon Cut, clear night, four seeds,
+tow on, sparring brain in both cars (`npx tsx tests/balance/report.ts 4`). Before is
+`docs/evidence/balance/tow-0.6.0-clear.md`, after is `docs/evidence/balance/after-0.7.0-clear.md`.
+The "none" probe (the 0.6.0 catalog with the magazines taken out) reproduced the before numbers
+exactly, so the differences below are the magazines and nothing else.
+
+| Measure | 0.6.0 | 0.7.0 |
+| :-- | --: | --: |
+| Weapon bench: Front Machine Gun, damage a credit against the median (29.2) | 7.64x | 4.76x |
+| Weapon bench: Swivel Turret | 8.07x | 3.97x |
+| Weapon bench: Rear Sentry | 3.05x | 2.01x |
+| Weapon bench: wins against the unarmed twin, Machine Gun / Turret / Sentry | 100 / 100 / 50% | 75 / 50 / 50% |
+| Weapon bench: bursts a race, Machine Gun / Turret / Sentry | 13.1 / 21.0 / 8.5 | 6.0 / 8.0 / 4.0 |
+| Weapon bench: unarmed twin wrecked, Machine Gun / Turret (of 8) | 2 / 4 | 0 / 0 |
+| Shipped builds: Front Machine Gun, damage a credit against the median | 3.96x | 3.13x |
+| Shipped builds: Rear Sentry | 2.00x | 1.65x |
+| Shipped builds: Front Machine Gun bursts a race (rounds) | 4.2 (20.7) | 2.8 (14.0) |
+| Shipped builds: Rear Sentry bursts a race (rounds) | 3.0 (11.8) | 2.3 (9.2) |
+| Weapon activations a race, both cars (rounds) | 6.1 (25.5) | 4.7 (18.8) |
+| Damage dealt a race, both cars | 73.1 | 61.6 |
+| Seconds a race within 220 px | 15.1 | 15.4 |
+| Races won by the car ahead after lap 1 | 93% | 94% |
+| Builds outside 30 to 70% | 6 | 7 |
+| Upgraded twin's wins (Rookie V6, Sprinter V8, Packhorse V8, Sprinter Slicks, Tinker Slicks, Trap Slicks) | 100, 50, 100, 50, 100, 63% | 100, 100, 100, 50, 100, 75% |
+
+In the bench, a car on pole with a forward gun leads all race and never fires; from the second
+slot it fires all 12 (traced), so "6.0 bursts" is the mean of 0 and 12. Read plainly: the
+Turret and the Machine Gun are still the strongest weapons for their price (4.0x and 4.8x the
+median on the bench), but no longer decide a race on their own; a Turret no longer wrecks its
+twin. The seventh build outside 30 to 70 percent is Longlegs (26 percent, was 46 with the tow):
+it carries a Front Machine Gun and was winning races with it. Damage a race fell by a sixth.
+
+**The eight tracks.** Seven tracks are new (`docs/TRACK_API.md`); no part changed for them.
+Report: `docs/evidence/balance/tracks-0.7.0.md` (`npx tsx tests/balance/tracksReport.ts 1`, one
+seed, 110 races on each of the 16 courses, plus each of the 20 wheel kits on the default car).
+
+- Every course finishes but three: Dust Devil (both weathers) and Canyon Switch in Dry Heat each
+  had 6 races of 110 run to the 180 s limit with neither car home. All 18 are pairings among
+  Packhorse, Longlegs and Iron Mule.
+- **The cause, measured: those three builds stall on sand.** Rolling resistance on sand is a
+  fixed 42 px/s² for every car (`SURFACE_ROLLING_DECEL`). Packhorse (Pickup, V6, Street Tires,
+  742 kg) has 53 px/s² of drive from rest on sand, so it gains 11 px/s² and reaches 46 px/s after
+  10 s, then loses power as its engine heats at full throttle and low speed (32 px/s at 30 s in
+  Dust Devil's clear weather, 0 in Canyon Switch's dry heat). Longlegs is the same. Iron Mule
+  (Four-Cylinder, Armored Tires) has less drive than the rolling resistance and does not move
+  on sand. On asphalt each passes 120 px/s in 5 s; the Sprinter, at 459 kg, has 85 px/s² and
+  reaches 176 px/s on sand in 10 s. Alone on Dust Devil the three do not finish; on Canyon
+  Switch in Sandstorm (cooler) Packhorse and Longlegs finish in 150 and 154 s.
+- **Not changed here; for the owner.** Two of the three are starter builds. Options, any one of
+  which is a tuning pass with its own measurements: make rolling resistance on loose ground
+  scale down when it would exceed most of a car's drive from rest (a floor of creeping speed),
+  lower sand's 42 (which also speeds up every other car and moves the desert lap times), or
+  re-equip the three templates with Sand Paddles on desert courses. The off-road ground of both
+  desert tracks is sand, so today the three can also get stuck after leaving the road there.
+  `tests/balance/tracks.test.ts` holds the list, so a fix shows up as a test change.
+- Lap 1 leader wins 92 to 98 percent on every course: as on Neon Cut, pace decides, and the
+  sparring brain never takes a shortcut. Iron Mule is the worst build everywhere (0 to 5
+  percent); the best is the Straight-Line Rocket on dry courses and Sprinter, Rain Runner or
+  Tiny Trouble in the wet, and Tiny Trouble or the Rocket on sand.
+- **Surface choice works.** With the default car, the fastest kit is Sand Paddles on both desert
+  tracks (120.2 s on Dust Devil against 137.9 on Street Tires), Mud Claws on Moss Run (94.9
+  against 101.1), Rain Runners in every wet weather, and Slicks or Micro Wheels in the dry on
+  paved tracks. Full Tracks do not finish Dust Devil or Canyon Switch in Dry Heat.
+
 ## The catch-up tow (protocol 5, catalog unchanged at 0.6.0, October 12, 2026)
 
 A rule of the race, not a change to any part: no price, mass or coefficient changed, so the

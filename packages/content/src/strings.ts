@@ -48,6 +48,13 @@ export const STRINGS = {
     shortLap: 'Short lap',
     mediumLap: 'Medium lap',
     longLap: 'Long lap',
+    chooseTrack: 'Track',
+    previousTrack: 'Previous track',
+    nextTrack: 'Next track',
+    trackCount: '{index} of {count}',
+    chooseWeather: 'Weather',
+    artInProgress: 'Track art in progress',
+    weatherArtInProgress: 'Weather art in progress',
     surfaceNames: {
       asphalt: 'Asphalt',
       cobble: 'Cobblestone',

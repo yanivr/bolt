@@ -154,6 +154,8 @@ export async function startDrive(
   const env = environmentFor(weatherPresetId);
   const conditions = conditionsFor(trackId, weatherPresetId);
   if (!track || !env || !conditions) return { error: 'content' };
+  // As the server does (resolveCourse): a preset must be one of this track's two.
+  if (!track.def.weatherPresetIds.includes(weatherPresetId)) return { error: 'content' };
   const resolved = resolveBuild(blueprint, conditions);
   if (!resolved.ok) return { error: 'content' };
   const raced = resolved.build.blueprint;

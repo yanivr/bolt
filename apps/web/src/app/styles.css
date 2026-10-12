@@ -1288,6 +1288,91 @@ button:focus-visible,
   color: var(--gold);
 }
 
+/* Track and weather picker: shown only when the build offers more than one course. The track
+   is stepped through at the top of the map, between Back and the art note; the weather badge
+   becomes the choice between the track's two weathers. */
+.preview-pick-track {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.preview-pick-count {
+  min-width: 44px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ivory-dim);
+}
+
+.preview-pick-next .glyph {
+  transform: scaleX(-1);
+}
+
+.preview-pick-weather {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.weather-badge.weather-choice {
+  appearance: none;
+  min-height: 44px;
+  border: 1px solid var(--steel-dark);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 3px 10px 3px 6px;
+  color: var(--ivory);
+  background: var(--steel);
+  box-shadow: inset var(--px) var(--px) 0 var(--steel-light);
+  cursor: pointer;
+}
+
+.weather-badge.weather-choice.is-on {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--navy);
+  background: var(--cyan);
+  box-shadow: none;
+}
+
+.weather-badge.weather-choice:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.preview-art-note {
+  position: absolute;
+  top: 48px;
+  right: 10px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--navy);
+  background: var(--gold);
+}
+
+/* The race view of a track whose terrain is not baked: development builds only. */
+.layout-badge {
+  position: absolute;
+  left: 50%;
+  bottom: 4px;
+  transform: translateX(-50%);
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--navy);
+  background: var(--gold);
+  opacity: 0.85;
+  pointer-events: none;
+  z-index: 5;
+}
+
 .preview-head {
   display: flex;
   flex-wrap: wrap;

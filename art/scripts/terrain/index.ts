@@ -1,5 +1,6 @@
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { getWeatherPreset } from '@bolt/content';
 import { buildTrack, hashString } from '@bolt/shared';
 import type {
   TerrainAnimatedProp,
@@ -9,10 +10,10 @@ import type {
 } from '@bolt/shared';
 import { writePng } from '../lib/pixels.js';
 import type { PixelBuffer } from '../lib/pixels.js';
-import type { BiomeChecks, BiomePainter } from './biome.js';
+import type { BiomeChecks, BiomeModule } from './biome.js';
 import { Canvas, col } from './canvas.js';
 import { reduceColors, writeChunks } from './chunks.js';
-import { paintCity } from './city/index.js';
+import { CITY_BIOME } from './city/index.js';
 import { buildCorridorField } from './field.js';
 import { drawMinimap } from './minimap.js';
 import { writePreviews, writeSheet } from './preview.js';
@@ -25,9 +26,18 @@ import { writePreviews, writeSheet } from './preview.js';
 
 export const CHUNK_SIZE = 512;
 
-const PAINTERS: Record<string, BiomePainter> = {
-  city: paintCity,
+/**
+ * Biome modules, one per biome (docs/TRACK_API.md, "Adding a biome"). City is the only one so
+ * far; the desert, forest, snow and industrial tracks race in the client's layout view until
+ * their module lands here.
+ */
+const BIOMES: Partial<Record<string, BiomeModule>> = {
+  [CITY_BIOME.biome]: CITY_BIOME,
 };
+
+export function biomeModule(biome: string): BiomeModule | undefined {
+  return BIOMES[biome];
+}
 
 export type BakeOptions = {
   def: TrackDefinition;
@@ -57,16 +67,26 @@ function cleanDir(dir: string): void {
 
 export function bakeTerrainWithReport(opts: BakeOptions): BakeReport {
   const { def, presetId, outDir } = opts;
-  const painter = PAINTERS[def.biome];
-  if (!painter) throw new Error(`No terrain painter for biome ${def.biome}`);
+  const module = biomeModule(def.biome);
+  if (!module)
+    throw new Error(
+      `No terrain module for biome ${def.biome}: add one to BIOMES (docs/TRACK_API.md, "Adding a biome")`,
+    );
+  if (!module.presets.includes(presetId))
+    throw new Error(`The ${def.biome} module does not paint ${presetId} yet`);
+  if (!def.weatherPresetIds.includes(presetId))
+    throw new Error(`${def.id} does not publish the weather ${presetId}`);
+  const preset = getWeatherPreset(presetId);
+  if (!preset) throw new Error(`No weather preset ${presetId}`);
   const track = buildTrack(def);
   const field = buildCorridorField(track);
   const world = Canvas.world(def.worldWidth, def.worldHeight);
-  const out = painter({
+  const out = module.paint({
     def,
     track,
     field,
     presetId,
+    preset,
     world,
     seed: hashString(`${def.id}:${presetId}`),
   });
@@ -173,19 +193,8 @@ export function bakeTerrainWithReport(opts: BakeOptions): BakeReport {
       world,
       composite,
       out.previewSpots,
-      ['start_line', 'tram_viaduct', 'alley_entrance'],
-      [
-        { name: 'start_line', x: 1930, y: 2341, car: { x: 1990, y: 2372, heading: 48 } },
-        { name: 'hairpin_one', x: 2180, y: 575, car: { x: 2290, y: 520, heading: 20 } },
-        { name: 'alley', x: 1790, y: 826 },
-        { name: 'west_avenue', x: 520, y: 1560, car: { x: 474, y: 1610, heading: 1 } },
-        { name: 'clock_tower_kink', x: 620, y: 1315 },
-        { name: 'market_street', x: 2560, y: 900 },
-        { name: 'arcade_sweeper', x: 720, y: 680 },
-        { name: 'harbor', x: 1750, y: 2560 },
-        { name: 'dense_block', x: 2000, y: 1500 },
-        { name: 'east_blocks', x: 2700, y: 1250 },
-      ],
+      out.previewPlain ?? [],
+      out.previewCars ?? [],
       opts.previewCarSheet ?? null,
     );
     writeSheet(join(opts.previewDir, 'sheet_overlays.png'), overlaySprites, 2);

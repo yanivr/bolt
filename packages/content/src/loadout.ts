@@ -120,7 +120,12 @@ export function resolveLoadout(loadout: VehicleLoadout): LoadoutCheck {
 export function environmentFor(weatherPresetId: string): RaceEnvironment | undefined {
   const preset = getWeatherPreset(weatherPresetId);
   if (!preset) return undefined;
-  return { weather: preset.weather, wetness: preset.wetness };
+  return {
+    weather: preset.weather,
+    wetness: preset.wetness,
+    windX: preset.windX,
+    windY: preset.windY,
+  };
 }
 
 /**

@@ -656,8 +656,8 @@ describe('determinism and the snapshot', () => {
     expect(second).toEqual(first);
   });
 
-  it('is protocol version 5, and every car in a snapshot carries tow', () => {
-    expect(PROTOCOL_VERSION).toBe(5);
+  it('is protocol version 6 (5 brought the tow), and every car in a snapshot carries tow', () => {
+    expect(PROTOCOL_VERSION).toBe(6);
     const m = match();
     play(m, undefined, 30 * 20);
     const snap = raceSnapshot(m.race, 1, 0);

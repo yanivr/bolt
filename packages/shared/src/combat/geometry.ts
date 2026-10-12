@@ -1,7 +1,7 @@
 import { CAR_RESTITUTION, RAM_YAW_KICK, SWEEP_STEP } from '../balance.js';
 import { clamp, wrapAngle } from '../math.js';
 import type { TrackLocation, TrackRuntime } from '../track.js';
-import { locate } from '../track.js';
+import { locate, wallDepth } from '../track.js';
 import type { VehicleMotionState, VehicleParams } from '../types.js';
 
 /**
@@ -21,7 +21,11 @@ export function localToWorld(m: VehicleMotionState, lx: number, ly: number, out:
   return out;
 }
 
-/** True when a world point is inside something solid: off the drivable corridor or in an obstacle. */
+/**
+ * True when a world point is inside something solid: off a walled track's corridor, in an
+ * obstacle, or in a wall. A rail crossing's barrier does not stop shots: it is a boom at bumper
+ * height, and line of sight over it stays open.
+ */
 export function pointSolid(
   track: TrackRuntime,
   x: number,
@@ -29,8 +33,11 @@ export function pointSolid(
   radius: number,
   loc: TrackLocation,
 ): 0 | 1 | 2 {
-  locate(track, x, y, loc);
-  if (loc.edge + radius > 0) return 1;
+  // A walled track's corridor edge is solid; on an open track only the authored walls are.
+  if (track.walled) {
+    locate(track, x, y, loc);
+    if (loc.edge + radius > 0) return 1;
+  }
   const gc = Math.floor(x / 96);
   const gr = Math.floor(y / 96);
   if (gc >= 0 && gr >= 0 && gc < track.gridCols && gr < track.gridRows) {
@@ -43,6 +50,7 @@ export function pointSolid(
       if (dx * dx + dy * dy < reach * reach) return 2;
     }
   }
+  if (track.walls.count > 0 && wallDepth(track, x, y, radius) > 0) return 1;
   return 0;
 }
 

@@ -16,7 +16,7 @@ export function Minimap({ manifests }: { manifests: GameManifests }) {
 
   useEffect(() => {
     const img = new Image();
-    img.src = `${manifests.terrainBase}/${minimap.file}`;
+    img.src = manifests.minimapSrc;
     img.onload = () => {
       image.current = img;
     };

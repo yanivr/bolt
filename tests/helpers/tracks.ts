@@ -1,4 +1,5 @@
 import type { TrackDefinition } from '@bolt/shared';
+import { plainTrackFields } from '@bolt/shared';
 
 /**
  * A huge clockwise stadium oval used to measure straight-line and steady-state behaviour
@@ -10,6 +11,7 @@ export function makeProvingGround(
 ): TrackDefinition {
   const w = 600;
   return {
+    ...plainTrackFields(14000, 6000),
     id: 'proving_ground',
     name: 'Proving Ground',
     biome: 'city',

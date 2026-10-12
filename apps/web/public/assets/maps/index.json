@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "maps": [
+    {
+      "trackId": "city_01",
+      "presetId": "city_clear_night"
+    }
+  ]
+}

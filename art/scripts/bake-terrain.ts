@@ -2,20 +2,39 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CITY_01 } from '@bolt/content';
+import { getTrack } from '@bolt/content';
 import { bakeTerrainWithReport } from './terrain/index.js';
+import { writeMapIndex } from './terrain/mapIndex.js';
 
-/** Bakes Neon Cut (city_01) under the clear night preset and writes review previews. */
+/**
+ * Bakes the terrain of one track under one weather preset and writes review previews.
+ *
+ *   npx tsx art/scripts/bake-terrain.ts                         Neon Cut, clear night
+ *   npx tsx art/scripts/bake-terrain.ts --track city_01 --preset city_clear_night
+ *   npx tsx art/scripts/bake-terrain.ts --out /tmp/bake          bake somewhere else (to compare)
+ *   npx tsx art/scripts/bake-terrain.ts --no-preview
+ *
+ * Baking into the game's own maps folder also refreshes `assets/maps/index.json`.
+ */
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const presetId = 'city_clear_night';
-const outDir = join(root, 'apps', 'web', 'public', 'assets', 'maps', CITY_01.id, presetId);
+const arg = (name: string): string | undefined => {
+  const i = process.argv.indexOf(name);
+  return i >= 0 ? process.argv[i + 1] : undefined;
+};
+const trackId = arg('--track') ?? 'city_01';
+const presetId = arg('--preset') ?? 'city_clear_night';
+const def = getTrack(trackId);
+if (!def) throw new Error(`No track ${trackId}`);
+const mapsDir = join(root, 'apps', 'web', 'public', 'assets', 'maps');
+const custom = arg('--out');
+const outDir = custom ? resolve(custom) : join(mapsDir, def.id, presetId);
 const previewDir = join(root, 'art', 'preview', 'terrain');
-const noPreview = process.argv.includes('--no-preview');
+const noPreview = process.argv.includes('--no-preview') || custom !== undefined;
 
 const t0 = performance.now();
 const report = bakeTerrainWithReport({
-  def: CITY_01,
+  def,
   presetId,
   outDir,
   previewDir: noPreview ? undefined : previewDir,
@@ -32,13 +51,17 @@ const report = bakeTerrainWithReport({
 });
 const seconds = (performance.now() - t0) / 1000;
 
-// The art-side copy of the manifest, in the layout the full art build writes.
-const manifestDir = join(root, 'art', 'manifests');
-mkdirSync(manifestDir, { recursive: true });
-writeFileSync(
-  join(manifestDir, `${CITY_01.id}_${presetId}.json`),
-  `${JSON.stringify(report.manifest, null, 2)}\n`,
-);
+if (!custom) {
+  // The art-side copy of the manifest, in the layout the full art build writes.
+  const manifestDir = join(root, 'art', 'manifests');
+  mkdirSync(manifestDir, { recursive: true });
+  writeFileSync(
+    join(manifestDir, `${def.id}_${presetId}.json`),
+    `${JSON.stringify(report.manifest, null, 2)}\n`,
+  );
+  const index = writeMapIndex(mapsDir);
+  console.log(`  index    ${index.maps.map((m) => `${m.trackId}/${m.presetId}`).join(', ')}`);
+}
 
 const digest = createHash('sha256');
 let total = 0;
@@ -56,7 +79,7 @@ for (const name of readdirSync(outDir).sort()) {
   total += bytes.length;
 }
 const kb = (n: number): string => `${(n / 1024).toFixed(1)} KB`;
-console.log(`Baked ${CITY_01.id}/${presetId} in ${seconds.toFixed(1)} s`);
+console.log(`Baked ${def.id}/${presetId} in ${seconds.toFixed(1)} s`);
 console.log(`  ground   ${report.manifest.ground.length} chunks, ${kb(report.bytes.ground)}`);
 console.log(`  overlays ${report.manifest.overlays.length}, ${kb(report.bytes.overlays)}`);
 console.log(`  animated ${report.manifest.animated.length}, ${kb(report.bytes.animated)}`);

@@ -23,7 +23,7 @@ Snapshots are 15 a second.
 | `combat/geometry.ts` | Hull and arc tests, swept hits, line of sight, car contact |
 | `ai/brain.ts`, `ai/sparring.ts` | The `RaceBrain` seam and the sparring rival |
 | `scenario.ts`, `content/scenarios.ts` | Scripted showcase scenarios |
-| `protocol.ts` | Input sample, events, snapshots: the wire contract. `PROTOCOL_VERSION` is 5 |
+| `protocol.ts` | Input sample, events, snapshots: the wire contract. `PROTOCOL_VERSION` is 6 (6: the eight tracks and their weathers, Milestone D phase 0) |
 
 ## The step
 

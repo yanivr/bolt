@@ -19,7 +19,7 @@ import { WEAPONS, WEAPON_LIST } from './weapons.js';
  * describe the change in docs/BALANCE_CHANGELOG.md. A blueprint records the version it was
  * built against; the server refuses to race one built against another.
  */
-export const CATALOG_VERSION = '0.6.0';
+export const CATALOG_VERSION = '0.7.0';
 
 export const PAINTS: Record<string, PaintOption> = {
   paint_signal: { id: 'paint_signal', displayName: 'Signal Red' },

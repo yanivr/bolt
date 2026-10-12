@@ -7,7 +7,7 @@ import {
   sanitizeBlueprintName,
 } from '@bolt/shared';
 import { useEffect, useMemo, useState } from 'react';
-import { TRACK_ID, WEATHER_PRESET_ID } from '../app/App.js';
+import { useApp } from '../app/store.js';
 import type { GameManifests } from '../game/assets.js';
 import type { LibraryEntry } from '../garage/blueprintLibrary.js';
 import { MAX_SAVED_BLUEPRINTS } from '../garage/blueprintLibrary.js';
@@ -71,9 +71,10 @@ export function BlueprintsView({
 
   useEffect(() => refresh(), [refresh]);
 
-  const track = getTrack(TRACK_ID);
+  const course = useApp((s) => s.course);
+  const track = getTrack(course.trackId);
   const hints = useMemo(() => {
-    const conditions = conditionsFor(TRACK_ID, WEATHER_PRESET_ID);
+    const conditions = conditionsFor(course.trackId, course.presetId);
     const map = new Map<string, string>();
     for (const entry of entries) {
       if (!entry.legal) continue;
@@ -89,7 +90,7 @@ export function BlueprintsView({
         );
     }
     return map;
-  }, [entries, track]);
+  }, [entries, track, course.trackId, course.presetId]);
 
   const full = entries.length >= MAX_SAVED_BLUEPRINTS;
   const say = (tone: Message['tone'], text: string) => setMessage({ tone, text });

@@ -83,6 +83,14 @@ export function createDriveSession(
   };
 }
 
+/**
+ * The clock timed track hazards run on for this session's next step: race ticks since GO
+ * (zero on the grid). Planners that look ahead add the ticks until they arrive.
+ */
+export function hazardClock(session: DriveSession): number {
+  return session.raceTicks;
+}
+
 export function raceTimeMs(session: DriveSession): number {
   return Math.round(session.raceTicks * SIM_DT * 1000);
 }
@@ -147,6 +155,7 @@ export function stepDriveSession(session: DriveSession, input: ControlInput): St
       session.scratch,
       session.telemetry,
       session.effects,
+      0,
     );
     session.motion.velocityX = 0;
     session.motion.velocityY = 0;
@@ -163,6 +172,7 @@ export function stepDriveSession(session: DriveSession, input: ControlInput): St
   const control = racing ? input : NEUTRAL_BRAKE;
   const prevX = session.motion.x;
   const prevY = session.motion.y;
+  // Timed track hazards run on the race clock: ticks since GO, before this one.
   stepVehicle(
     session.motion,
     control,
@@ -173,6 +183,7 @@ export function stepDriveSession(session: DriveSession, input: ControlInput): St
     session.scratch,
     session.telemetry,
     session.effects,
+    session.raceTicks,
   );
 
   if (!racing) return result;

@@ -1,4 +1,5 @@
 import type { TrackDefinition } from '@bolt/shared';
+import { plainTrackFields } from '@bolt/shared';
 
 /**
  * Skid pad: one very wide, very long strip of dry asphalt. Wide enough that full-lock circles,
@@ -7,9 +8,12 @@ import type { TrackDefinition } from '@bolt/shared';
  */
 export const PAD_START = { x: 14500, y: 3000 };
 
-export function makeSkidPad(surface: TrackDefinition['main']['surface'] = 'asphalt'): TrackDefinition {
+export function makeSkidPad(
+  surface: TrackDefinition['main']['surface'] = 'asphalt',
+): TrackDefinition {
   const w = 2400;
   return {
+    ...plainTrackFields(20000, 12000),
     id: 'skid_pad',
     name: 'Skid Pad',
     biome: 'city',

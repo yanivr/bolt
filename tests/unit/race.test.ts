@@ -75,9 +75,11 @@ function record(a: string, b: string, seed: number, ticks = Infinity): Recording
 }
 
 describe('protocol (Section 15.3)', () => {
-  it('is version 5, and an input sample carries two fire buttons, utility buttons and a repair target', () => {
+  it('is version 6, and an input sample carries two fire buttons, utility buttons and a repair target', () => {
     // 5 added the tow: `tow` on both cars, three numbers in the effects, the `catchup` event.
-    expect(PROTOCOL_VERSION).toBe(5);
+    // 6 is track format 2: the same wire, but a client now predicts wind and timed track
+    // hazards on the race clock, so an older one would be corrected on the new tracks.
+    expect(PROTOCOL_VERSION).toBe(6);
     const base = { sequence: 1, clientTick: 1, steer: 0, brake: 0, coast: false };
     expect(inputSampleSchema.safeParse(base).success).toBe(true);
     expect(inputSampleSchema.safeParse({ ...base, fire: 3, use: 255, target: 63 }).success).toBe(

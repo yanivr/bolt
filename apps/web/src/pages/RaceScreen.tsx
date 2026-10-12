@@ -1,13 +1,17 @@
-import { CATALOG, STRINGS } from '@bolt/content';
+import { CATALOG, STRINGS, getScenario } from '@bolt/content';
 import { mountedPartSprites, resolveBlueprint, resolveCarSprites } from '@bolt/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { TRACK_ID, WEATHER_PRESET_ID, bootAssets } from '../app/App.js';
+import { bootAssets, courseAssets, courseOptions } from '../app/App.js';
+import type { Course } from '../app/course.js';
+import { settleCourse } from '../app/course.js';
 import { debugEnabled } from '../app/flags.js';
 import { useApp, useHud } from '../app/store.js';
 import type { RaceGameHandle } from '../game/RaceGame.js';
 import { createRaceGame } from '../game/RaceGame.js';
 import type { GameManifests } from '../game/assets.js';
 import { EngineAudio } from '../game/audio/EngineAudio.js';
+import { setAudioRaceContext } from '../game/audio/index.js';
+import { LAYOUT_LABEL } from '../game/layout/layoutCanvas.js';
 import type { DriveOptions, DriveSetup, DriveSetupError } from '../game/startDrive.js';
 import { startDrive } from '../game/startDrive.js';
 import { Hud } from '../hud/Hud.js';
@@ -164,9 +168,21 @@ export function RaceScreen() {
 
     void (async () => {
       try {
+        // The course: a showcase scenario brings its own; otherwise the one chosen on the
+        // preview, settled onto one this build may offer.
+        const options = driveOptions();
+        const scenario = options.scenarioId ? getScenario(options.scenarioId) : undefined;
+        let course: Course;
+        if (scenario) course = { trackId: scenario.trackId, presetId: scenario.weatherPresetId };
+        else {
+          // What may be offered is known once the art index has loaded.
+          await bootAssets();
+          const c = settleCourse(useApp.getState().course, courseOptions());
+          course = { trackId: c.trackId, presetId: c.presetId };
+        }
         const [m, setup] = await Promise.all([
-          bootAssets(),
-          startDrive(TRACK_ID, WEATHER_PRESET_ID, useApp.getState().blueprint, driveOptions()),
+          bootAssets().then(() => courseAssets(course)),
+          startDrive(course.trackId, course.presetId, useApp.getState().blueprint, options),
         ]);
         if ('error' in setup) {
           if (!cancelled) setLoad({ kind: 'error', reason: setup.error });
@@ -190,6 +206,13 @@ export function RaceScreen() {
           ? resolveCarSprites(m.cars, setup.rival.blueprint).loadout
           : null;
         setManifests(m);
+        if (!scenario)
+          setAudioRaceContext({
+            blueprint: setup.blueprint,
+            trackId: course.trackId,
+            weatherPresetId: course.presetId,
+            track: setup.track,
+          });
         // The HUD listens to the race feed from before the first snapshot.
         const { loadout, rivalNames } = hudSetup(setup);
         input.repairMask = loadout.repairMask;
@@ -238,6 +261,7 @@ export function RaceScreen() {
       setHud(null);
       leave?.();
       audio.dispose();
+      setAudioRaceContext(null);
     };
   }, [attempt]);
 
@@ -289,6 +313,11 @@ export function RaceScreen() {
     <main className="screen race">
       <div className="race-canvas" ref={canvasHost} />
       <div className="race-surface" ref={surface} />
+      {load.kind === 'ready' && manifests && manifests.terrainArt === 'layout' && (
+        <span className="layout-badge" data-testid="layout-badge">
+          {LAYOUT_LABEL}
+        </span>
+      )}
       {load.kind === 'ready' && manifests && hud && (
         <Hud
           manifests={manifests}

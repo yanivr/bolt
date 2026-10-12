@@ -1,4 +1,12 @@
-import { WRONG_WAY_SECONDS } from './balance.js';
+import {
+  OPEN_GATE_REACH,
+  SHORTCUT_MIN_GATES,
+  SHORTCUT_MIN_GATES_WALLED,
+  TRACK_HAZARD,
+  WRONG_WAY_SECONDS,
+} from './balance.js';
+import type { Ground } from './hazards.js';
+import { applyAreaHazard, createGround, hazardActive } from './hazards.js';
 import {
   clamp,
   headingForwardX,
@@ -7,14 +15,27 @@ import {
   lerp,
   segmentIntersection,
 } from './math.js';
+import type { CornerSign } from './trackSigns.js';
+import { placeCornerSigns } from './trackSigns.js';
+import type { ResolvedBand } from './trackShapes.js';
+import {
+  bandSpan,
+  branchPointAt,
+  resolveBand,
+  segmentDistance,
+  shapeTester,
+} from './trackShapes.js';
 import type {
   SurfaceId,
   TrackBranchDefinition,
   TrackControlPoint,
   TrackDefinition,
+  TrackHazard,
   TrackObstacle,
+  TrackShape,
   VehicleProgressState,
 } from './types.js';
+import { SURFACE_IDS } from './types.js';
 
 /**
  * Runtime track model. Built once from an authored TrackDefinition and then queried by the
@@ -22,7 +43,11 @@ import type {
  * is pure and deterministic so the server and the predicting client agree.
  *
  * A track is a union of corridors. Each corridor follows a sampled centerline and carries a
- * paved half-width plus a drivable shoulder; anything beyond the shoulder is solid.
+ * paved half-width plus a drivable shoulder. On a walled track (format 1, and the city)
+ * anything beyond the shoulder is solid. On an open track it is off-road ground, and what is
+ * solid is listed: walls, obstacles and a crossing's barrier while it is down. Track format 2
+ * adds surface zones and area hazards, baked into a grid of `TRACK_HAZARD.zoneCell` pixels,
+ * checkpoints that make every shortcut earn its credit, and corner signs. docs/TRACK_API.md.
  */
 
 export const TRACK_SAMPLE_SPACING = 10;
@@ -52,6 +77,8 @@ export type TrackBranch = {
   /** For shortcuts: the main-line arc lengths this branch leaves from and rejoins at. */
   leaveS: number;
   rejoinS: number;
+  /** Area hazard under each centerline sample, or -1: for planners (AI, corner speeds). */
+  hazard: Int16Array;
 };
 
 export type TrackGate = {
@@ -70,7 +97,13 @@ export type TrackCheckpoint = {
   /** Position along the lap measured from the start line. */
   lapS: number;
   gates: TrackGate[];
+  /** Course progress after crossing this gate runs from `low` to `high` on the lap. */
+  low: number;
+  high: number;
 };
+
+/** Solid line segments as capsules: ax, ay, bx, by, radius for each, flat. */
+export type WallSegments = { data: Float64Array; count: number; owner: Int32Array };
 
 export type TrackSpawn = { x: number; y: number; headingRad: number };
 
@@ -88,6 +121,38 @@ export type TrackRuntime = {
   gridRows: number;
   grid: Int32Array[];
   obstacleGrid: Int32Array[];
+  /** Beyond the shoulder is solid (walled) or off-road ground (open). */
+  walled: boolean;
+  /** Zone grid: surface (0 none, else `SURFACE_IDS` index + 1) and area hazard (index + 1). */
+  zoneCell: number;
+  zoneCols: number;
+  zoneRows: number;
+  zoneSurface: Uint8Array | null;
+  zoneHazard: Uint8Array | null;
+  hazards: TrackHazard[];
+  /** Indices into `hazards` of the crossings, whose barriers are solid while active. */
+  crossings: number[];
+  walls: WallSegments;
+  /** Wall segments per 96 px cell, like `obstacleGrid`. */
+  wallGrid: Int32Array[];
+  /** Course progress floor on the grid before the start line. */
+  gridProgressFloor: number;
+  cornerSigns: CornerSign[];
+  /**
+   * Where hazards sit on the route, for planners: the branch and arc length of each crossing's
+   * barrier, and of the middle of each area hazard the centerline runs through.
+   */
+  routeHazards: RouteHazard[];
+};
+
+export type RouteHazard = {
+  /** Index into `TrackRuntime.hazards`. */
+  hazard: number;
+  branch: number;
+  /** Arc length on the branch: the barrier, or the first centerline sample inside the area. */
+  s: number;
+  /** For an area hazard, the length of centerline inside it. */
+  length: number;
 };
 
 export type TrackLocation = {
@@ -279,6 +344,7 @@ function buildBranch(
     shoulderSurface: def.shoulderSurface,
     leaveS: 0,
     rejoinS: 0,
+    hazard: new Int16Array(count).fill(-1),
   };
 }
 
@@ -367,13 +433,32 @@ function nearestArcLength(branch: TrackBranch, px: number, py: number): number {
   return bestS;
 }
 
+/** Built runtimes, by definition object: building samples every spline and bakes grids. */
+const BUILT = new WeakMap<TrackDefinition, TrackRuntime>();
+
+/**
+ * Builds the runtime of a track. A definition is immutable once shipped, so a runtime is
+ * built once per definition object and shared (`TrackRuntime` is never mutated after this).
+ */
 export function buildTrack(def: TrackDefinition): TrackRuntime {
+  const cached = BUILT.get(def);
+  if (cached) return cached;
+  const runtime = buildTrackUncached(def);
+  BUILT.set(def, runtime);
+  return runtime;
+}
+
+/**
+ * The sampled centerlines of a track: the main line, then each shortcut with its ends snapped
+ * onto the main line. Cheap (no grids): authoring tools place features against these.
+ */
+export function routeBranches(
+  def: Pick<TrackDefinition, 'id' | 'main' | 'shortcuts'>,
+): TrackBranch[] {
   if (def.main.points.length < 4)
     throw new Error(`Track ${def.id}: main line needs at least four control points`);
   const main = buildBranch(def.main, 0, null, null);
   const branches: TrackBranch[] = [main];
-  const lapLength = main.length;
-  const startS = nearestArcLength(main, def.startNear.x, def.startNear.y);
 
   for (const shortcut of def.shortcuts) {
     const leaveS = nearestArcLength(main, shortcut.leaveNear.x, shortcut.leaveNear.y);
@@ -414,22 +499,100 @@ export function buildTrack(def: TrackDefinition): TrackRuntime {
     branch.rejoinS = rejoinS;
     branches.push(branch);
   }
+  return branches;
+}
 
-  // Ordered checkpoints, evenly spaced around the lap. Checkpoint 0 is the start line.
-  const checkpoints: TrackCheckpoint[] = [];
-  for (let k = 0; k < def.checkpointCount; k++) {
-    const lapS = (k * lapLength) / def.checkpointCount;
-    const gates = [gateAt(main, startS + lapS)];
-    for (const branch of branches) {
-      if (branch.index === 0) continue;
-      const span = positiveMod(branch.rejoinS - branch.leaveS, lapLength);
-      const offset = positiveMod(startS + lapS - branch.leaveS, lapLength);
-      if (offset > 0 && offset < span) {
-        // Progress equivalence: the same fraction of the bypassed main-line span.
-        gates.push(gateAt(branch, (offset / span) * branch.length));
-      }
+function buildTrackUncached(def: TrackDefinition): TrackRuntime {
+  const branches = routeBranches(def);
+  const main = branches[0]!;
+  const lapLength = main.length;
+  const startS = nearestArcLength(main, def.startNear.x, def.startNear.y);
+  const walled = def.edges === 'walled';
+
+  const gridCols = Math.ceil(def.worldWidth / GRID_CELL);
+  const gridRows = Math.ceil(def.worldHeight / GRID_CELL);
+  const grid = walled
+    ? corridorGrid(branches, gridCols, gridRows)
+    : nearestGrid(branches, gridCols, gridRows);
+  const obstacleBuckets: number[][] = Array.from({ length: gridCols * gridRows }, () => []);
+  def.obstacles.forEach((ob, idx) => {
+    const reach = ob.radius + 40;
+    const c0 = clamp(Math.floor((ob.x - reach) / GRID_CELL), 0, gridCols - 1);
+    const c1 = clamp(Math.floor((ob.x + reach) / GRID_CELL), 0, gridCols - 1);
+    const r0 = clamp(Math.floor((ob.y - reach) / GRID_CELL), 0, gridRows - 1);
+    const r1 = clamp(Math.floor((ob.y + reach) / GRID_CELL), 0, gridRows - 1);
+    for (let r = r0; r <= r1; r++) {
+      for (let c = c0; c <= c1; c++) obstacleBuckets[r * gridCols + c]!.push(idx);
     }
-    checkpoints.push({ index: k, lapS, gates });
+  });
+  const walls = wallSegments(def);
+  const wallGrid = segmentGrid(walls, gridCols, gridRows);
+
+  const zoneCell = TRACK_HAZARD.zoneCell;
+  const zoneCols = Math.ceil(def.worldWidth / zoneCell);
+  const zoneRows = Math.ceil(def.worldHeight / zoneCell);
+  const zoneSurface = def.surfaceZones.length > 0 ? new Uint8Array(zoneCols * zoneRows) : null;
+  const areaHazards = def.hazards.filter((h) => h.kind !== 'crossing');
+  const zoneHazard = areaHazards.length > 0 ? new Uint8Array(zoneCols * zoneRows) : null;
+
+  const runtime: TrackRuntime = {
+    def,
+    branches,
+    main,
+    lapLength,
+    startS,
+    checkpoints: [],
+    spawns: [],
+    obstacles: def.obstacles,
+    gridCols,
+    gridRows,
+    grid: grid.map((b) => Int32Array.from(b)),
+    obstacleGrid: obstacleBuckets.map((b) => Int32Array.from(b)),
+    walled,
+    zoneCell,
+    zoneCols,
+    zoneRows,
+    zoneSurface,
+    zoneHazard,
+    hazards: def.hazards,
+    crossings: def.hazards.flatMap((h, i) => (h.kind === 'crossing' ? [i] : [])),
+    walls,
+    wallGrid,
+    gridProgressFloor: -lapLength / def.checkpointCount,
+    cornerSigns: [],
+    routeHazards: [],
+  };
+
+  // Zones: later zones win, so each is stamped in order over the cells its bounds touch.
+  if (zoneSurface) {
+    for (const zone of def.surfaceZones) {
+      const code = SURFACE_IDS.indexOf(zone.surface) + 1;
+      stampAny(runtime, zone.shape, zoneSurface, code);
+    }
+  }
+  if (zoneHazard) {
+    def.hazards.forEach((h, i) => {
+      if (h.kind === 'crossing') return;
+      stampAny(runtime, h.shape, zoneHazard, i + 1);
+    });
+  }
+  // What the centerline runs over, zone surfaces and area hazards included, for planners.
+  for (const branch of branches) {
+    for (let i = 0; i < branch.count; i++) {
+      const cell = zoneIndex(runtime, branch.x[i]!, branch.y[i]!);
+      if (cell < 0) continue;
+      const sv = zoneSurface ? zoneSurface[cell]! : 0;
+      if (sv > 0) branch.surface[i] = SURFACE_IDS[sv - 1]!;
+      const hv = zoneHazard ? zoneHazard[cell]! : 0;
+      if (hv > 0) branch.hazard[i] = hv - 1;
+    }
+  }
+
+  runtime.checkpoints = buildCheckpoints(runtime);
+  const uniform = runtime.checkpoints.length === def.checkpointCount;
+  if (!uniform) {
+    const last = runtime.checkpoints[runtime.checkpoints.length - 1]!;
+    runtime.gridProgressFloor = -(lapLength - last.lapS);
   }
 
   // Two grid slots just behind the line, staggered so neither car starts ahead on distance.
@@ -445,9 +608,41 @@ export function buildTrack(def: TrackDefinition): TrackRuntime {
       headingRad: headingFromVector(p.tx, p.ty),
     });
   }
+  runtime.spawns = spawns;
+  runtime.cornerSigns = placeCornerSigns(runtime);
+  runtime.routeHazards = routeHazardsOf(runtime);
+  return runtime;
+}
 
-  const gridCols = Math.ceil(def.worldWidth / GRID_CELL);
-  const gridRows = Math.ceil(def.worldHeight / GRID_CELL);
+function routeHazardsOf(track: TrackRuntime): RouteHazard[] {
+  const out: RouteHazard[] = [];
+  track.hazards.forEach((h, index) => {
+    if (h.kind === 'crossing') {
+      const mx = (h.a.x + h.b.x) / 2;
+      const my = (h.a.y + h.b.y) / 2;
+      const loc = createLocation();
+      locate(track, mx, my, loc);
+      out.push({ hazard: index, branch: loc.branch, s: loc.s, length: 0 });
+      return;
+    }
+    for (const b of track.branches) {
+      const step = b.length / (b.closed ? b.count : b.count - 1);
+      let first = -1;
+      let n = 0;
+      for (let i = 0; i < b.count; i++) {
+        if (b.hazard[i] !== index) continue;
+        // On a loop the run may wrap the seam: start it after a sample outside.
+        if (first < 0 || (b.closed && i > 0 && b.hazard[i - 1] !== index && first === 0)) first = i;
+        n++;
+      }
+      if (n > 0) out.push({ hazard: index, branch: b.index, s: first * step, length: n * step });
+    }
+  });
+  return out;
+}
+
+/** Format-1 bucketing: every centerline segment in the cells its corridor and a margin touch. */
+function corridorGrid(branches: TrackBranch[], gridCols: number, gridRows: number): number[][] {
   const buckets: number[][] = Array.from({ length: gridCols * gridRows }, () => []);
   for (const branch of branches) {
     const links = branch.closed ? branch.count : branch.count - 1;
@@ -471,32 +666,368 @@ export function buildTrack(def: TrackDefinition): TrackRuntime {
       }
     }
   }
-  const obstacleBuckets: number[][] = Array.from({ length: gridCols * gridRows }, () => []);
-  def.obstacles.forEach((ob, idx) => {
-    const reach = ob.radius + 40;
-    const c0 = clamp(Math.floor((ob.x - reach) / GRID_CELL), 0, gridCols - 1);
-    const c1 = clamp(Math.floor((ob.x + reach) / GRID_CELL), 0, gridCols - 1);
-    const r0 = clamp(Math.floor((ob.y - reach) / GRID_CELL), 0, gridRows - 1);
-    const r1 = clamp(Math.floor((ob.y + reach) / GRID_CELL), 0, gridRows - 1);
-    for (let r = r0; r <= r1; r++) {
-      for (let c = c0; c <= c1; c++) obstacleBuckets[r * gridCols + c]!.push(idx);
+  return buckets;
+}
+
+/**
+ * Open-track bucketing: every cell of the world lists each segment that can be the deepest
+ * corridor for some point in the cell, so `locate` never falls back to a full scan off-road.
+ * A segment is kept when its best case (distance from the cell centre less half the cell
+ * diagonal, less its widest corridor) is no worse than the worst case of the best segment.
+ */
+function nearestGrid(branches: TrackBranch[], gridCols: number, gridRows: number): number[][] {
+  const n = branches.reduce((sum, b) => sum + (b.closed ? b.count : b.count - 1), 0);
+  const code = new Int32Array(n);
+  const mx = new Float64Array(n);
+  const my = new Float64Array(n);
+  const half = new Float64Array(n);
+  const x0 = new Float64Array(n);
+  const y0 = new Float64Array(n);
+  const x1 = new Float64Array(n);
+  const y1 = new Float64Array(n);
+  const rMin = new Float64Array(n);
+  const rMax = new Float64Array(n);
+  const ax = new Float64Array(n);
+  const ay = new Float64Array(n);
+  const bx = new Float64Array(n);
+  const by = new Float64Array(n);
+  const dist = new Float64Array(n);
+  const cand: number[] = [];
+  let k = 0;
+  for (const branch of branches) {
+    const links = branch.closed ? branch.count : branch.count - 1;
+    for (let i = 0; i < links; i++, k++) {
+      const j = (i + 1) % branch.count;
+      const sx = branch.x[i]!;
+      const sy = branch.y[i]!;
+      const ex = branch.x[j]!;
+      const ey = branch.y[j]!;
+      const ri = branch.halfWidth[i]! + branch.shoulder[i]!;
+      const rj = branch.halfWidth[j]! + branch.shoulder[j]!;
+      code[k] = (branch.index << 20) | i;
+      ax[k] = sx;
+      ay[k] = sy;
+      bx[k] = ex;
+      by[k] = ey;
+      mx[k] = (sx + ex) / 2;
+      my[k] = (sy + ey) / 2;
+      half[k] = Math.hypot(ex - sx, ey - sy) / 2;
+      x0[k] = Math.min(sx, ex);
+      y0[k] = Math.min(sy, ey);
+      x1[k] = Math.max(sx, ex);
+      y1[k] = Math.max(sy, ey);
+      rMin[k] = Math.min(ri, rj);
+      rMax[k] = Math.max(ri, rj);
+    }
+  }
+  // For a point anywhere in the cell, a segment's corridor edge distance is at most its
+  // distance from the cell centre through the segment's midpoint plus half its length plus half
+  // the cell's diagonal, less its narrowest corridor; and at least its distance from the centre
+  // to the segment's bounding box less half the diagonal, less its widest corridor. Keep every
+  // segment whose best case is no worse than the best worst case: the true deepest is among them.
+  const diag = (GRID_CELL * Math.SQRT2) / 2;
+  const buckets: number[][] = [];
+  for (let r = 0; r < gridRows; r++) {
+    for (let c = 0; c < gridCols; c++) {
+      const cx = (c + 0.5) * GRID_CELL;
+      const cy = (r + 0.5) * GRID_CELL;
+      let worstBest = Infinity;
+      for (let q = 0; q < n; q++) {
+        const upper = Math.hypot(cx - mx[q]!, cy - my[q]!) + half[q]! + diag - rMin[q]!;
+        if (upper < worstBest) worstBest = upper;
+      }
+      // Candidates by the cheap bound, then the exact distance to tighten both bounds.
+      cand.length = 0;
+      for (let q = 0; q < n; q++) {
+        const dx = cx < x0[q]! ? x0[q]! - cx : cx > x1[q]! ? cx - x1[q]! : 0;
+        const dy = cy < y0[q]! ? y0[q]! - cy : cy > y1[q]! ? cy - y1[q]! : 0;
+        if (Math.hypot(dx, dy) - diag - rMax[q]! <= worstBest + 1) cand.push(q);
+      }
+      for (const q of cand) {
+        const d = segmentDistance(cx, cy, ax[q]!, ay[q]!, bx[q]!, by[q]!);
+        dist[q] = d;
+        if (d + diag - rMin[q]! < worstBest) worstBest = d + diag - rMin[q]!;
+      }
+      const list: number[] = [];
+      for (const q of cand) if (dist[q]! - diag - rMax[q]! <= worstBest + 1) list.push(code[q]!);
+      buckets.push(list);
+    }
+  }
+  return buckets;
+}
+
+function wallSegments(def: TrackDefinition): WallSegments {
+  const flat: number[] = [];
+  const owner: number[] = [];
+  def.walls.forEach((wall, w) => {
+    const pts = wall.points;
+    const n = wall.closed ? pts.length : pts.length - 1;
+    for (let i = 0; i < n; i++) {
+      const a = pts[i]!;
+      const b = pts[(i + 1) % pts.length]!;
+      flat.push(a.x, a.y, b.x, b.y, wall.thickness / 2);
+      owner.push(w);
     }
   });
+  return { data: Float64Array.from(flat), count: owner.length, owner: Int32Array.from(owner) };
+}
 
-  return {
-    def,
-    branches,
-    main,
-    lapLength,
-    startS,
-    checkpoints,
-    spawns,
-    obstacles: def.obstacles,
-    gridCols,
-    gridRows,
-    grid: buckets.map((b) => Int32Array.from(b)),
-    obstacleGrid: obstacleBuckets.map((b) => Int32Array.from(b)),
+function segmentGrid(walls: WallSegments, gridCols: number, gridRows: number): Int32Array[] {
+  const buckets: number[][] = Array.from({ length: gridCols * gridRows }, () => []);
+  for (let k = 0; k < walls.count; k++) {
+    const d = walls.data;
+    const reach = d[k * 5 + 4]! + 48;
+    const c0 = clamp(
+      Math.floor((Math.min(d[k * 5]!, d[k * 5 + 2]!) - reach) / GRID_CELL),
+      0,
+      gridCols - 1,
+    );
+    const c1 = clamp(
+      Math.floor((Math.max(d[k * 5]!, d[k * 5 + 2]!) + reach) / GRID_CELL),
+      0,
+      gridCols - 1,
+    );
+    const r0 = clamp(
+      Math.floor((Math.min(d[k * 5 + 1]!, d[k * 5 + 3]!) - reach) / GRID_CELL),
+      0,
+      gridRows - 1,
+    );
+    const r1 = clamp(
+      Math.floor((Math.max(d[k * 5 + 1]!, d[k * 5 + 3]!) + reach) / GRID_CELL),
+      0,
+      gridRows - 1,
+    );
+    for (let r = r0; r <= r1; r++)
+      for (let c = c0; c <= c1; c++) buckets[r * gridCols + c]!.push(k);
+  }
+  return buckets.map((b) => Int32Array.from(b));
+}
+
+function zoneIndex(track: TrackRuntime, x: number, y: number): number {
+  const c = Math.floor(x / track.zoneCell);
+  const r = Math.floor(y / track.zoneCell);
+  if (c < 0 || r < 0 || c >= track.zoneCols || r >= track.zoneRows) return -1;
+  return r * track.zoneCols + c;
+}
+
+function stampAny(track: TrackRuntime, shape: TrackShape, grid: Uint8Array, code: number): void {
+  if (shape.type === 'band') stampBand(track, resolveBand(shape, track.branches), grid, code);
+  else stampShape(track, shapeTester(shape, track.branches), grid, code);
+}
+
+/**
+ * A band, stamped as the union of one quad per centerline segment between its two offsets, cut
+ * square at its two arc lengths. Each cell is tested only against the quads near it.
+ */
+function stampBand(track: TrackRuntime, band: ResolvedBand, grid: Uint8Array, code: number): void {
+  const { branch } = band;
+  const span = bandSpan(band);
+  const steps = Math.max(1, Math.ceil(span / 6));
+  const cell = track.zoneCell;
+  let prev = branchPointAt(branch, band.s0);
+  for (let k = 1; k <= steps; k++) {
+    const p = branchPointAt(branch, band.s0 + (span * k) / steps);
+    const quad = [
+      prev.x - prev.ty * band.l0,
+      prev.y + prev.tx * band.l0,
+      p.x - p.ty * band.l0,
+      p.y + p.tx * band.l0,
+      p.x - p.ty * band.l1,
+      p.y + p.tx * band.l1,
+      prev.x - prev.ty * band.l1,
+      prev.y + prev.tx * band.l1,
+    ];
+    let qx0 = Infinity;
+    let qy0 = Infinity;
+    let qx1 = -Infinity;
+    let qy1 = -Infinity;
+    for (let q = 0; q < 8; q += 2) {
+      qx0 = Math.min(qx0, quad[q]!);
+      qx1 = Math.max(qx1, quad[q]!);
+      qy0 = Math.min(qy0, quad[q + 1]!);
+      qy1 = Math.max(qy1, quad[q + 1]!);
+    }
+    const c0 = clamp(Math.floor(qx0 / cell), 0, track.zoneCols - 1);
+    const c1 = clamp(Math.floor(qx1 / cell), 0, track.zoneCols - 1);
+    const r0 = clamp(Math.floor(qy0 / cell), 0, track.zoneRows - 1);
+    const r1 = clamp(Math.floor(qy1 / cell), 0, track.zoneRows - 1);
+    for (let r = r0; r <= r1; r++)
+      for (let c = c0; c <= c1; c++) {
+        if (inQuad(quad, (c + 0.5) * cell, (r + 0.5) * cell)) grid[r * track.zoneCols + c] = code;
+      }
+    prev = p;
+  }
+}
+
+function inQuad(q: readonly number[], x: number, y: number): boolean {
+  let inside = false;
+  for (let i = 0, j = 6; i < 8; j = i, i += 2) {
+    const ax = q[i]!;
+    const ay = q[i + 1]!;
+    const bx = q[j]!;
+    const by = q[j + 1]!;
+    if (ay > y !== by > y && x < ((bx - ax) * (y - ay)) / (by - ay) + ax) inside = !inside;
+  }
+  return inside;
+}
+
+/** Writes `code` into every zone cell whose centre lies in the shape. */
+function stampShape(
+  track: TrackRuntime,
+  tester: ReturnType<typeof shapeTester>,
+  grid: Uint8Array,
+  code: number,
+): void {
+  const cell = track.zoneCell;
+  const c0 = clamp(Math.floor(tester.bounds.x0 / cell), 0, track.zoneCols - 1);
+  const c1 = clamp(Math.floor(tester.bounds.x1 / cell), 0, track.zoneCols - 1);
+  const r0 = clamp(Math.floor(tester.bounds.y0 / cell), 0, track.zoneRows - 1);
+  const r1 = clamp(Math.floor(tester.bounds.y1 / cell), 0, track.zoneRows - 1);
+  for (let r = r0; r <= r1; r++) {
+    for (let c = c0; c <= c1; c++) {
+      if (tester.contains((c + 0.5) * cell, (r + 0.5) * cell)) grid[r * track.zoneCols + c] = code;
+    }
+  }
+}
+
+/**
+ * Ordered checkpoints. Evenly spaced around the lap, checkpoint 0 on the start line; then, for
+ * every shortcut that holds fewer gates of its own than it must (`SHORTCUT_MIN_GATES`, one on a
+ * walled track), more checkpoints inside the span it bypasses. A checkpoint inside a shortcut's
+ * span has a gate on the shortcut too, at the same share of its length (progress equivalence).
+ */
+function buildCheckpoints(track: TrackRuntime): TrackCheckpoint[] {
+  const { def, main, lapLength, startS, branches } = track;
+  const count = def.checkpointCount;
+  const spans = branches.slice(1).map((branch) => ({
+    branch,
+    span: positiveMod(branch.rejoinS - branch.leaveS, lapLength),
+    // Lap position of the leave point, measured from the start line.
+    from: positiveMod(branch.leaveS - startS, lapLength),
+  }));
+  const inside = (lapS: number, sp: (typeof spans)[number]): boolean => {
+    const offset = positiveMod(lapS - sp.from, lapLength);
+    return offset > 0 && offset < sp.span;
   };
+  const positions: number[] = [];
+  for (let k = 0; k < count; k++) positions.push((k * lapLength) / count);
+  let uniform = true;
+  def.shortcuts.forEach((shortcut, n) => {
+    const sp = spans[n]!;
+    const need = shortcut.gates ?? (track.walled ? SHORTCUT_MIN_GATES_WALLED : SHORTCUT_MIN_GATES);
+    const have = positions.filter((p) => inside(p, sp)).length;
+    if (have >= need) return;
+    uniform = false;
+    // Replace what is inside with `need` checkpoints evenly inside the span.
+    for (let i = positions.length - 1; i >= 0; i--)
+      if (inside(positions[i]!, sp)) positions.splice(i, 1);
+    for (let j = 1; j <= need; j++)
+      positions.push(positiveMod(sp.from + (sp.span * j) / (need + 1), lapLength));
+  });
+  if (!uniform) positions.sort((a, b) => a - b);
+
+  const checkpoints: TrackCheckpoint[] = [];
+  const span = lapLength / count;
+  positions.forEach((lapS, k) => {
+    const gates = [makeGate(track, main, startS + lapS)];
+    for (const sp of spans) {
+      const offset = positiveMod(startS + lapS - sp.branch.leaveS, lapLength);
+      if (offset > 0 && offset < sp.span) {
+        // Progress equivalence: the same fraction of the bypassed main-line span.
+        gates.push(makeGate(track, sp.branch, (offset / sp.span) * sp.branch.length));
+      }
+    }
+    const low = uniform ? k * span : lapS;
+    const high = uniform ? low + span : (positions[k + 1] ?? lapLength);
+    checkpoints.push({ index: k, lapS, gates, low, high });
+  });
+  return checkpoints;
+}
+
+/**
+ * A gate across a branch. On a walled track it spans the corridor and a margin. On an open
+ * track it reaches `OPEN_GATE_REACH` past the shoulder on each side, so a car that runs wide
+ * over open ground is still counted, but it stops short of a wall or of another piece of road.
+ */
+function makeGate(track: TrackRuntime, branch: TrackBranch, s: number): TrackGate {
+  if (track.walled) return gateAt(branch, s);
+  const p = sampleBranch(branch, s);
+  const nx = -p.ty;
+  const ny = p.tx;
+  const base = p.halfWidth + p.shoulder + GATE_MARGIN;
+  const loc = createLocation();
+  const reachOn = (side: number): number => {
+    let reach = base;
+    for (let d = base; d <= base + OPEN_GATE_REACH; d += 8) {
+      const x = p.x + nx * d * side;
+      const y = p.y + ny * d * side;
+      if (wallDepth(track, x, y, 4) > 0 || obstacleDepth(track, x, y, 4) > 0) break;
+      if (x < 0 || y < 0 || x > track.def.worldWidth || y > track.def.worldHeight) break;
+      locate(track, x, y, loc);
+      const other =
+        loc.branch !== branch.index ||
+        Math.abs(positiveModHalf(loc.s - s, branch.closed ? branch.length : Infinity)) > 160;
+      if (other && loc.edge < 40) break;
+      reach = d;
+    }
+    return reach;
+  };
+  const left = reachOn(-1);
+  const right = reachOn(1);
+  return {
+    ax: p.x - nx * left,
+    ay: p.y - ny * left,
+    bx: p.x + nx * right,
+    by: p.y + ny * right,
+    tx: p.tx,
+    ty: p.ty,
+    branch: branch.index,
+  };
+}
+
+function positiveModHalf(value: number, modulus: number): number {
+  if (!Number.isFinite(modulus)) return value;
+  let v = positiveMod(value, modulus);
+  if (v > modulus / 2) v -= modulus;
+  return v;
+}
+
+/** How far a circle of `radius` at a point sinks into the deepest wall, or a negative clearance. */
+export function wallDepth(track: TrackRuntime, x: number, y: number, radius: number): number {
+  const c = Math.floor(x / GRID_CELL);
+  const r = Math.floor(y / GRID_CELL);
+  if (c < 0 || r < 0 || c >= track.gridCols || r >= track.gridRows) return -Infinity;
+  const bucket = track.wallGrid[r * track.gridCols + c]!;
+  const d = track.walls.data;
+  let deepest = -Infinity;
+  for (let k = 0; k < bucket.length; k++) {
+    const w = bucket[k]! * 5;
+    const depth =
+      d[w + 4]! + radius - segmentDistance(x, y, d[w]!, d[w + 1]!, d[w + 2]!, d[w + 3]!);
+    if (depth > deepest) deepest = depth;
+  }
+  return deepest;
+}
+
+/** How far a circle sinks into the deepest obstacle, or a negative clearance. */
+export function obstacleDepth(track: TrackRuntime, x: number, y: number, radius: number): number {
+  const c = Math.floor(x / GRID_CELL);
+  const r = Math.floor(y / GRID_CELL);
+  if (c < 0 || r < 0 || c >= track.gridCols || r >= track.gridRows) return -Infinity;
+  const bucket = track.obstacleGrid[r * track.gridCols + c]!;
+  let deepest = -Infinity;
+  for (let k = 0; k < bucket.length; k++) {
+    const ob = track.obstacles[bucket[k]!]!;
+    const depth = ob.radius + radius - Math.hypot(ob.x - x, ob.y - y);
+    if (depth > deepest) deepest = depth;
+  }
+  return deepest;
+}
+
+/** Whether the barrier of crossing hazard `index` (into `track.hazards`) is down at this tick. */
+export function crossingClosed(track: TrackRuntime, index: number, clockTicks: number): boolean {
+  const h = track.hazards[index];
+  return !!h && h.kind === 'crossing' && hazardActive(h, clockTicks);
 }
 
 function evaluateSegment(
@@ -589,10 +1120,59 @@ export function surfaceAt(
   track: TrackRuntime,
   loc: TrackLocation,
 ): { surface: SurfaceId; onShoulder: boolean } {
+  if (track.zoneSurface || !track.walled) {
+    // Format 2: zones and off-road ground. The located point is rebuilt from the location.
+    const x = loc.cx - loc.ty * loc.lateral;
+    const y = loc.cy + loc.tx * loc.lateral;
+    groundAt(track, loc, x, y, 0, surfaceScratch);
+    return { surface: surfaceScratch.surface, onShoulder: surfaceScratch.onShoulder };
+  }
   const branch = track.branches[loc.branch]!;
   if (Math.abs(loc.lateral) > loc.halfWidth)
     return { surface: branch.shoulderSurface, onShoulder: true };
   return { surface: branch.surface[loc.index]!, onShoulder: false };
+}
+
+const surfaceScratch = createGround();
+
+/**
+ * Everything the ground does to a car whose centre is at (x, y), located as `loc`, at race
+ * clock `clockTicks` (ticks since GO): the surface (a zone's, the road's, the shoulder's or
+ * the off-road ground's), whether the shoulder penalty applies, and the area hazard's effect.
+ * One `locate` the caller has done already, one grid read; no allocation.
+ */
+export function groundAt(
+  track: TrackRuntime,
+  loc: TrackLocation,
+  x: number,
+  y: number,
+  clockTicks: number,
+  out: Ground,
+): Ground {
+  const branch = track.branches[loc.branch]!;
+  const offroad = !track.walled && loc.edge > 0;
+  out.offroad = offroad;
+  if (offroad) {
+    out.surface = track.def.offroadSurface;
+    out.onShoulder = true;
+  } else if (Math.abs(loc.lateral) > loc.halfWidth) {
+    out.surface = branch.shoulderSurface;
+    out.onShoulder = true;
+  } else {
+    out.surface = branch.surface[loc.index]!;
+    out.onShoulder = false;
+  }
+  const grid = track.zoneSurface;
+  if (grid) {
+    const c = Math.floor(x / track.zoneCell);
+    const r = Math.floor(y / track.zoneCell);
+    if (c >= 0 && r >= 0 && c < track.zoneCols && r < track.zoneRows) {
+      const v = grid[r * track.zoneCols + c]!;
+      if (v > 0) out.surface = SURFACE_IDS[v - 1]!;
+    }
+  }
+  applyAreaHazard(track, x, y, clockTicks, out);
+  return out;
 }
 
 /** Position around the lap, measured from the start line, for any located point. */
@@ -671,12 +1251,12 @@ export function updateProgress(
   } else if (progress.lap === 0) {
     // Still on the grid behind the line: progress is the (negative) distance to the line.
     const pos = lapPosition(track, loc);
-    progress.courseProgress = clamp(pos - lapLength, -lapLength / count, 0);
+    progress.courseProgress = clamp(pos - lapLength, track.gridProgressFloor, 0);
   } else {
-    const span = lapLength / count;
     const lastIndex = positiveMod(progress.checkpointIndex - 1, count);
-    const low = lastIndex * span;
-    const high = low + span;
+    const last = track.checkpoints[lastIndex]!;
+    const low = last.low;
+    const high = last.high;
     let pos = lapPosition(track, loc);
     // `loc` is where the car was before this step, so on the tick it crosses a gate its
     // position can still read as just short of it. Around the start line that is a whole lap

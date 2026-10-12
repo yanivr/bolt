@@ -323,6 +323,7 @@ export function deriveVehicleParams(
     rollingAdd: sparse(steering.rollingAdd, 0),
     rollingFactor: sparse(steering.rollingFactor, 1),
     obstacleImpulse: totals.impulse.obstacle,
+    magneticTires: typeof build.tires.params?.metalGripFactor === 'number',
     wearStartSeconds: steering.wearStartSeconds,
     wearRampSeconds: steering.wearRampSeconds,
     wornGrip: steering.wornGrip,

@@ -170,7 +170,13 @@ describe('weapons (Sections 8.3, 11.5)', () => {
       d.fire(0);
       expect(d.of('refused', 0).map((e) => e.reason)).toEqual(['cooldown']);
       expect(d.module(d.a, 'weapon_front_mg').module.cooldownTotal).toBe(ticksOf(1.4));
-      expect(d.module(d.a, 'weapon_front_mg').module.charges).toBe(-1);
+      // Catalog 0.7.0: a magazine of twelve bursts a race, one spent by each burst.
+      expect(d.module(d.a, 'weapon_front_mg').module.charges).toBe(11);
+      const e = duel(armed('weapon_front_mg'));
+      for (let i = 0; i < 12; i++) e.fire(0, 0, ticksOf(1.5));
+      expect(e.module(e.a, 'weapon_front_mg').module.charges).toBe(0);
+      e.fire(0);
+      expect(e.of('refused', 0).map((x) => x.reason)).toContain('no_ammo');
     },
   );
 

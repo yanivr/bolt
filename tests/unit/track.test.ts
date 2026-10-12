@@ -71,7 +71,8 @@ describe('track content contract (Section 9.1)', () => {
   it.each(Object.values(TRACKS))('$id builds with valid geometry', (def) => {
     const t = buildTrack(def);
     expect(t.lapLength).toBeGreaterThan(4000);
-    expect(t.checkpoints).toHaveLength(def.checkpointCount);
+    // Format 2: the evenly spaced checkpoints, and more where a shortcut needs its own gates.
+    expect(t.checkpoints.length).toBeGreaterThanOrEqual(def.checkpointCount);
     expect(t.spawns.length).toBeGreaterThanOrEqual(2);
     expect(def.shortcuts.length).toBeGreaterThanOrEqual(1);
     expect(def.landmarks.length).toBeGreaterThanOrEqual(4);

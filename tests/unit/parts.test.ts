@@ -57,10 +57,12 @@ function totalsOf(blueprint: VehicleBlueprint) {
 // --- Weapons ------------------------------------------------------------------------------------
 
 // Transcribed from the Section 11.5 table and the ammunition and targeting paragraphs.
+// The three bullet guns carry the magazines the product owner approved in catalog 0.7.0
+// (docs/BALANCE_CHANGELOG.md); the table itself gives them unlimited ammunition.
 const SPEC_WEAPONS: Record<string, PartParams> = {
-  weapon_front_mg: { bullets: 5, damagePerBullet: 3, coneDegrees: 85, range: 220, charges: 0 },
-  weapon_rear_mg: { bullets: 4, damagePerBullet: 3, range: 220, charges: 0 },
-  weapon_turret: { damage: 18, range: 220, charges: 0 },
+  weapon_front_mg: { bullets: 5, damagePerBullet: 3, coneDegrees: 85, range: 220, charges: 12 },
+  weapon_rear_mg: { bullets: 4, damagePerBullet: 3, range: 220, charges: 8 },
+  weapon_turret: { damage: 18, range: 220, charges: 8 },
   weapon_shotgun: { pellets: 8, damagePerPellet: 3, range: 110, charges: 0 },
   weapon_railshot: { damage: 27, range: 350, charges: 5 },
   weapon_rocket: { damage: 22, range: 220, charges: 5 },
@@ -172,17 +174,25 @@ describe('weapons (Section 11.5)', () => {
     expect(new Set(WEAPON_LIST.map((w) => w.behaviorId)).size).toBe(20);
     expect(new Set(WEAPON_LIST.map((w) => JSON.stringify(w.params))).size).toBe(20);
     expect(new Set(WEAPON_LIST.map((w) => w.soundKey)).size).toBe(20);
-    // Section 11.5: missiles, railgun, mortar and mines have charges; guns and tools do not.
+    // Section 11.5: missiles, railgun, mortar and mines have charges; since catalog 0.7.0 the
+    // three bullet guns carry a magazine too (product-owner decision); the tools do not.
     const limited = WEAPON_LIST.filter((w) => Number(w.params.charges) > 0)
       .map((w) => w.id)
       .sort();
     expect(limited).toEqual([
+      'weapon_front_mg',
       'weapon_homing',
       'weapon_mine',
       'weapon_mortar',
       'weapon_railshot',
+      'weapon_rear_mg',
       'weapon_rocket',
+      'weapon_turret',
     ]);
+    // The magazine is on the part card, in its drawback line.
+    expect(ACCESSORIES.weapon_front_mg!.drawback).toMatch(/^Twelve bursts a match/);
+    expect(ACCESSORIES.weapon_rear_mg!.drawback).toMatch(/^Eight bursts a match/);
+    expect(ACCESSORIES.weapon_turret!.drawback).toMatch(/^Eight bursts a match/);
     // Typical direct hits 8 to 18, heavy rare hits 20 to 30 (Section 8.4).
     for (const weapon of WEAPON_LIST)
       expect(weaponDamage(weapon.params), weapon.id).toBeLessThanOrEqual(30);
@@ -199,7 +209,8 @@ describe('weapons (Section 11.5)', () => {
     const idle = statsOf(
       car('chassis_pickup', [{ partId: 'weapon_front_mg', mountId: 'bed_rear' }]),
     );
-    expect(armed.scores.firepower).toBeGreaterThan(20);
+    // Twelve bursts a match is valued as a share of a race of fire (`STATS_RACE_SECONDS`).
+    expect(armed.scores.firepower).toBeGreaterThan(4);
     expect(idle.scores.firepower).toBe(0);
     expect(idle.details.firepower).toMatchObject({ activeWeapons: 0, inactiveWeapons: 1 });
     expect(idle.indicators.energy.drawPerSecond).toBe(0);

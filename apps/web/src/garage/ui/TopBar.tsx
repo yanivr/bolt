@@ -1,7 +1,7 @@
 import { STRINGS, getTrack, getWeatherPreset } from '@bolt/content';
 import type { BuildStats } from '@bolt/shared';
 import type { ReactNode } from 'react';
-import { TRACK_ID, WEATHER_PRESET_ID } from '../../app/App.js';
+import { useApp } from '../../app/store.js';
 import { Glyph } from '../../components/Glyph.js';
 import { weatherGlyph } from '../../pages/TrackPreviewScreen.js';
 import { fill, signedDelta } from '../text.js';
@@ -53,8 +53,9 @@ export function TopBar({
   statusLine,
 }: Props) {
   const g = STRINGS.garage;
-  const track = getTrack(TRACK_ID);
-  const preset = getWeatherPreset(WEATHER_PRESET_ID);
+  const course = useApp((s) => s.course);
+  const track = getTrack(course.trackId);
+  const preset = getWeatherPreset(course.presetId);
   const urgent = secondsLeft !== null && secondsLeft <= 10;
   const left = stats?.indicators.budget.left ?? 0;
   const status = stats?.indicators.budget.status ?? 'ok';

@@ -2,19 +2,18 @@ import { CATALOG, conditionsFor } from '@bolt/content';
 import type { BuildStats, BuildStatsDelta, VehicleBlueprint } from '@bolt/shared';
 import { compareBuildStats, computeBuildStats } from '@bolt/shared';
 import { useMemo } from 'react';
-import { TRACK_ID, WEATHER_PRESET_ID } from '../../app/App.js';
+import { useApp } from '../../app/store.js';
 
 /**
  * Build stats for the published track and weather, straight from the shared model. The
  * interface never recomputes a rule: it shows these numbers and the differences between them.
  */
 export function useBuildStats(blueprint: VehicleBlueprint | null): BuildStats | null {
+  const { trackId, presetId } = useApp((s) => s.course);
   return useMemo(
     () =>
-      blueprint
-        ? computeBuildStats(blueprint, CATALOG, conditionsFor(TRACK_ID, WEATHER_PRESET_ID))
-        : null,
-    [blueprint],
+      blueprint ? computeBuildStats(blueprint, CATALOG, conditionsFor(trackId, presetId)) : null,
+    [blueprint, trackId, presetId],
   );
 }
 

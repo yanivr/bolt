@@ -450,6 +450,38 @@ The entries of the two tables above that these replace: `Keep-out` and `Layout`.
 | Bars and icons    | A whole car shows no diagram, no icons, no tow, no best lap and no offline label; a hit brings the diagram up beside the bars with that part marked, clear of the lane and of the car's box, and it leaves after about two seconds; a destroyed wheel's icon stays, crossed, named; a critical engine's icon is drawn differently; a damaged part has none; overheat and low power change the mark, the hatch and the frame, not only the color, and the blink stops with Reduce Flashing Effects; the tow shows nothing at 0, 0.04 and 0.05 and one to three chevrons inside the strip above that |
 | Offline label     | Not on the HUD as text; a small mark on the menu button with the tooltip `Offline test drive` in a single-player race and none on the server; in the pause menu of a single-player race with the lap times, in the results of a scenario, and absent in a race on the server (also `tests/e2e/drive.spec.ts`)                                                                                                                                                                                                                                                                                                                                                                         |
 
+## Automated coverage added in Milestone D phase 0 (magazines, track format 2, the eight tracks)
+
+`tests/unit/trackFormat.test.ts` (42 tests), `tests/unit/course.test.ts` (4),
+`tests/balance/tracks.test.ts` (17), `tests/e2e/tracks.spec.ts` (2), and changes to
+`tests/unit/parts.test.ts`, `combatParts.test.ts`, `track.test.ts` and `race.test.ts`.
+Review tools: `npx tsx tests/tools/trackcheck.ts <id> [--drive]` (the validator),
+`npx tsx tests/tools/trackview.ts all` (layout PNGs with the driven line, in
+`art/preview/tracks`), `npx tsx tests/balance/tracksReport.ts [seeds]` (the harness on all 16
+courses), `npx tsx tests/visual/tracks.ts <url>` (preview and race screenshots of every track
+against a running server, `tests/visual/out/tracks`).
+
+| Area (unit and balance) | What is asserted |
+| :-- | :-- |
+| Magazines | The three bullet guns carry 12, 8 and 8 charges from the catalog; a burst spends one; after twelve the gun is refused `no_ammo`; each drawback line names its magazine; a gun still scores Firepower |
+| Neon Cut unchanged | Its runtime, a default-car race and a whole armed race match the format-1 sha256 fingerprints bit for bit |
+| The table | Exactly the eight tracks of Section 9.1 in order, with names, biomes, published surface mixes and weathers; four short and four long; three laps |
+| Validator | Each of the eight passes all 15 rules |
+| Length class | The default car finishes each track in its first weather within 10 percent of 105 s or 130 s, with no wall strike and every corner sign 0.8 to 1.2 s ahead at normal speed; the second weather finishes under 180 s |
+| Weather | Every preset's grip and cooling are the table's row exactly; every preset has a temperature, rain, wetness, wind and visibility; tire specialization is capped at 1.45 on a magnetic strip |
+| Wind | A reference car in a full crosswind is pushed across at the stated 35 px/s²; a sheltered car is bit-identical with and without wind; a bullet drifts and a lobbed shell lands where its telegraph says |
+| Hazards | Timetables read the same at every call; the tram crossing warns, closes and stops a car on its timetable; oil, steam (drag and heat), magnets (only for magnetic tires), deep mud and gusts act only inside their shape and while active |
+| Shortcuts | A shortcut is credited only when driven through its gates; going round Dust Devil's Dry Wash over open ground is not credited, and the car can return for the gate it missed |
+| Off-road | On an open track a car that leaves the road slows, is never walled in, and drives back |
+| Cost | The ground under a car is one grid read (0.3 us); `locate` and `groundAt` at random points and a two-car tick stay inside their budgets; every track builds in under 2.5 s |
+| Courses offered | The art index is read defensively; baked, weather fallback and layout are told apart; production offers only baked courses, development all sixteen; a stored choice settles on what is offered |
+| Harness on all tracks | Four quick builds race to a finish on all 16 courses in 80 to 170 s; the list of shipped builds that stall on sand is exactly Packhorse, Longlegs and Iron Mule (a finding, BALANCE_CHANGELOG 0.7.0) |
+
+| Test (end to end) | What is asserted |
+| :-- | :-- |
+| Production course | Without `?debug=1` the preview shows Neon Cut with its map, no picker and no art note |
+| Picker and layout view | With `?debug=1` the picker shows `1 of 8`, steps forward and back round the list keeping the weather slot, marks an unbaked track `Track art in progress`, keeps the choice over a reload, and the chosen course is raced on the server with the layout view's badge and a running clock |
+
 ## Cannot be verified from this repository
 
 These are requirements, not optional extras, and they stay open in the release checklist

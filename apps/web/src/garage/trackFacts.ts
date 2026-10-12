@@ -160,16 +160,12 @@ export function trackFacts(
     }))
     .sort((a, b) => b.share - a.share);
   const lapMeters = Math.round(runtime.lapLength / WORLD_PIXELS_PER_METER / 10) * 10;
-  const raceMeters = lapMeters * def.laps;
   return {
     laps: def.laps,
     lapMeters,
-    lengthLabel:
-      raceMeters < 3200
-        ? STRINGS.preview.shortLap
-        : raceMeters < 4200
-          ? STRINGS.preview.mediumLap
-          : STRINGS.preview.longLap,
+    // Section 9.3: the length class is set by the default car's measured race time, not by
+    // distance (a short course on sand is fewer metres than a short course on asphalt).
+    lengthLabel: def.lengthClass === 'short' ? STRINGS.preview.shortLap : STRINGS.preview.longLap,
     corners: countMajorCorners(runtime),
     surfaces,
     cooling: COOLING_MULTIPLIER[preset.weather],

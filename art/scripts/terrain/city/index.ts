@@ -1,6 +1,6 @@
 import { createLocation, locate } from '@bolt/shared';
 import type { TerrainLight } from '@bolt/shared';
-import type { BakeContext, BiomeOutput } from '../biome.js';
+import type { BakeContext, BiomeModule, BiomeOutput } from '../biome.js';
 import { accumulatePools, applyLight, applyShadows, castShadows } from '../lighting.js';
 import type { LightPool } from '../lighting.js';
 import { Scene } from '../oblique.js';
@@ -138,5 +138,29 @@ export function paintCity(ctx: BakeContext): BiomeOutput {
       { name: 'neon_tower', x: 2000, y: 826 },
       { name: 'harbor_ship', x: 2380, y: 2560 },
     ],
+    previewPlain: ['start_line', 'tram_viaduct', 'alley_entrance'],
+    previewCars: [
+      { name: 'start_line', x: 1930, y: 2341, car: { x: 1990, y: 2372, heading: 48 } },
+      { name: 'hairpin_one', x: 2180, y: 575, car: { x: 2290, y: 520, heading: 20 } },
+      { name: 'alley', x: 1790, y: 826 },
+      { name: 'west_avenue', x: 520, y: 1560, car: { x: 474, y: 1610, heading: 1 } },
+      { name: 'clock_tower_kink', x: 620, y: 1315 },
+      { name: 'market_street', x: 2560, y: 900 },
+      { name: 'arcade_sweeper', x: 720, y: 680 },
+      { name: 'harbor', x: 1750, y: 2560 },
+      { name: 'dense_block', x: 2000, y: 1500 },
+      { name: 'east_blocks', x: 2700, y: 1250 },
+    ],
   };
 }
+
+/**
+ * The city biome module. It was written for Neon Cut and still places Neon Cut's landmarks by
+ * name (`def.props`) and paints only the clear night; Backstreet Blitz needs its own landmarks
+ * and the day presets before it can be baked (docs/TRACK_API.md, "What the art must provide").
+ */
+export const CITY_BIOME: BiomeModule = {
+  biome: 'city',
+  paint: paintCity,
+  presets: ['city_clear_night'],
+};

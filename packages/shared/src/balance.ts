@@ -352,6 +352,82 @@ export const KO_SECONDS = 3;
 /** Floor on the speed a time gap is measured against, so a stopped car is not "hours" ahead. */
 export const GAP_SPEED_FLOOR = 80;
 
+// --- Track format 2: wind, hazards, checkpoints and corner signs (docs/TRACK_API.md) -----------
+
+/**
+ * Wind (Section 9.2: "mainly affects exposed bodies and airborne projectiles"). On a car, the
+ * wind vector times `bodyGain` times the local exposure is an acceleration in px/s2: in full
+ * across the car, `alongShare` of it along the car (a head or tail wind is felt less than a
+ * side gust, and a top speed that changed with the wind would read as a bug). Light cars feel
+ * more of it: scaled by the square root of the reference mass over the car's mass, clamped.
+ * A projectile carries `projectileGain` of the wind as drift from the moment it is launched.
+ * With the crosswind preset's 70 px/s, a reference car in a fully exposed zone feels 35 px/s2
+ * across it (about a seventh of what its tires hold on sand) and a bullet at its full 220 px of
+ * reach drifts about 10 px.
+ */
+export const WIND = {
+  bodyGain: 0.5,
+  alongShare: 0.25,
+  massExponent: 0.5,
+  massFactorMin: 0.7,
+  massFactorMax: 1.35,
+  projectileGain: 0.35,
+} as const;
+
+/** Track hazards: what a tram gate, steam, oil and magnets do. Per-hazard numbers are data. */
+export const TRACK_HAZARD = {
+  /** Size of a zone grid cell, world px: surfaces and area hazards are baked at this pitch. */
+  zoneCell: 8,
+  /** Half thickness of a closed crossing barrier is its own; cars are pushed out of it. */
+  crossingMinThickness: 10,
+} as const;
+
+/** Every shortcut carries at least this many checkpoint gates of its own (open tracks). */
+export const SHORTCUT_MIN_GATES = 2;
+/** On walled tracks one gate suffices: there is no way onto a shortcut but its mouth. */
+export const SHORTCUT_MIN_GATES_WALLED = 1;
+/** On an open track a gate reaches this far past the shoulder, unless it meets other road. */
+export const OPEN_GATE_REACH = 200;
+
+/**
+ * Corner signs (Section 9.3): placed so they are passed 0.8 to 1.2 s before the bend at normal
+ * speed. Normal speed is a reference profile of the default car: top speed, cornering at
+ * `cornerConfidence` of the clear-weather limit, braking and acceleration as below. A bend is
+ * sharp when the profile has to slow below `sharpShare` of top speed for it.
+ */
+export const CORNER_SIGNS = {
+  topSpeed: 262,
+  cornerConfidence: 0.86,
+  brakeConfidence: 0.7,
+  accel: 120,
+  /**
+   * How fast a car that runs onto a slower surface loses the excess, as a share of that
+   * surface's rolling resistance (the engine still pulls, the tires slip).
+   */
+  fadeShare: 0.2,
+  sharpShare: 0.8,
+  /** A bend is a run of curvature tighter than this radius, px, turning at least this far. */
+  bendRadius: 260,
+  minTurnDeg: 30,
+  leadSeconds: 1.0,
+  leadMin: 0.8,
+  leadMax: 1.2,
+  /**
+   * The default car's top speed on each surface as a share of `topSpeed` (measured flat out on
+   * the proving ground: 270, 257, 153, 234, 84, 212, 272 and 270 px/s).
+   */
+  surfaceTop: {
+    asphalt: 1,
+    cobble: 0.95,
+    sand: 0.57,
+    dirt: 0.87,
+    mud: 0.31,
+    snow: 0.79,
+    ice: 1,
+    metal: 1,
+  } as Record<SurfaceId, number>,
+} as const;
+
 // --- Tow: the long-range catch-up (product-owner decision, docs/DECISIONS.md 189 to 198) ---------
 
 /**
@@ -625,7 +701,7 @@ export const DIRECTION_REVERSE_SPEED = 30;
 
 // --- Network ----------------------------------------------------------------------------------
 
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 export const MAX_QUEUED_INPUTS = 8;
 export const MAX_INPUTS_PER_PACKET = 6;
 export const REMOTE_INTERP_DELAY_MS = 120;

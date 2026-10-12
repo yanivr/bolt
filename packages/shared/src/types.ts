@@ -38,10 +38,15 @@ export type WeatherPreset = {
   ambientTempC: number;
   /** 0 dry to 1 standing water. Drives spray, reflections and cosmetic rain density. */
   wetness: number;
+  /** 0 dry to 1 a downpour: how much falls, for the art and the sound (wetness is the road). */
+  rainIntensity: number;
   /** World-space wind in world pixels per second. */
   windX: number;
   windY: number;
+  /** 1 clear; lower in rain, dust or snow. The art thins what is drawn far from the car. */
   visibility: number;
+  /** Cooling multiplier: always `COOLING_MULTIPLIER[weather]`, published for the preview. */
+  cooling: number;
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -494,6 +499,11 @@ export type VehicleBlueprint = {
 // Tracks
 // ---------------------------------------------------------------------------------------------
 
+/** Version of the authored track format (docs/TRACK_API.md). Format 1 had no zones or hazards. */
+export const TRACK_FORMAT_VERSION = 2;
+
+export type TrackPoint = { x: number; y: number };
+
 export type TrackControlPoint = {
   x: number;
   y: number;
@@ -523,14 +533,28 @@ export type ShortcutDefinition = TrackBranchDefinition & {
   leaveNear: { x: number; y: number };
   rejoinNear: { x: number; y: number };
   signName: string;
+  /**
+   * Checkpoint gates the shortcut must carry, at least. The builder adds checkpoints on the
+   * main line inside the bypassed span until the shortcut has this many gates of its own, so a
+   * car is credited only for actually driving it. Defaults to 2 (`SHORTCUT_MIN_GATES`).
+   */
+  gates?: number;
+  /** What makes it risky, for the preview, the AI and the art: narrow, rough, hazards. */
+  risk?: string;
 };
 
+/**
+ * A solid round obstacle on or beside the road (bollards, trees, rocks, pillars, crates).
+ * `telegraph` names the anchor (a sign, paint or light) that warns of it; the validator
+ * requires one for any obstacle that reaches into the racing lane.
+ */
 export type TrackObstacle = {
   id: string;
   kind: string;
   x: number;
   y: number;
   radius: number;
+  telegraph?: string;
 };
 
 export type TrackProp = {
@@ -542,26 +566,204 @@ export type TrackProp = {
   variant?: number;
 };
 
+/**
+ * An area on the ground. Polygons and circles are in world pixels. A band follows a branch:
+ * from the arc length nearest `from` to the one nearest `to` (in the direction of travel),
+ * between two signed offsets from the centerline (positive is right of travel).
+ */
+export type TrackShape =
+  | { type: 'polygon'; points: TrackPoint[] }
+  | { type: 'circle'; x: number; y: number; radius: number }
+  | {
+      type: 'band';
+      /** `main` or a shortcut id. */
+      branch: string;
+      from: TrackPoint;
+      to: TrackPoint;
+      lateral: [number, number];
+    };
+
+/** Ground of one surface laid over the road or the off-road ground. Later zones win. */
+export type SurfaceZone = {
+  id: string;
+  surface: SurfaceId;
+  shape: TrackShape;
+};
+
+/**
+ * A static solid line: a capsule of `thickness` along the polyline (barriers, barricades,
+ * cliff faces, tree lines, snow banks, rails, building walls, the boundary of an open map).
+ */
+export type TrackWall = {
+  id: string;
+  kind: string;
+  points: TrackPoint[];
+  closed?: boolean;
+  thickness: number;
+  /** Anchor that warns of it, required when it stands in a branch's racing lane. */
+  telegraph?: string;
+};
+
+/**
+ * A fixed timetable, in race seconds from GO: `offsetSeconds` into the race the first period
+ * starts; each period is quiet, then `warnSeconds` of warning, then `activeSeconds` active.
+ */
+export type HazardSchedule = {
+  periodSeconds: number;
+  offsetSeconds: number;
+  warnSeconds: number;
+  activeSeconds: number;
+};
+
+/** Environment hazards (Section 9.3): they act on every racer alike and are telegraphed. */
+export type TrackHazard =
+  | {
+      /** A rail crossing: while active, a barrier across the road is solid. */
+      id: string;
+      kind: 'crossing';
+      label: string;
+      a: TrackPoint;
+      b: TrackPoint;
+      thickness: number;
+      schedule: HazardSchedule;
+      /** Warning lights, for the art and the sound. */
+      lights: TrackPoint[];
+      /** Path of the tram across the road, for the art. */
+      railPath: TrackPoint[];
+    }
+  | {
+      /** A standing oil pool: grip multiplied by `grip` while the car's centre is in it. */
+      id: string;
+      kind: 'oil';
+      label: string;
+      shape: TrackShape;
+      grip: number;
+    }
+  | {
+      /** A steam vent: while active, drag and heat on a car inside. */
+      id: string;
+      kind: 'steam_vent';
+      label: string;
+      shape: TrackShape;
+      schedule: HazardSchedule;
+      /** Extra rolling resistance while active, px/s2. */
+      drag: number;
+      /** Engine heat added per second while active. */
+      heatPerSecond: number;
+    }
+  | {
+      /** A magnetic floor strip: Magnetic Rollers grip harder on it (Section 11.4). */
+      id: string;
+      kind: 'magnetic_strip';
+      label: string;
+      shape: TrackShape;
+      /** Extra grip, minus one, for a car on magnetic tires, scaled by their power supply. */
+      gripBonus: number;
+    }
+  | {
+      /** An exposed stretch where the weather's wind acts at `exposure`, in optional gusts. */
+      id: string;
+      kind: 'crosswind';
+      label: string;
+      shape: TrackShape;
+      exposure: number;
+      gust?: { periodSeconds: number; offsetSeconds: number; low: number; high: number };
+    }
+  | {
+      /** Deep mud or soft snow: extra rolling resistance on top of the surface. */
+      id: string;
+      kind: 'deep_mud';
+      label: string;
+      shape: TrackShape;
+      drag: number;
+    };
+
+export type TrackHazardKind = TrackHazard['kind'];
+
+/**
+ * A named point or polyline the art and the sound hang things on: lamps, neon, waterfalls,
+ * chimneys, snow guns, conveyor belts, birds, signs. One point is a point anchor.
+ */
+export type TrackAnchor = {
+  id: string;
+  kind: string;
+  points: TrackPoint[];
+  /** Free-form detail for the art (a color, a sign's text, a direction). */
+  tag?: string;
+};
+
+export type TrackRect = { x: number; y: number; w: number; h: number };
+
 export type TrackDefinition = {
+  formatVersion: typeof TRACK_FORMAT_VERSION;
   id: string;
   name: string;
   biome: BiomeId;
   character: string;
+  /** Section 9.3: about 105 s (`short`) or 130 s (`long`) for the default car over a race. */
+  lengthClass: 'short' | 'long';
   laps: number;
   worldWidth: number;
   worldHeight: number;
+  /**
+   * `walled`: beyond each corridor's shoulder is solid (a city street between buildings).
+   * `open`: beyond the shoulder is drivable off-road ground of `offroadSurface`, bounded only
+   * by the walls and obstacles listed below.
+   */
+  edges: 'walled' | 'open';
+  offroadSurface: SurfaceId;
   main: TrackBranchDefinition & { closed: true };
   shortcuts: ShortcutDefinition[];
   /** Number of evenly spaced ordered checkpoints, including the start line. */
   checkpointCount: number;
   /** World point near the start and finish line. Snapped onto the main line. */
   startNear: { x: number; y: number };
+  surfaceZones: SurfaceZone[];
+  walls: TrackWall[];
   obstacles: TrackObstacle[];
+  hazards: TrackHazard[];
+  /** Share of the weather's wind that reaches a car or a projectile outside crosswind zones. */
+  windExposure: number;
+  anchors: TrackAnchor[];
+  /** What the camera may show and the art must cover. Today always the whole world. */
+  cameraBounds: TrackRect;
   props: TrackProp[];
   landmarks: string[];
   weatherPresetIds: string[];
+  /** Section 9.1 table: share of the main route on each surface. The validator measures it. */
   surfaceMix: Partial<Record<SurfaceId, number>>;
 };
+
+/** The format-2 fields a walled test track without zones or hazards needs. */
+export function plainTrackFields(
+  worldWidth: number,
+  worldHeight: number,
+): Pick<
+  TrackDefinition,
+  | 'formatVersion'
+  | 'lengthClass'
+  | 'edges'
+  | 'offroadSurface'
+  | 'surfaceZones'
+  | 'walls'
+  | 'hazards'
+  | 'windExposure'
+  | 'anchors'
+  | 'cameraBounds'
+> {
+  return {
+    formatVersion: TRACK_FORMAT_VERSION,
+    lengthClass: 'short',
+    edges: 'walled',
+    offroadSurface: 'asphalt',
+    surfaceZones: [],
+    walls: [],
+    hazards: [],
+    windExposure: 0,
+    anchors: [],
+    cameraBounds: { x: 0, y: 0, w: worldWidth, h: worldHeight },
+  };
+}
 
 // ---------------------------------------------------------------------------------------------
 // Simulation state
@@ -726,6 +928,8 @@ export type VehicleParams = {
   rollingFactor: Partial<Record<SurfaceId, number>>;
   /** Multiplier on speed lost and bounce taken from walls and obstacles. */
   obstacleImpulse: number;
+  /** Magnetic tires: a magnetic floor strip grips them harder. Missing means not magnetic. */
+  magneticTires?: boolean;
   wearStartSeconds: number;
   wearRampSeconds: number;
   wornGrip: number;
@@ -782,6 +986,9 @@ export type BuildConditions = {
 export type RaceEnvironment = {
   weather: WeatherId;
   wetness: number;
+  /** World wind in px/s. Missing is still air. Acts only where the track is exposed. */
+  windX?: number;
+  windY?: number;
 };
 
 /**

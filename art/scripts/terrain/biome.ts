@@ -1,10 +1,21 @@
-import type { TerrainLight, TrackDefinition, TrackRuntime } from '@bolt/shared';
+import type {
+  BiomeId,
+  TerrainLight,
+  TrackDefinition,
+  TrackRuntime,
+  WeatherPreset,
+} from '@bolt/shared';
 import type { Canvas } from './canvas.js';
 import type { CorridorField } from './field.js';
 
 /**
- * Contract between the generic baker and a biome painter. The baker owns the corridor field,
- * chunking, overlays packaging, previews and the manifest; a biome owns the picture.
+ * Contract between the generic baker and a biome painter (docs/TRACK_API.md, "The terrain
+ * baker"). The baker owns the corridor field, chunking, overlays packaging, the minimap,
+ * previews and the manifest; a biome owns the picture. A painter reads the track only through
+ * the context: the format-2 definition (`def`: zones, walls, obstacles, hazards, anchors,
+ * camera bounds), its runtime (`track`: sampled centerlines, checkpoints, corner signs, the
+ * zone grids and `groundAt`, the very lookup the physics uses) and the corridor field, so the
+ * art can only ever agree with the simulation.
  */
 
 export type BakeContext = {
@@ -12,6 +23,8 @@ export type BakeContext = {
   track: TrackRuntime;
   field: CorridorField;
   presetId: string;
+  /** The weather preset being baked: time of day, wetness, rain, wind, visibility. */
+  preset: WeatherPreset;
   /** World-sized surface with a flag plane. The biome paints the final ground layer here. */
   world: Canvas;
   seed: number;
@@ -49,12 +62,27 @@ export type BiomeChecks = {
   animatedMismatch: number;
 };
 
+/** A review crop with a car composited in for scale. Never shipped. */
+export type PreviewCarSpot = PreviewSpot & { car?: { x: number; y: number; heading: number } };
+
 export type BiomeOutput = {
   overlays: OverlayArt[];
   animated: AnimatedArt[];
   lights: TerrainLight[];
   previewSpots: PreviewSpot[];
+  /** Spots, by name, that also get a crop without overlays. */
+  previewPlain?: string[];
+  /** Crops with a car drawn in for scale. */
+  previewCars?: PreviewCarSpot[];
   checks: BiomeChecks;
 };
 
 export type BiomePainter = (ctx: BakeContext) => BiomeOutput;
+
+/** A biome's plug-in: its painter and which weather presets it can paint. */
+export type BiomeModule = {
+  biome: BiomeId;
+  paint: BiomePainter;
+  /** Preset ids this module paints; others are refused rather than painted wrongly. */
+  presets: readonly string[];
+};

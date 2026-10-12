@@ -33,6 +33,7 @@ import { addGlow, extractTagged, footprintShadow, renderModel, silhouette } from
 import type { RGBA } from './lib/pixels.js';
 import { PixelBuffer, hex, readPng, writePng } from './lib/pixels.js';
 import { bakeTerrain } from './terrain/index.js';
+import { writeMapIndex } from './terrain/mapIndex.js';
 import { bakeCombatVfx } from './bake-vfx.js';
 import { buildCoreVfx } from './vfx/core.js';
 
@@ -669,6 +670,7 @@ function main(): void {
   if (!carsOnly) {
     const outDir = join(MAPS_DIR, 'city_01/city_clear_night');
     const manifest = bakeTerrain({ def: CITY_01, presetId: 'city_clear_night', outDir });
+    writeMapIndex(MAPS_DIR);
     writeFileSync(
       join(MANIFEST_DIR, 'city_01_city_clear_night.json'),
       `${JSON.stringify(manifest, null, 2)}\n`,

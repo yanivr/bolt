@@ -6,7 +6,9 @@ import {
   PROJECTILE_MAX_LIFE_SECONDS,
   SIM_DT,
   WET_WEATHER,
+  WIND,
 } from '../balance.js';
+import { exposureAt } from '../hazards.js';
 import { clamp, wrapAngle } from '../math.js';
 import type { HazardKind, ProjectileKind } from '../protocol.js';
 import {
@@ -96,6 +98,11 @@ export function spawnProjectile(
   p.y = y;
   p.vx = (dx * spec.speed + m.velocityX) * SIM_DT;
   p.vy = (dy * spec.speed + m.velocityY) * SIM_DT;
+  // Wind drift (Section 9.2), carried from the launch so the flight stays a straight line.
+  if (projectileDrift(race, x, y)) {
+    p.vx += drift.x;
+    p.vy += drift.y;
+  }
   p.life = Math.min(spec.lifeTicks > 0 ? spec.lifeTicks : MAX_LIFE_TICKS, MAX_LIFE_TICKS);
   p.age = 0;
   p.travel = 0;
@@ -136,6 +143,11 @@ export function spawnLobbed(
 ): Projectile {
   const p = allocProjectile(race);
   const flight = Math.max(1, spec.flightTicks);
+  // The wind carries a shell for its whole flight; the telegraph shows where it will land.
+  if (projectileDrift(race, x, y)) {
+    landX += drift.x * flight;
+    landY += drift.y * flight;
+  }
   p.id = race.nextEntityId++;
   p.active = true;
   p.kind = kind;
@@ -185,6 +197,23 @@ export function spawnLobbed(
     projectile: p.id,
   });
   return p;
+}
+
+const drift = { x: 0, y: 0 };
+
+/**
+ * Wind drift for something launched at (x, y) this tick, world px per tick, into `drift`.
+ * False, and nothing written, when the air is still or the launch point is sheltered.
+ */
+function projectileDrift(race: RaceSession, x: number, y: number): boolean {
+  const wx = race.env.windX ?? 0;
+  const wy = race.env.windY ?? 0;
+  if (wx === 0 && wy === 0) return false;
+  const exposure = exposureAt(race.track, x, y, race.raceTicks);
+  if (!(exposure > 0)) return false;
+  drift.x = wx * exposure * WIND.projectileGain * SIM_DT;
+  drift.y = wy * exposure * WIND.projectileGain * SIM_DT;
+  return true;
 }
 
 /** Records where a projectile is and how it is moving, for the next snapshot. */

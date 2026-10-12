@@ -22,6 +22,7 @@ import {
   angleDelta,
   bendAhead,
   blueprintSchema,
+  hazardState,
   clamp,
   createDriverScratch,
   driveCenterline,
@@ -50,6 +51,7 @@ import { BodyMotion, RenderPipeline, chunksInView } from '../rendering/frame.js'
 import { CombatView, FX_TEXTURE } from '../combat/CombatView.js';
 import '../debugHook.js';
 import { CombatStage } from '../combat/stage.js';
+import { LAYOUT_RESOLUTION, layoutChunks } from '../layout/layoutCanvas.js';
 import { runStress } from '../combat/stress.js';
 import { FxAtlas } from '../vfx/atlas.js';
 import { QualityGovernor, setVfxQuality, vfxQualitySetting } from '../vfx/quality.js';
@@ -104,6 +106,8 @@ export class RaceScene extends Phaser.Scene {
   private car!: CarView;
   private effects!: Effects;
   private overlays: Array<{ def: TerrainOverlay; image: Phaser.GameObjects.Image }> = [];
+  /** Timed hazards over the layout view: drawn by the scene while there is no art for them. */
+  private layoutHazards: Phaser.GameObjects.Graphics | null = null;
   private outbox: InputSample[] = [];
   private lastSendMs = 0;
   private lastHudMs = 0;
@@ -221,6 +225,24 @@ export class RaceScene extends Phaser.Scene {
     const { manifests, loadout, session } = this.cfg;
     this.cameras.main.setBackgroundColor('#151C2C');
 
+    // A track whose terrain is not baked yet is drawn in the layout view: flat shapes from its
+    // data, labelled as such (development and `?debug=1` builds only offer it).
+    if (manifests.terrainArt === 'layout') {
+      layoutChunks(session.track).forEach((chunk, k) => {
+        const key = `layout:${session.track.def.id}:${k}`;
+        if (!this.textures.exists(key)) this.textures.addCanvas(key, chunk.canvas);
+        this.add
+          .image(chunk.x, chunk.y, key)
+          .setOrigin(0, 0)
+          .setScale(1 / LAYOUT_RESOLUTION)
+          .setDepth(0);
+      });
+      if (
+        session.track.crossings.length > 0 ||
+        session.track.hazards.some((h) => h.kind === 'steam_vent')
+      )
+        this.layoutHazards = this.add.graphics().setDepth(1);
+    }
     // Nothing rotates and the scale is a whole number, so every chunk lands exactly on the
     // device pixel grid at its authored size. No overlap is needed to hide seams.
     for (const chunk of manifests.terrain.ground) {
@@ -403,6 +425,29 @@ export class RaceScene extends Phaser.Scene {
     this.cfg.onReady();
   }
 
+  /** Crossing barriers and steam vents in the layout view, from the race clock. */
+  private drawLayoutHazards(session: DriveSession): void {
+    const g = this.layoutHazards!;
+    g.clear();
+    const clock = session.raceTicks;
+    for (const h of session.track.hazards) {
+      const state = hazardState(h, clock);
+      if (h.kind === 'crossing') {
+        const color = state.phase === 'idle' ? 0x7d828c : 0xe8433a;
+        if (state.phase === 'active') {
+          g.lineStyle(h.thickness, 0xe8433a, 1);
+          g.lineBetween(h.a.x, h.a.y, h.b.x, h.b.y);
+        }
+        const blink = state.phase === 'idle' || Math.floor(state.periodTime * 3) % 2 === 0;
+        g.fillStyle(color, blink ? 1 : 0.35);
+        for (const l of h.lights) g.fillCircle(l.x, l.y, 7);
+      } else if (h.kind === 'steam_vent' && h.shape.type === 'circle' && state.phase !== 'idle') {
+        g.fillStyle(0xe9f2ff, state.phase === 'active' ? 0.75 : 0.25);
+        g.fillCircle(h.shape.x, h.shape.y, h.shape.radius);
+      }
+    }
+  }
+
   /** The predicted car as the render pipeline wants it. The returned object is reused. */
   private readPose(): SimPose {
     const m = this.predictor.session.motion;
@@ -550,6 +595,7 @@ export class RaceScene extends Phaser.Scene {
     );
     this.cameras.main.setScroll(view.scrollX, view.scrollY);
     this.effects.update(dt);
+    if (this.layoutHazards) this.drawLayoutHazards(session);
 
     // --- Car pose ------------------------------------------------------------------------------
     const speed = t.speed;
