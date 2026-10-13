@@ -3304,7 +3304,8 @@ p.g-spend.is-blocked {
     display: none;
   }
   .g-fire-row .chip {
-    font-size: 13px;
+    font-size: 12.5px;
+    letter-spacing: -0.01em;
   }
 }
 
@@ -4067,7 +4068,7 @@ p.g-spend.is-blocked {
     gap: 10px;
   }
   .preview-info {
-    gap: 3px;
+    gap: 2px;
   }
   .preview-facts {
     gap: 0 16px;
@@ -4082,11 +4083,11 @@ p.g-spend.is-blocked {
     display: none;
   }
   .preview-tips {
-    gap: 5px;
+    gap: 4px;
   }
   .preview-tips li {
-    padding: 4px 8px;
-    font-size: 13px;
+    padding: 3px 8px;
+    font-size: 12.5px;
     line-height: 1.2;
   }
   .preview-go {

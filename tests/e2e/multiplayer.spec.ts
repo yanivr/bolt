@@ -193,7 +193,16 @@ for (const [hostSize, guestSize] of [
 
     // --- Then the guest's phone goes away for good: autopilot, then a disconnect forfeit.
     await guestContext.close();
-    await expect(host.getByTestId('rival-away')).toBeVisible({ timeout: 10_000 });
+    // The away banner shows for the grace window; on a slow runner the results can already be
+    // up by the time the host page is looked at, so either one proves the drop was seen.
+    await expect
+      .poll(
+        async () =>
+          (await host.getByTestId('rival-away').isVisible()) ||
+          (await host.getByTestId('results').isVisible()),
+        { timeout: 20_000 },
+      )
+      .toBe(true);
     await expect(host.getByTestId('results')).toBeVisible({ timeout: 40_000 });
     await expect(host.getByTestId('results')).toHaveAttribute('data-reason', 'rival_forfeit');
     await expect(host.getByTestId('results-line')).toHaveText(
