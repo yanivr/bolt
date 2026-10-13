@@ -14,7 +14,6 @@
     "@colyseus/core": "0.16.26",
     "@colyseus/schema": "3.0.76",
     "@colyseus/ws-transport": "0.16.5",
-    "colyseus": "0.16.5",
     "express": "^4.21.2",
     "helmet": "^8.1.0",
     "pg": "8.13.1",
