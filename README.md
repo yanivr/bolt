@@ -61,6 +61,25 @@ runs the same shared simulation in the page and says so in the HUD. It exists so
 feel can be checked on hardware before a server is deployed. Build with `VITE_ALLOW_OFFLINE=0`
 to disable it.
 
+## Saved cars, car codes and PostgreSQL
+
+My Blueprints lives in the browser and works offline. Sharing a car issues a short code such as
+`CAR-7K92QZ-R4` (`Copy Code` on a saved car, `Share Blueprint` on the results screen), and
+`Load Code` (Home, My Blueprints, the garage, or a link `/car/<code>`) brings a shared car in.
+Codes, guest sessions and match records are stored in PostgreSQL. Settings has `Privacy Info`,
+with what is kept and a working `Delete My Data`. Details: `docs/PERSISTENCE.md`.
+
+```bash
+pnpm db:dev                                              # PostgreSQL 16 on :5499, no Docker needed
+DATABASE_URL=postgresql://bolt@localhost:5499/bolt pnpm dev
+pnpm test:db                                             # the persistence suites on bolt_test
+pnpm db:dev stop
+```
+
+Or, with Docker: `pnpm install && pnpm build && docker compose up` (PostgreSQL and the server on
+:2567; a development stack, not the deployment). Without `DATABASE_URL` the server keeps
+everything in memory and says so in its log; in production it refuses to start without one.
+
 ## Quality checks
 
 ```bash
@@ -98,5 +117,5 @@ are not part of the game and nothing is copied from them.
 ## Deployment
 
 Not deployed. There is no public URL. The server refuses to start in production without a
-real `GUEST_TOKEN_SECRET`. Docker Compose, Caddy, PostgreSQL and the public HTTPS deployment
+real `GUEST_TOKEN_SECRET` and a `DATABASE_URL`. Production Docker images, Caddy and the public HTTPS deployment
 are Milestone G and need infrastructure credentials.

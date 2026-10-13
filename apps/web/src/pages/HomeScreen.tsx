@@ -11,6 +11,7 @@ import { Emblem } from '../components/Emblem.js';
 import { Glyph } from '../components/Glyph.js';
 import { StarterList } from '../components/StarterList.js';
 import { useViewport } from '../components/useViewport.js';
+import { useCodeUi } from '../garage/codeStore.js';
 import { fill } from '../garage/text.js';
 import { SettingsPanel } from '../hud/SettingsPanel.js';
 
@@ -91,6 +92,21 @@ export function HomeScreen() {
         >
           {STRINGS.home.startRacing}
         </button>
+        <div className="home-row home-friend">
+          <button
+            className="btn"
+            onClick={() => {
+              void enterImmersive();
+              setScreen('lobby');
+            }}
+            data-testid="challenge-friend"
+          >
+            {STRINGS.home.challengeFriend}
+          </button>
+          <button className="btn" onClick={() => setScreen('join')} data-testid="join-with-code">
+            {STRINGS.home.joinWithCode}
+          </button>
+        </div>
         <div className="home-row">
           {returning && (
             <button className="btn" onClick={race} disabled={!drawable}>
@@ -99,6 +115,9 @@ export function HomeScreen() {
           )}
           <button className="btn" onClick={() => setQuickOpen(true)}>
             {STRINGS.home.quickBuild}
+          </button>
+          <button className="btn" onClick={() => useCodeUi.getState().openLoad()}>
+            {STRINGS.codes.loadCode}
           </button>
         </div>
         <div className="home-row">

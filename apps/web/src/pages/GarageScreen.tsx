@@ -14,6 +14,7 @@ import { useViewport } from '../components/useViewport.js';
 import type { Slot } from '../garage/buildSession.js';
 import { activeSlot, issueText, planFor, secondsLeft } from '../garage/buildSession.js';
 import { clockSound, garageSound } from '../garage/garageSounds.js';
+import { useCodeUi } from '../garage/codeStore.js';
 import { garageStore, useGarage } from '../garage/garageStore.js';
 import { catalogEntries, fitsMount, partsForSlot, slotKey } from '../garage/slots.js';
 import { fill, mountName } from '../garage/text.js';
@@ -30,6 +31,8 @@ import { Workbench } from '../garage/ui/Workbench.js';
 import { useBuildPreview, useBuildStats } from '../garage/ui/useBuildStats.js';
 import type { GameManifests } from '../game/assets.js';
 import { uiSound } from '../game/audio/index.js';
+import { activeMatch, useMatch } from '../network/matchClient.js';
+import { LeaveConfirm } from './match/parts.js';
 
 type Overlay = 'leave' | 'reset' | 'paint' | 'quick' | 'blueprints' | 'more' | null;
 type Line = { tone: 'ok' | 'warn' | 'error'; text: string; key: string };
@@ -56,9 +59,15 @@ export function GarageScreen() {
   });
   useEffect(() => {
     useApp.getState().takeGarageDraft();
-    garageStore
-      .getState()
-      .start(initial.draft, { seconds: buildSeconds(), fallback: initial.fallback });
+    // Race a Friend: the server owns the build clock (Section 5.6), so both players lock at
+    // the same moment; the garage counts down to the room's deadline on this page's clock.
+    const match = useMatch.getState();
+    const inMatch = match.active && match.phase === 'BUILDING' && match.endsAt > 0;
+    const seconds = inMatch
+      ? Math.max(1, Math.ceil((match.endsAt - Date.now()) / 1000))
+      : buildSeconds();
+    garageStore.getState().start(initial.draft, { seconds, fallback: initial.fallback });
+    if (inMatch) garageStore.getState().setDeadline(match.endsAt);
     return () => garageStore.getState().end();
   }, [initial]);
 
@@ -118,6 +127,29 @@ function Garage({ manifests }: { manifests: GameManifests }) {
     if (sound) uiSound(sound);
   }, [left, session.phase]);
 
+  // Race a Friend (Section 5.6): the room holds the deadline and the newest legal build. Every
+  // legal change is submitted shortly after it is made, so at the deadline the server always
+  // has this player's last legal car; Ready commits it. The race starts when the room says.
+  const match = useMatch();
+  const inMatch = match.active && (match.phase === 'BUILDING' || match.phase === 'VS_REVEAL');
+  const rival = match.seat >= 0 ? match.seats[match.seat === 0 ? 1 : 0] : null;
+  useEffect(() => {
+    if (inMatch && match.endsAt > 0) garageStore.getState().setDeadline(match.endsAt);
+  }, [inMatch, match.endsAt]);
+  const lastLegal = session.lastLegal;
+  useEffect(() => {
+    if (!inMatch || session.phase !== 'building') return;
+    const timer = window.setTimeout(() => activeMatch()?.submitBuild(lastLegal), 400);
+    return () => window.clearTimeout(timer);
+  }, [inMatch, lastLegal, session.phase]);
+  // The build the server locked is the one that races, whatever this page last had.
+  const serverLocked = match.locked;
+  useEffect(() => {
+    if (!serverLocked) return;
+    garageStore.getState().lockWith(serverLocked.blueprint);
+    setBlueprint(serverLocked.blueprint);
+  }, [serverLocked, setBlueprint]);
+
   // The locked car, and only the locked car, goes to the race.
   const lockedCar = session.locked;
   const lockReason = session.lockReason;
@@ -127,6 +159,11 @@ function Garage({ manifests }: { manifests: GameManifests }) {
     setIndicator(null);
     setBlueprint(lockedCar);
     completeMilestone(MILESTONE_BUILT);
+    if (useMatch.getState().active) {
+      // Ready is a commitment to the room; the room moves both players on together.
+      if (lockReason === 'ready') activeMatch()?.ready(lockedCar);
+      return;
+    }
     const timer = window.setTimeout(
       () => setScreen('race'),
       lockReason === 'timer' ? LOCK_BANNER_MS : 0,
@@ -648,6 +685,15 @@ function Garage({ manifests }: { manifests: GameManifests }) {
           <button className="btn" onClick={() => setOverlay('quick')}>
             {g.quickBuild}
           </button>
+          <button
+            className="btn"
+            onClick={() => {
+              setOverlay(null);
+              useCodeUi.getState().openLoad();
+            }}
+          >
+            {STRINGS.codes.loadCode}
+          </button>
           <button className="btn" onClick={() => setOverlay('reset')}>
             {g.reset}
           </button>
@@ -696,7 +742,39 @@ function Garage({ manifests }: { manifests: GameManifests }) {
           </button>
         </Dialog>
       )}
-      {overlay === 'leave' && (
+      {overlay === 'leave' && inMatch && (
+        <LeaveConfirm
+          text={STRINGS.match.leaveMatchConfirm}
+          leaveLabel={STRINGS.match.leaveMatch}
+          onLeave={() => {
+            activeMatch()?.leave();
+            setScreen('home');
+          }}
+          onStay={() => setOverlay(null)}
+        />
+      )}
+      {inMatch && rival && (
+        <span
+          className={`g-rival${rival.ready ? ' is-ready' : ''}${rival.connected ? '' : ' is-away'}`}
+          data-testid="rival-build-status"
+          data-ready={rival.ready}
+        >
+          {!rival.connected
+            ? STRINGS.match.rivalAwayShort
+            : rival.ready
+              ? STRINGS.match.rivalReady
+              : STRINGS.match.rivalBuilding}
+        </span>
+      )}
+      {inMatch && locked && lockReason === 'ready' && (
+        <div className="overlay g-locked" role="status" data-testid="build-waiting">
+          <div className="panel dialog">
+            <Glyph name="lock" size={36} />
+            <p>{STRINGS.match.lockedWaiting}</p>
+          </div>
+        </div>
+      )}
+      {overlay === 'leave' && !inMatch && (
         <Dialog
           title={STRINGS.garage.leave}
           role="alertdialog"

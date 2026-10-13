@@ -11,6 +11,8 @@ import { useApp } from '../app/store.js';
 import type { GameManifests } from '../game/assets.js';
 import type { LibraryEntry } from '../garage/blueprintLibrary.js';
 import { MAX_SAVED_BLUEPRINTS } from '../garage/blueprintLibrary.js';
+import { codes } from '../garage/codes.js';
+import { useCodeUi } from '../garage/codeStore.js';
 import { useLibrary } from '../garage/libraryStore.js';
 import { fill, listNames } from '../garage/text.js';
 import { BlueprintCard, isDrawable } from './BlueprintCard.js';
@@ -42,9 +44,10 @@ function flagFor(entry: LibraryEntry): string | undefined {
 }
 
 /**
- * My Blueprints (Section 5.12, local half): the saved cars and the starter cars, each a card
- * with a thumbnail composed from the real sprites. Share codes need the server and are not
- * offered here; nothing on this screen pretends otherwise.
+ * My Blueprints (Section 5.12): the saved cars and the starter cars, each a card with a
+ * thumbnail composed from the real sprites. The cards live in this browser and work offline;
+ * `Copy Code` gets a server code for a card (once, then the card shows it) and opens the share
+ * sheet. `Load Code` brings in a car someone else shared.
  */
 export function BlueprintsView({
   manifests,
@@ -69,7 +72,13 @@ export function BlueprintsView({
   const [draftName, setDraftName] = useState('');
   const [deleting, setDeleting] = useState<LibraryEntry | null>(null);
 
-  useEffect(() => refresh(), [refresh]);
+  useEffect(() => {
+    refresh();
+    // Deletions made while offline are sent now that the screen is open again.
+    if (codes.hasGuest()) void codes.flushPending();
+  }, [refresh]);
+  const openShare = useCodeUi((s) => s.openShare);
+  const openLoad = useCodeUi((s) => s.openLoad);
 
   const course = useApp((s) => s.course);
   const track = getTrack(course.trackId);
@@ -139,6 +148,9 @@ export function BlueprintsView({
         >
           {STRINGS.blueprints.saveThisCar}
         </button>
+        <button className="btn btn-small" onClick={() => openLoad()}>
+          {STRINGS.codes.loadCode}
+        </button>
         <button className="btn btn-small" onClick={onClose}>
           {closeLabel}
         </button>
@@ -178,6 +190,7 @@ export function BlueprintsView({
                       ? STRINGS.blueprints.inUse
                       : undefined
                   }
+                  code={entry.share?.code}
                 >
                   {entry.legal ? (
                     <button
@@ -218,6 +231,15 @@ export function BlueprintsView({
                       }}
                     >
                       {STRINGS.blueprints.repair}
+                    </button>
+                  )}
+                  {entry.legal && (
+                    <button
+                      className="btn btn-small"
+                      onClick={() => openShare(entry.id)}
+                      data-testid="copy-code"
+                    >
+                      {STRINGS.codes.copyCode}
                     </button>
                   )}
                   {!entry.legal && isDrawable(manifests, entry.blueprint) && (
@@ -318,7 +340,10 @@ export function BlueprintsView({
           className="dialog"
           hideTitle
         >
-          <p>{fill(STRINGS.blueprints.deleteConfirm, { name: deleting.blueprint.name })}</p>
+          <p>
+            {fill(STRINGS.blueprints.deleteConfirm, { name: deleting.blueprint.name })}
+            {deleting.share && ` ${STRINGS.codes.deleteSharedNote}`}
+          </p>
           <div className="dialog-actions">
             <button
               className="btn btn-danger"

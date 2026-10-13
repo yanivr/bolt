@@ -19,6 +19,8 @@ export const ClientMessage = {
   PLAYER_INPUT: 'PLAYER_INPUT',
   READY: 'READY',
   RESET_CAR: 'RESET_CAR',
+  /** The page was hidden: drive this car on neutral input until samples come again (5.10). */
+  NEUTRAL: 'NEUTRAL',
   LEAVE: 'LEAVE',
 } as const;
 
@@ -50,7 +52,15 @@ export const inputSampleSchema = z
 export type InputSample = z.infer<typeof inputSampleSchema>;
 
 export const playerInputMessageSchema = z
-  .object({ inputs: z.array(inputSampleSchema).min(1).max(MAX_INPUTS_PER_PACKET) })
+  .object({
+    /**
+     * The race the samples are for (the room state's `raceId`). A reset or a rematch starts a
+     * new race and a new numbering; samples stamped with any other race are dropped. Optional
+     * for the drive room, where an unstamped packet counts for the current race.
+     */
+    race: z.number().int().min(0).max(0xffff).optional(),
+    inputs: z.array(inputSampleSchema).min(1).max(MAX_INPUTS_PER_PACKET),
+  })
   .strict();
 export type PlayerInputMessage = z.infer<typeof playerInputMessageSchema>;
 
@@ -105,6 +115,10 @@ export const ERROR_CODES = [
   'SERVER_FULL',
   'NOT_FOUND',
   'INTERNAL',
+  /** Race a Friend: the code names no open lobby (unknown, expired, or closed). */
+  'INVITE_EXPIRED',
+  /** Race a Friend: both seats are taken. */
+  'LOBBY_FULL',
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
@@ -374,7 +388,7 @@ export type RaceEventBody =
   | { type: 'misfire'; car: number; part: number; weapon: string }
   | { type: 'refused'; car: number; part: number; reason: RefusalReason }
   | { type: 'ko'; car: number; by: number }
-  | { type: 'result'; winner: number; reason: 'finish' | 'timeout' | 'ko' };
+  | { type: 'result'; winner: number; reason: 'finish' | 'timeout' | 'ko' | 'forfeit' };
 
 export type RaceEvent = RaceEventBody & { id: number; tick: number };
 export type RaceEventType = RaceEvent['type'];
@@ -495,9 +509,15 @@ export type RaceResultCar = {
 /** Section 3.4: one authoritative result. `winner` is -1 for an explicit draw. */
 export type RaceResult = {
   winner: number;
-  reason: 'finish' | 'timeout' | 'ko';
+  /**
+   * `forfeit` (Section 3.3): a driver left the race, or was gone longer than the reconnect
+   * window, and the other wins. Clearly distinguished from a normal finish.
+   */
+  reason: 'finish' | 'timeout' | 'ko' | 'forfeit';
   raceTimeMs: number;
   cars: RaceResultCar[];
+  /** For a forfeit: the car that forfeited, and why. */
+  forfeit?: { car: number; cause: 'left' | 'disconnected' };
 };
 
 /** Everything about the race that is not the viewer's own car. */

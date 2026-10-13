@@ -45,6 +45,9 @@ export function Dialog({
       (first ?? node).focus({ preventScroll: true });
     }
     const onKey = (event: KeyboardEvent) => {
+      // With dialogs stacked (a share sheet over My Blueprints), only the top one answers.
+      const panels = document.querySelectorAll('.dialog-panel');
+      if (node && panels.length > 1 && panels[panels.length - 1] !== node) return;
       if (event.key === 'Escape') {
         event.stopPropagation();
         event.preventDefault();

@@ -79,7 +79,9 @@ describe('protocol (Section 15.3)', () => {
     // 5 added the tow: `tow` on both cars, three numbers in the effects, the `catchup` event.
     // 6 is track format 2: the same wire, but a client now predicts wind and timed track
     // hazards on the race clock, so an older one would be corrected on the new tracks.
-    expect(PROTOCOL_VERSION).toBe(8);
+    // 9 is Race a Friend: the room's own clock, `race` on input packets, `you` and `net` in the
+    // state, the forfeit result (docs/COMBAT_API.md).
+    expect(PROTOCOL_VERSION).toBe(9);
     const base = { sequence: 1, clientTick: 1, steer: 0, brake: 0, coast: false };
     expect(inputSampleSchema.safeParse(base).success).toBe(true);
     expect(inputSampleSchema.safeParse({ ...base, fire: 3, use: 255, target: 63 }).success).toBe(

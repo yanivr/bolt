@@ -1,0 +1,737 @@
+/*
+ * Race a Friend screens (Sections 3.2, 5.4 and 5.10): the join screen, the friend lobby, the
+ * match states over the reveal, garage, race and results. Same visual language as the rest of
+ * the interface: navy metal panels, cyan for this player, coral for the rival, gold for the
+ * code and the primary action, amber for warnings.
+ */
+
+/* --- Join with Code ------------------------------------------------------------------------ */
+
+.join {
+  display: grid;
+  place-items: center;
+  background:
+    repeating-conic-gradient(#1b2538 0 25%, #172033 0 50%) 0 0 / 64px 64px,
+    var(--navy);
+}
+
+.join-panel {
+  position: relative;
+  width: min(560px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 16px 20px 18px;
+}
+
+.join-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.join-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.join-title {
+  margin: 0;
+}
+
+.join-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.join-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ivory-dim);
+}
+
+.join-row {
+  display: flex;
+  gap: 10px;
+}
+
+.join-input {
+  flex: 1;
+  min-width: 0;
+  height: 64px;
+  padding: 0 14px;
+  font:
+    800 32px/1 ui-monospace,
+    'SF Mono',
+    Menlo,
+    Consolas,
+    monospace;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--gold);
+  background: var(--steel-dark);
+  border: 1px solid #05070c;
+  box-shadow: inset 2px 2px 0 #05070c;
+  border-radius: 0;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.join-input::placeholder {
+  color: #3a4660;
+}
+
+.join-input.is-bad {
+  color: var(--amber);
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}
+
+.join-paste {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 64px;
+}
+
+.join-hint {
+  margin: 0;
+  min-height: 20px;
+  font-size: 14px;
+  color: var(--ivory-dim);
+}
+
+.join-hint.is-bad {
+  color: var(--amber);
+}
+
+.join-progress {
+  display: flex;
+  gap: 6px;
+}
+
+.join-progress span {
+  width: 18px;
+  height: 6px;
+  background: var(--steel-dark);
+}
+
+.join-progress span.is-on {
+  background: var(--gold);
+}
+
+.join-go {
+  margin-top: 4px;
+}
+
+.join-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--amber);
+}
+
+.join-error p {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--ivory);
+}
+
+/* --- The friend lobby ---------------------------------------------------------------------- */
+
+.lobby {
+  display: grid;
+  grid-template-columns: 56fr 44fr;
+  gap: 2.5%;
+  align-items: stretch;
+  background:
+    repeating-conic-gradient(#1b2538 0 25%, #172033 0 50%) 0 0 / 64px 64px,
+    var(--navy);
+}
+
+.lobby-opening {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.lobby-left {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lobby-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.lobby-top .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lobby-title {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--ivory-dim);
+  text-transform: uppercase;
+}
+
+.lobby-code {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    'label label'
+    'code code'
+    'actions actions';
+  gap: 6px 12px;
+  border-left: 4px solid var(--gold);
+}
+
+.lobby-code-label {
+  grid-area: label;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ivory-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.lobby-code-value {
+  grid-area: code;
+  display: flex;
+}
+
+.lobby-code-actions {
+  grid-area: actions;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lobby-code-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lobby-podium {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.lobby-vs {
+  align-self: center;
+}
+
+.lobby-notice {
+  margin: 0;
+  min-height: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ivory-dim);
+}
+
+.seat-card {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    'emblem name'
+    'emblem tags'
+    'line line';
+  gap: 2px 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-left: 4px solid var(--cyan);
+}
+
+.seat-card.is-rival {
+  border-left-color: var(--coral);
+}
+
+.seat-card.is-empty {
+  border-left-style: dashed;
+  opacity: 0.85;
+}
+
+.seat-card.is-away {
+  border-left-color: var(--amber);
+}
+
+.seat-emblem {
+  grid-area: emblem;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: var(--cyan);
+  background: var(--steel-dark);
+  box-shadow: inset 2px 2px 0 #05070c;
+}
+
+.seat-card.is-rival .seat-emblem {
+  color: var(--coral);
+}
+
+.seat-card.is-empty .seat-emblem {
+  color: #3a4660;
+}
+
+.seat-name {
+  grid-area: name;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--ivory);
+  text-align: left;
+}
+
+.seat-rename {
+  appearance: none;
+  padding: 0;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--ivory);
+  background: none;
+  border: 0;
+  border-bottom: 2px dotted var(--ivory-dim);
+  cursor: pointer;
+  justify-self: start;
+  max-width: 100%;
+}
+
+.seat-tags {
+  grid-area: tags;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.seat-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--navy);
+  background: var(--cyan);
+}
+
+.seat-card.is-rival .seat-tag,
+.seat-tag.is-rival {
+  background: var(--coral);
+}
+
+.seat-tag.is-host {
+  background: var(--gold);
+}
+
+.seat-tag.is-ready {
+  background: var(--mint);
+}
+
+.seat-line {
+  grid-area: line;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ivory-dim);
+}
+
+.seat-line.is-warn {
+  color: var(--amber);
+}
+
+.seat-card .net-quality {
+  grid-area: line;
+}
+
+.waiting-dots {
+  animation: waiting-pulse 1.4s steps(2) infinite;
+}
+
+@keyframes waiting-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.net-quality {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ivory-dim);
+}
+
+.net-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+}
+
+.net-bars i {
+  display: block;
+  width: 4px;
+  background: #3a4660;
+}
+
+.net-bars i:nth-child(1) {
+  height: 5px;
+}
+
+.net-bars i:nth-child(2) {
+  height: 8px;
+}
+
+.net-bars i:nth-child(3) {
+  height: 12px;
+}
+
+.net-quality.is-good .net-bars i {
+  background: var(--mint);
+}
+
+.net-quality.is-fair .net-bars i:nth-child(-n + 2) {
+  background: var(--amber);
+}
+
+.net-quality.is-poor .net-bars i:nth-child(1) {
+  background: var(--red);
+}
+
+.lobby-course {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-left: 4px solid var(--steel-light);
+}
+
+.lobby-course-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.lobby-course-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ivory-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.lobby-course-step {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.lobby-map {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 64px;
+  background: var(--steel-dark);
+  box-shadow: inset 2px 2px 0 #05070c;
+  overflow: hidden;
+}
+
+.lobby-map img {
+  position: absolute;
+  inset: 6px;
+  width: calc(100% - 12px);
+  height: calc(100% - 12px);
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.lobby-track-name {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.lobby-random {
+  flex: 1 1 auto;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  text-align: center;
+  background: var(--steel-dark);
+  box-shadow: inset 2px 2px 0 #05070c;
+}
+
+.lobby-random p {
+  margin: 0 10px;
+  font-size: 14px;
+  color: var(--ivory-dim);
+}
+
+.lobby-course-note,
+.lobby-wait-host {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ivory-dim);
+}
+
+.lobby-wait-host.is-ready {
+  align-self: flex-start;
+  padding: 3px 10px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--navy);
+  background: var(--mint);
+}
+
+.lobby-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.lobby-actions .btn-primary {
+  flex: 1;
+}
+
+.lobby-actions .btn.is-on {
+  color: var(--navy);
+  background: var(--cyan);
+}
+
+/* Small landscape phones: the code shrinks a step and the course card drops its map first. */
+@media (max-height: 400px) {
+  .lobby-left {
+    gap: 6px;
+  }
+  .lobby-code {
+    padding: 6px 10px;
+    gap: 4px 10px;
+  }
+  .lobby-code-actions .btn,
+  .lobby-top .btn,
+  .lobby-course-step .btn {
+    min-height: 40px;
+    padding: 4px 10px;
+    font-size: 14px;
+  }
+  .seat-card {
+    padding: 6px 8px;
+  }
+  .seat-emblem {
+    width: 36px;
+    height: 36px;
+  }
+  .lobby-course {
+    gap: 5px;
+    padding: 8px 10px;
+  }
+  .lobby-course .weather-badge {
+    font-size: 13px;
+  }
+  .lobby-actions .btn {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 720px) and (orientation: landscape) {
+  .lobby {
+    grid-template-columns: 58fr 42fr;
+  }
+  .lobby-code-value .pixel-text {
+    transform: scale(0.8);
+    transform-origin: left center;
+  }
+  .lobby-podium {
+    gap: 4px;
+  }
+  .lobby-vs .pixel-text {
+    transform: scale(0.67);
+  }
+  .seat-card {
+    gap: 2px 7px;
+  }
+  .seat-name,
+  .seat-rename {
+    font-size: 15px;
+  }
+  .seat-line,
+  .seat-card .net-quality {
+    font-size: 12px;
+  }
+}
+
+@media (orientation: portrait) {
+  .lobby {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    overflow-y: auto;
+  }
+  .join-row {
+    flex-direction: column;
+  }
+}
+
+/* --- Over the reveal, the garage, the race and the results --------------------------------- */
+
+.preview-match-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.preview-wait {
+  margin: 0;
+  align-self: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.g-rival {
+  position: absolute;
+  z-index: 6;
+  /* The car stage's free top-left corner, above the Rear slot. */
+  top: calc(var(--safe-top) + 60px);
+  left: calc(var(--safe-left, 0px) + 12px);
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--navy);
+  background: var(--coral);
+  box-shadow: 0 2px 0 var(--steel-dark);
+  pointer-events: none;
+}
+
+.g-rival.is-ready {
+  background: var(--mint);
+}
+
+.g-rival.is-away {
+  background: var(--amber);
+}
+
+.match-banner {
+  position: absolute;
+  z-index: 40;
+  top: calc(var(--safe-top) + 54px);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(520px, 60vw);
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--ivory);
+  background: rgba(14, 19, 32, 0.88);
+  border: 1px solid var(--steel-dark);
+  box-shadow: inset 2px 2px 0 var(--steel-light);
+  pointer-events: none;
+}
+
+.match-banner.is-warn {
+  color: var(--navy);
+  background: var(--amber);
+  box-shadow: none;
+}
+
+/*
+ * The friend race's results footer: the match buttons across the top row, and below them the
+ * vote line on the left of Save and Share, where the solo footer has empty space. The line
+ * never takes a row of its own, so the table above keeps its height on a 375 px screen.
+ */
+.results-match {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 10px;
+}
+
+.match-results-actions {
+  display: contents;
+}
+
+.match-results-actions > .results-actions {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+
+.results-match > .results-actions {
+  grid-column: 2;
+  grid-row: 2;
+  border-top: 0;
+}
+
+/* One rule across the whole second row, with or without a vote line in it. */
+.results-match::before {
+  content: '';
+  grid-column: 1 / -1;
+  grid-row: 2;
+  border-top: 1px solid #1c2536;
+}
+
+.match-vote-line {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding-top: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.match-results-actions .btn.is-asked:not(.is-on) {
+  outline: 2px solid var(--coral);
+  outline-offset: 2px;
+}
+
+.match-results-actions .btn.is-on {
+  color: var(--navy);
+  background: var(--cyan);
+}
+
+.match-lost {
+  z-index: 200;
+}
+
+/*
+ * Home on a short landscape phone. The friend row (Challenge a Friend, Join with Code) adds a
+ * row to the menu, so on a screen 420 px tall or less every secondary row keeps to the 44 px
+ * touch minimum with labels allowed onto two lines, and a returning player's menu (with Use
+ * Last Build) still fits a 370 px screen.
+ */
+@media (max-height: 420px) {
+  .home-row .btn {
+    min-height: 44px;
+    padding: 3px 6px;
+    font-size: 15px;
+    line-height: 1.1;
+  }
+}

@@ -739,9 +739,12 @@ export const DIRECTION_REVERSE_SPEED = 30;
 /**
  * 7: the loose-ground crawl floor changed the physics a client predicts, and the join may name
  * the AI's difficulty (Milestone D). 8: the deep-ground floor on sand and mud
- * (`DEEP_GROUND_FLOOR`) changed it again.
+ * (`DEEP_GROUND_FLOOR`) changed it again. 9: Milestone E. Rooms advance on their own 30 Hz
+ * clock and acknowledge per driver (`TickInputBuffer`); input packets carry their race; the
+ * room state gained `you`, `raceId`, `held` and the input statistics; results may be forfeits;
+ * the match room exists.
  */
-export const PROTOCOL_VERSION = 8;
+export const PROTOCOL_VERSION = 9;
 export const MAX_QUEUED_INPUTS = 8;
 export const MAX_INPUTS_PER_PACKET = 6;
 export const REMOTE_INTERP_DELAY_MS = 120;

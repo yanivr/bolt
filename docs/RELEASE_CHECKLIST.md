@@ -60,13 +60,13 @@ Still open in Milestone B:
 - [x] Flow: Home, Track Preview, 60-second garage, race, `Change My Build`; `Use Last Build` and `Quick Build` from Home.
 - [x] My Blueprints in local storage, 30 cars, with flagged stale builds and repair. A saved car on a retired chassis is flagged and rebuilt on the Beetle by Repair Build.
 - [x] Garage focus mode and polish after the owner's second review (DECISIONS 90 to 98): selecting a mount or the engine moves the view in by one or two whole scale steps with the slot centred, `Whole Car`, Escape or the bare floor goes back; the status line has its own reserved place and never covers the car; essentials tiles show a one-line name; nothing on the workbench scrolls; the compare pane fits 667 x 375; the idle panel shows scores, indicator states, a derived summary and tappable equipment. Checked by unit and end-to-end tests and in screenshots at 870 x 370, 667 x 375, 450 x 840 and 1440 x 900. **Not checked on the owner's phone.**
-- [ ] **Deferred to Milestone E:** short share codes (`Load Code`, `Copy Code`) and a server-owned build timer. The client clock locks the last legal snapshot today; `setDeadline` and `lockWith` are the hooks for the server. No code control is shown.
+- [ ] **Deferred to Milestone E:** short share codes (`Load Code`, `Copy Code`) and a server-owned build timer. The client clock locks the last legal snapshot today; `setDeadline` and `lockWith` are the hooks for the server. _Codes (`Load Code`, `Copy Code`) are done in Milestone E part 2; the server-owned build timer is done in Milestone E part 1 for friend races (the solo race keeps the client clock)._
 - [ ] **Not built:** two-finger zoom on the workbench, flipping paired parts, the biome diorama on Track Preview, a second weather preset to choose.
 - [x] Sprites for all five chassis (with mount heights for every mount), 20 engines, 20 wheel kits and 60 mounted parts, plus 32 and 24 pixel catalog icons rendered from the same models. `SPRITES_PENDING` in `tests/unit/assets.test.ts` is empty and the test fails if any catalog part loses its sheet. The car atlas is 1.13 MB in 143 files (it was 2.23 MB in 203 with twenty chassis). **Art quality is unreviewed by a person.** Known weak spots: the Spider's wheels read as dark blobs at race size; the larger engines overhang the Pickup's hood and the Trike's frame; several tire kits (Balloon, Mud, Monster, Rain) differ mostly by size on a dark road; catalog icons are small inside their tiles.
 - [x] Mounted parts drawn on the car in the race, the garage and every thumbnail through the one shared compositor, lifted to the bodywork height of their mount. Checked in screenshots (`tests/visual/loaded.ts`, `tests/visual/garage.ts`).
 - [x] Engines in mid and front bays draw a sheet without tail pipes (`engineInBay`), so pipes no longer cross the cab.
 - [x] Player-facing HUD for heat and power: two gauges in the car condition widget, with a marked limit, a pattern and a word when hot or low, and `ENGINE HOT` and `LOW POWER` callouts (Milestone C part 2, track H). Low power is the HUD's own reading; the snapshot has no flag for it (DECISIONS 164).
-- [ ] Blueprint storage and codes on the server (PostgreSQL arrives in Milestone E); blueprints live in local storage today.
+- [x] Blueprint storage and codes on the server: done in Milestone E part 2 (below). My Blueprints stays local-first; a shared card carries its server code.
 - [ ] Balance review of the values by a person, the five retuned chassis first. One known question, narrowed in 0.4.0: Tiny Trouble is 2.1 s behind the Straight-Line Rocket in the dry for two thirds of the price (`docs/BALANCE_CHANGELOG.md`).
 - [x] Weapons, defenses and utilities act in a race (Milestone C part 1, below).
 
@@ -116,10 +116,43 @@ Phase 0, the tracks and their rules (October 12, 2026). Contract: `docs/TRACK_AP
 - [ ] Music themes, ambience and weather sound for the seven tracks; rain, snow, sand and wind effects in the race scene.
 - [ ] The AI (difficulty levels, build choice, shortcuts, hazards) and the bot tournament harness. Not started.
 
-### Milestones E to G
+### Milestone E part 1: Race a Friend (October 12, 2026)
 
-Not started. E: two-player rooms, friend links,
-PostgreSQL blueprints and codes. F: VS sequence, results, highlights, daily challenge, full
+Reference `docs/MULTIPLAYER.md`, decisions 283 to 300, evidence `docs/evidence/multiplayer`.
+Gate: "Two physical phones on separate networks can invite, build, race, damage, repair,
+finish and rematch without desynchronization or state leaks." **Not met as written: no
+physical phones and no real networks were used.** What was run is below.
+
+- [x] Server-paced rooms: the solo room and the friend room step one shared `RaceHost` on a fixed 30 Hz clock; per-player `TickInputBuffer` with an adaptive delay; a missing sample repeats the last control, a late one is dropped and counted; a silent car is driven by the autopilot after 0.5 s; one player never stalls the other (measured during a 1.5 s outage of the other).
+- [x] Each client predicts its own car against its own acknowledgement and sees the other human as it sees the AI rival, interpolated; each client is sent only its own view (`StateView`), measured at about 149 bytes a patch and 2.6 KB/s down per client while racing.
+- [x] Friend lobby: Challenge a Friend, six-character code without look-alikes, Copy Invite Link, Copy Code, Share Link where the device has it, `/join/<code>` links, Join with Code with a forgiving field and Paste, preset nicknames and emblems only, host picks track and weather or Random, the guest sees changes live, Start Build, shared Track Preview, two seats and no spectators.
+- [x] Server-owned 60-second build phase through the garage's `setDeadline` and `lockWith`; every legal change submitted, validated by the server's validator and catalog, illegal ones refused with the approved copy; the last legal build locked at the deadline for a player who never pressed Ready; each player sees the other's readiness, never the build.
+- [x] Results from one authoritative `RaceResult` on both screens (asserted equal field for field, and the result rows equal across two browser contexts); Race Again, Swap Cars and Change My Build need both players; Leave; Invite Someone New when the rival has gone.
+- [x] Disconnects by phase as Section 3.3 says: lobby and build graces, the 15 s race autopilot with a visible countdown, reconnect with nothing reset, disconnect forfeit clearly distinguished from a finish, host hand-over, page reload resumes the seat. Tested over real sockets: reconnect mid-build and mid-race, permanent loss mid-build and mid-race.
+- [x] Security: strict schemas on every message, strikes, message and flood limits, build submission limit, 8 KB frames, lobby and code-guess limits per address and per guest, signed guest tokens, protocol version 9, no free text, no personal data in room state; tested with forged inputs, forged tokens, someone else's reconnection token, a brute-force run, an oversized frame, a flood, and a state-leak check of everything one client receives.
+- [x] Two-context Playwright run on the production build (870 x 370 host, 667 x 375 guest) through the whole flow including touch driving, identical results, a rematch and a disconnect forfeit; screenshots of every new screen at both sizes.
+- [ ] **Two physical phones on separate networks.** Not done. Needs a deployed server (Milestone G) or a LAN with two devices.
+- [ ] Under 2% TCP stalls of 400 ms (head-of-line blocking) the slow phone's own car is corrected 35 to 53 times a minute, median 2.5 to 6 px, worst 22 px (smoothed on screen); the fast phone 4 to 7 times a minute, at most 9.5 px. Acceptable for a first version; WebSockets cannot do better on a lossy link (`docs/MULTIPLAYER.md`, Weak points). To be judged on phones.
+- [ ] The VS fight card (`VS_REVEAL` is only the load wait today) and highlights: Milestone F.
+
+### Milestone E part 2: persistence and sharing (October 12, 2026)
+
+Reference `docs/PERSISTENCE.md`, decisions 270 to 282, evidence `docs/evidence/persistence`.
+
+- [x] PostgreSQL layer: pool from `DATABASE_URL`, ordered transactional migrations with a migrations table and a lock, repositories for `guest_sessions`, `blueprints`, `matches`, `match_events`, `daily_challenges`, the Section 15.8 indexes. Tested against PostgreSQL 16 from an empty schema.
+- [x] In-memory implementation behind the same interfaces when `DATABASE_URL` is absent, logged at startup; production refuses to start without `DATABASE_URL`; a configured but unreachable database stops startup. Tested by running `main.ts`.
+- [x] Guest sessions persisted (token hash only), renewed once per visit, deletable; a deleted guest's token refused.
+- [x] Short codes `CAR-XXXXXX-XX` with a Reed-Solomon checksum that rejects every single substitution and every swap (exhaustively tested), collision retries (tested with a forced generator), idempotent and deduplicated creation, public lookup with a stale flag, soft delete, my codes, limits on creation, lookups and misses.
+- [x] Client: Copy Code and the share sheet (system share where available, clipboard otherwise), Load Code from Home, My Blueprints and the garage with live checksum feedback, preview, repair and replace confirmation, `/car/<code>` deep links, results `Save This Car` and `Share Blueprint`.
+- [x] Match records through the room's `recordMatch` hook with per-match pseudonyms; event sampling ready but fed by no room yet.
+- [x] Retention job (events 30 days, matches 90, deleted cars 30, expired sessions) at startup and hourly.
+- [x] Privacy page from Settings and at `/privacy`; Delete My Data deletes server records first, then the device. Tested end to end.
+- [x] `pnpm db:dev`, `.env.example`, `docker-compose.yml` (postgres and server). The compose file has not been run: no Docker daemon was available.
+- [ ] Not verified: the CI job with a PostgreSQL service has never run; nothing has been tried between two physical devices or on a deployed server; no legal review of the privacy text.
+
+### Milestones F and G
+
+Not started. F: VS sequence, results, highlights, daily challenge, full
 settings. G: load, security, Docker deployment, public HTTPS.
 
 ## Launch acceptance (Section 19.7)
@@ -130,10 +163,10 @@ settings. G: load, security, Docker deployment, public HTTPS.
 - [ ] Five chassis (by product-owner decision of October 11, 2026, overriding the 20 of Section 19.7: Beetle, Arrow, Pickup, Spider, Trike; `docs/DECISIONS.md` entry 87), 20 engines, 20 tire kits, 20 weapons, 20 defenses, 20 utilities. _All 105 exist in rules and in art, and all 60 weapons, defenses and utilities behave in a race. Their combat visuals and sound do not exist yet._
 - [ ] All 105 catalog parts covered by behavior or primitive tests. _The 60 mounted parts each have a behavior test and a limit test, enforced by a table-driven test. Chassis, engines and tire kits are covered by the Milestone B data and handling tests._
 - [ ] Arbitrary legal assemblies composited and physically validated. _Compositor draws any legal blueprint including mounted parts; all templates are raced in tests._
-- [ ] Multiplayer garage locks after 60 seconds and never spends more than 1,000 credits.
+- [ ] Multiplayer garage locks after 60 seconds and never spends more than 1,000 credits. _Met in automated tests: the server owns the deadline, validates every submission with the shared validator and the server's catalog (which enforces the budget), and locks the last legal build. Open until seen on two phones._
 - [ ] Every car has meaningful heat, energy, mass and stability behavior. _Implemented in the simulation; only the debug readout shows heat and power in a race._
 - [ ] Top-down float steering, braking and left-handed actions work with two fingers. _Automated two-finger tests pass; real-device check open. The designed fire and equipment buttons hold, fire on the press and work with three and four simultaneous touches in an automated CDP test, in both hand layouts; unverified under a real thumb._
-- [ ] Two friends can enter by code or link and finish a synchronized match.
+- [ ] Two friends can enter by code or link and finish a synchronized match. _Met in automated tests only: two headless clients over a simulated mobile network with identical results and identical views of each car at every tick, and two Chromium contexts on the production build (`tests/net/match.test.ts`, `tests/e2e/multiplayer.spec.ts`). Open until two physical phones on separate networks have done it._
 - [ ] AI uses the same physics, funds and weapon rules as a human. _The sparring rival races a legal 1,000-credit template and acts only through the control sample a player sends, with the same cooldowns, ammunition and physics (asserted). It is a stand-in for the AI of Milestone D._
 - [ ] Sixteen directional chassis frames and coherent attachments render without flicker. _Sixteen frames per chassis are baked and tested; "without flicker" needs a device._
 - [ ] Each of 20 weapons has a unique visual and audible signature. _Audible: each weapon has its own recipes, and their rendered scenarios differ by a measured fingerprint distance of at least 0.9; unheard by a person._
@@ -141,13 +174,13 @@ settings. G: load, security, Docker deployment, public HTTPS.
 - [ ] Wet road reflections, rain spray, sand dust and forest ambience work on real phones.
 - [ ] Damage appears on the correct component and a spare wheel visibly repairs it. _True in the simulation and its events (hit localisation and the spare wheel are tested). Nothing shows it on the car yet._
 - [ ] All launch tracks, weather, checkpoints and shortcuts are operational. _All eight tracks and their 16 courses race, with checkpoints, shortcuts, hazards and weather, and pass the validator (Milestone D phase 0). Only Neon Cut, Clear Night has terrain art; the others race in a development layout view, and a production build offers only the baked course._
-- [ ] One authoritative result is shown consistently to both players. _The server produces one `RaceResult` and sends it in the state; there is one human in a room. The results screen shows that result and nothing that contradicts it (the end-to-end test of a whole race compares them)._
-- [ ] Short car codes create, persist, import and validate across browsers.
-- [ ] Rematch, edit build, swap cars and share flows work without an account.
+- [ ] One authoritative result is shown consistently to both players. _The server produces one `RaceResult` and sends it to both players; the two results are asserted equal over real sockets, and the two browser contexts show the same rows mirrored. Open until seen on two phones._
+- [ ] Short car codes create, persist, import and validate across browsers. _Met in automated tests on this machine: two browser profiles (two guests) on the production build with the server on PostgreSQL 16 create, persist across reloads, import by a code typed loosely and validate typos before any request (`tests/e2e/codes.spec.ts`). Open until it is seen on two physical devices against a deployed server._
+- [ ] Rematch, edit build, swap cars and share flows work without an account. _Rematch, swap cars and change build work in friend races without an account (automated tests); share flows are Milestone E part 2. Open until seen on devices._
 - [ ] No placeholder buttons, stock images, generic square cars or empty scenes remain. _True of what exists: every control shown does what it says. The home scene is a plain workbench, not the animated garage of Section 5.3._
 - [ ] Low-effects settings preserve readability and touch responsiveness. _Shake amount and reduced flashes exist; the camera no longer rotates or zooms at all; particle quality tiers do not._
 - [ ] Device tests and network stress tests meet documented budgets.
-- [ ] Privacy disclosure, deletion controls, error handling, backups and HTTPS are in place. _Guest tokens carry no personal data and can be cleared locally; no privacy page yet._
+- [ ] Privacy disclosure, deletion controls, error handling, backups and HTTPS are in place. _Privacy page and working deletion controls exist (server records and device, tested end to end; `docs/PERSISTENCE.md`). Backups and HTTPS are Milestone G; no legal review yet._
 - [ ] Automated tests and clean install and build commands pass on the committed revision. _Locally, on the working tree of October 12, 2026 after Milestone D phase 0 (not committed): `tsc -b` and ESLint are clean, 1,727 Vitest tests in 51 files and 88 Playwright tests pass, and the build succeeds. CI itself has never run._
 
 ## Launch blockers known today

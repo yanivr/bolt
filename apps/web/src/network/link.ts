@@ -29,4 +29,11 @@ export interface DriveLink {
   onStatus: ((status: LinkStatus) => void) | null;
   /** Round-trip estimate in milliseconds, or 0 when unknown or offline. */
   readonly latencyMs: number;
+  /**
+   * True while the authority holds the race on the grid and the client must not run its
+   * prediction clock (the match room while both players load). Absent means never.
+   */
+  readonly held?: boolean;
+  /** The page went to the background: the authority drives the car on neutral (Section 5.10). */
+  away?(): void;
 }

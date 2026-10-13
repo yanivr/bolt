@@ -1082,9 +1082,12 @@ test('a rocket hit shows on the rival bar, the button counts down, and results m
   expect(card.y).toBeGreaterThanOrEqual(0);
   expect(card.x + card.width).toBeLessThanOrEqual(view.width);
   expect(card.y + card.height).toBeLessThanOrEqual(view.height);
+  // Section 5.11 order; Save This Car and Share Blueprint are the car code component's.
   await expect(results.getByRole('button')).toHaveText([
     'Race Again',
     'Change My Build',
+    'Save This Car',
+    'Share Blueprint',
     'Back Home',
   ]);
   await expect(results.getByRole('button', { name: 'Race Again' })).toBeFocused();

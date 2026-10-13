@@ -234,13 +234,24 @@ export type Outcome = 'victory' | 'defeat' | 'draw';
 
 /** Which line explains the verdict (Section 3.4 and the Wreck and DNF rules of COMBAT_API). */
 export type OutcomeReason =
-  'margin' | 'rival_dnf' | 'you_dnf' | 'rival_ko' | 'you_ko' | 'timeout' | 'draw';
+  | 'margin'
+  | 'rival_dnf'
+  | 'you_dnf'
+  | 'rival_ko'
+  | 'you_ko'
+  | 'timeout'
+  | 'draw'
+  /** Race a Friend (Section 3.3): a driver left, or was gone past the reconnect window. */
+  | 'rival_forfeit'
+  | 'you_forfeit';
 
 export type Verdict = {
   outcome: Outcome;
   reason: OutcomeReason;
   /** Seconds between the two finishing times, when both cars finished. */
   marginSeconds: number | null;
+  /** For a forfeit: whether the driver left on purpose or the connection was gone too long. */
+  forfeitCause?: 'left' | 'disconnected';
 };
 
 /** Reads the server's result for one driver. The winner is never worked out here. */
@@ -253,6 +264,13 @@ export function verdictFor(result: RaceResult, you: number): Verdict {
   if (mine && other && mine.finishTimeMs !== null && other.finishTimeMs !== null)
     marginSeconds = Math.abs(mine.finishTimeMs - other.finishTimeMs) / 1000;
   let reason: OutcomeReason;
+  if (result.reason === 'forfeit')
+    return {
+      outcome,
+      reason: result.forfeit?.car === you ? 'you_forfeit' : 'rival_forfeit',
+      marginSeconds: null,
+      forfeitCause: result.forfeit?.cause ?? 'disconnected',
+    };
   if (result.reason === 'ko') reason = mine?.ko ? 'you_ko' : 'rival_ko';
   else if (outcome === 'draw') reason = 'draw';
   else if (marginSeconds !== null) reason = 'margin';

@@ -1,0 +1,465 @@
+/*
+ * Car codes: the Load Code overlay, the share sheet, the code on a saved card and the privacy
+ * page. Same visual language as app/styles.css (navy metal panels, gold for the code itself,
+ * green for valid, amber for warnings). Codes are set in a monospace face with wide tracking so
+ * 0 and O, 1 and I never need telling apart (the alphabet has neither O nor I).
+ */
+.code-mono,
+.code-input,
+.share-code,
+.code-echo {
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+}
+
+/* --- Load Code ---------------------------------------------------------------------------- */
+
+.code-sheet {
+  width: min(780px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 14px 14px;
+}
+
+.code-load {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.code-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.code-title {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.code-field input.code-input {
+  font-size: 24px;
+  min-height: 54px;
+  padding: 6px 12px;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.code-field input.code-input::placeholder {
+  color: #59647d;
+  letter-spacing: 0.08em;
+}
+
+.code-field input[aria-invalid='true'] {
+  border-color: var(--amber);
+  box-shadow:
+    inset 2px 2px 0 #05070c,
+    0 0 0 1px var(--amber);
+}
+
+.code-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-height: 40px;
+  margin: 6px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.code-status .glyph {
+  flex: none;
+  margin-top: 3px;
+}
+
+.code-status.tone-hint {
+  color: var(--ivory-dim);
+  font-weight: 400;
+}
+
+.code-status.tone-ok {
+  color: var(--mint);
+}
+
+.code-status.tone-warn {
+  color: var(--amber);
+}
+
+.code-echo {
+  margin: 0;
+  font-size: 13px;
+  color: #7b86a0;
+}
+
+.code-entry-actions,
+.code-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.code-preview {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 10px;
+  background: var(--steel-dark);
+  border: 1px solid #05070c;
+  box-shadow: inset 2px 2px 0 #05070c;
+}
+
+.code-car {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.code-preview .code-thumb {
+  grid-area: auto;
+}
+
+.code-car-body {
+  min-width: 0;
+}
+
+.code-badge {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.code-badge .glyph {
+  flex: none;
+  margin-top: 2px;
+}
+
+.code-badge.is-ok {
+  color: var(--mint);
+}
+
+.code-badge.is-warn {
+  color: var(--amber);
+}
+
+.code-confirm p {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.code-saved {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--mint);
+}
+
+.code-empty {
+  flex: 1 1 auto;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  min-height: 120px;
+  color: #59647d;
+  text-align: center;
+}
+
+.code-empty p {
+  margin: 0;
+  max-width: 30ch;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ivory-dim);
+}
+
+@media (max-height: 400px) {
+  .code-title {
+    font-size: 18px;
+  }
+  .code-status {
+    min-height: 36px;
+    margin-top: 4px;
+  }
+}
+
+@media (max-width: 560px) {
+  .code-load {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* --- Share sheet -------------------------------------------------------------------------- */
+
+.dialog.share-sheet {
+  max-width: 560px;
+}
+
+.share-sheet {
+  width: min(560px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+.dialog.share-sheet .share-car {
+  margin: 0 0 6px;
+  font-size: 15px;
+  color: var(--ivory-dim);
+}
+
+.dialog.share-sheet .share-code {
+  margin: 0 0 12px;
+  padding: 10px 8px;
+  font-size: clamp(26px, 6.2vw, 38px);
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--gold);
+  background: var(--steel-dark);
+  border: 1px solid #05070c;
+  box-shadow:
+    inset 2px 2px 0 #05070c,
+    0 0 0 2px #3a2a10;
+  white-space: nowrap;
+  -webkit-user-select: all;
+  user-select: all;
+}
+
+.dialog.share-sheet .share-code.is-pending {
+  font-size: 18px;
+  font-family: inherit;
+  letter-spacing: 0;
+  color: var(--ivory-dim);
+}
+
+.share-actions {
+  gap: 10px;
+}
+
+.share-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dialog.share-sheet .share-note {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--ivory-dim);
+}
+
+.dialog.share-sheet .share-note.tone-ok {
+  color: var(--mint);
+  font-weight: 700;
+}
+
+.dialog.share-sheet .share-note.tone-warn {
+  color: var(--amber);
+  font-weight: 700;
+}
+
+.dialog.share-sheet .share-fail {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  color: var(--amber);
+  font-weight: 700;
+}
+
+@media (max-height: 400px) {
+  .dialog.share-sheet {
+    padding: 12px 16px;
+  }
+  .dialog.share-sheet .share-code {
+    margin-bottom: 10px;
+    padding: 6px 8px;
+  }
+  .dialog.share-sheet .share-note {
+    margin-top: 8px;
+  }
+}
+
+/* --- A saved card's code ------------------------------------------------------------------ */
+
+.bp-code {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+/* --- Results ------------------------------------------------------------------------------ */
+
+.results-actions .btn.results-glyph-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.results-actions .btn.results-glyph-btn > .glyph + span {
+  margin-left: 0;
+}
+
+.results-share-status {
+  align-self: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--mint);
+}
+
+.results-share-status[data-tone='warn'] {
+  color: var(--amber);
+}
+
+/* --- Privacy ------------------------------------------------------------------------------ */
+
+.privacy-screen {
+  display: flex;
+  justify-content: center;
+}
+
+.privacy {
+  width: min(980px, 100%);
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.privacy-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.privacy-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 22px;
+  color: var(--ivory);
+}
+
+.privacy-title .glyph {
+  color: var(--cyan);
+}
+
+.privacy-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  padding: 2px 4px 8px 2px;
+  outline: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.privacy-intro {
+  margin: 0 0 10px;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.privacy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px;
+}
+
+.privacy-grid section {
+  padding: 10px 12px;
+  background: var(--steel);
+  border: 1px solid var(--steel-dark);
+  box-shadow:
+    inset var(--px) var(--px) 0 var(--steel-light),
+    inset calc(var(--px) * -1) calc(var(--px) * -1) 0 #1c2536;
+}
+
+.privacy-grid h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  color: var(--gold);
+}
+
+.privacy-grid ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.privacy-grid li,
+.privacy-delete p {
+  margin: 0 0 6px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.privacy-delete {
+  outline: 1px solid #4c101c;
+}
+
+.privacy-delete .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.privacy-counts {
+  display: flex;
+  flex-direction: column;
+  font-weight: 700;
+}
+
+.privacy-status {
+  display: flex;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.privacy-status.tone-ok {
+  color: var(--mint);
+}
+
+.privacy-status.tone-warn {
+  color: var(--amber);
+}
+
+.privacy-failed {
+  margin-top: 10px;
+}
+
+.privacy-small {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--ivory-dim);
+}

@@ -20,16 +20,13 @@ import type {
 import {
   ClientMessage,
   INPUT_PACKET_HZ,
-  MAX_QUEUED_INPUTS,
   SIM_HZ,
   SNAPSHOT_HZ,
   ServerMessage,
   applyScenario,
   buildTrack,
-  eventVisibleTo,
   playerInputMessageSchema,
   resetRace,
-  stepRaceWithBrains,
 } from '@bolt/shared';
 import type { MatchPhaseMessage } from '@bolt/shared';
 import type { DriveRoomTuning } from '../config.js';
@@ -46,19 +43,20 @@ import {
   resolveCar,
   resolveCourse,
 } from './driveJoin.js';
-import { InputPacer } from './inputPacer.js';
-import { DriveState, writeDriveState, writeRaceState } from './schema.js';
+import { RaceHost } from './raceHost.js';
+import { DriveState } from './schema.js';
 
 /**
- * The Milestone C race room: one driver against a sparring rival on one track. The server owns
- * time, physics, combat and checkpoint progress; the client only ever submits control samples
- * (steering, brake, fire and utility buttons). The rival is driven by a brain that sends the
+ * The race against the computer: one driver against the AI on one track. The server owns time,
+ * physics, combat and checkpoint progress; the client only ever submits control samples
+ * (steering, brake, fire and utility buttons). The rival is driven by a brain that makes the
  * same kind of sample.
  *
- * The whole race advances once per control sample of its one human driver (see InputPacer):
- * the race is a pure function of that sample sequence and the seed, which is what lets the
- * client predict its own car exactly and lets the offline link reproduce a race bit for bit.
- * A room with two human drivers (Milestone E) will step on room ticks instead.
+ * The race advances on the room's own 30 Hz clock through `RaceHost`, exactly as a race between
+ * two people does in the match room (Milestone E): the driver's samples go through a jitter
+ * buffer that hands the race one control per tick. The race starts on the grid only once the
+ * driver's first samples are in, so a phone still downloading the track does not lose its
+ * countdown.
  */
 
 export type DriveRoomDeps = {
@@ -114,12 +112,9 @@ function trackRuntimeFor(def: TrackDefinition): TrackRuntime {
 }
 
 /**
- * Everything the room tracks for one driver. Kept apart from the room so the two-player
- * rooms planned for Milestone E can hold one of these per seat.
+ * Everything the room tracks for one driver, apart from the race itself.
  */
 class DrivePlayer {
-  /** Queued control samples and the policy for consuming them, one tick at a time. */
-  readonly inputs = new InputPacer(MAX_QUEUED_INPUTS);
   connected = true;
   /** Set when the server itself ends the connection, so no reconnection window is offered. */
   removed = false;
@@ -129,20 +124,18 @@ class DrivePlayer {
   malformedMessages = 0;
   windowHadMalformed = false;
   lastResetTick = -RESET_COOLDOWN_TICKS;
-  lastPhase: MatchPhase;
+  /** Room tick of the last input packet, for the idle timeout. */
+  lastInputTick = 0;
   /** Events that happened while the connection was down. */
   readonly heldEvents: RaceEvent[] = [];
-  /** One control slot per car; only the player's is ever filled. */
-  readonly controls: Array<ControlInput | undefined> = [];
+  host!: RaceHost;
 
   constructor(
     readonly guestId: string,
     readonly sparring: SparringRace,
     /** Set when the room hosts a showcase scenario instead of a race. */
     readonly scenario: ScenarioRace | null = null,
-  ) {
-    this.lastPhase = this.session.phase;
-  }
+  ) {}
 
   /** The player's own car within the race. Looked up each time: a reset rebuilds the grid. */
   get session(): DriveSession {
@@ -258,6 +251,9 @@ export function createDriveRoom(deps: DriveRoomDeps): new () => Room<DriveState>
       this.onMessage(ClientMessage.RESET_CAR, (client, message: unknown) =>
         this.onResetCar(client, message),
       );
+      this.onMessage(ClientMessage.NEUTRAL, (client, message: unknown) =>
+        this.onNeutral(client, message),
+      );
       this.onMessage(ClientMessage.READY, (client) => void this.admit(client));
       this.onMessage(ClientMessage.LEAVE, (client) => this.onLeaveRequest(client));
       // Without a catch-all Colyseus closes the socket on the first unknown type. Counting it
@@ -325,11 +321,13 @@ export function createDriveRoom(deps: DriveRoomDeps): new () => Room<DriveState>
       }
       if (!sparring) throw joinError('BAD_REQUEST', 'That rival is not available.');
       const player = new DrivePlayer(auth.guestId, sparring, scenario);
+      player.lastInputTick = this.roomTick;
+      player.host = this.createHost(client.sessionId, player, 1);
       this.players.set(client.sessionId, player);
       this.state.buildHash = sparring.race.cars[PLAYER_CAR]!.buildHash;
       // The opening phase reaches the client with its first state snapshot. MATCH_PHASE is
       // only sent for later changes, since nothing can be listening for it this early.
-      this.writeState(player);
+      player.host.writeViews();
       this.log.info('player_joined', {
         guestId: auth.guestId,
         sessionId: client.sessionId,
@@ -341,13 +339,47 @@ export function createDriveRoom(deps: DriveRoomDeps): new () => Room<DriveState>
       });
     }
 
+    /** The race host for this driver's race: the person on car 0, the AI (or script) on car 1. */
+    private createHost(sessionId: string, player: DrivePlayer, raceId: number): RaceHost {
+      const script = player.scenario?.brains[PLAYER_CAR];
+      const host = new RaceHost({
+        race: player.sparring.race,
+        raceId,
+        brains: player.sparring.brains,
+        policy: tuning.inputPolicy,
+        drivers: [
+          {
+            carIndex: PLAYER_CAR,
+            view: this.state,
+            deliver: (event) => this.forward(sessionId, player, event),
+          },
+        ],
+        // In a scenario the car keeps to its scripted lane and speed; the buttons are the
+        // client's own, so every fire command still crosses the wire and is judged here.
+        ...(script
+          ? {
+              transform: (index: number, control: ControlInput) => {
+                const driven = script.control(player.sparring.race, index);
+                driven.fire = control.fire ?? 0;
+                driven.use = control.use ?? 0;
+                driven.target = control.target ?? 0;
+                return driven;
+              },
+            }
+          : {}),
+      });
+      // The race waits on the grid for the driver's first samples.
+      host.awaitingDrivers = true;
+      return host;
+    }
+
     override async onLeave(client: Client<unknown, DriveAuth>, consented?: boolean): Promise<void> {
       const player = this.players.get(client.sessionId);
       if (!player) return;
       player.connected = false;
-      // Whatever was queued or held belongs to a connection that no longer exists. The car
-      // coasts on neutral input until its driver is back.
-      player.inputs.clear();
+      // The car coasts on neutral input until its driver is back.
+      const seat = player.host.seat(PLAYER_CAR);
+      if (seat) seat.connected = false;
 
       if (consented || player.removed) {
         this.players.delete(client.sessionId);
@@ -362,7 +394,13 @@ export function createDriveRoom(deps: DriveRoomDeps): new () => Room<DriveState>
       try {
         const back = await this.allowReconnection(client, tuning.reconnectSeconds);
         player.connected = true;
-        player.inputs.touch();
+        player.lastInputTick = this.roomTick;
+        const again = player.host.seat(PLAYER_CAR);
+        if (again) {
+          // Samples queued for the old connection are gone; the stream starts again.
+          again.input.restartStream();
+          again.connected = true;
+        }
         // What happened while the line was down arrives now, once and in order.
         for (const event of player.heldEvents) back.send(ServerMessage.RACE_EVENT, event);
         player.heldEvents.length = 0;
@@ -415,9 +453,10 @@ export function createDriveRoom(deps: DriveRoomDeps): new () => Room<DriveState>
       this.roomTick += 1;
       const windowEnded = this.roomTick % SIM_HZ === 0;
       for (const [sessionId, player] of this.players) {
-        this.stepPlayer(sessionId, player);
+        const { phase, changed } = player.host.step();
+        if (changed) this.announcePhase(phase, player);
         if (windowEnded) this.closeMessageWindow(sessionId, player);
-        if (player.connected && player.inputs.ticksSinceInput > idleTicks) {
+        if (player.connected && this.roomTick - player.lastInputTick > idleTicks) {
           this.log.info('room_idle_timeout', { sessionId });
           this.close();
           return;
@@ -425,56 +464,25 @@ export function createDriveRoom(deps: DriveRoomDeps): new () => Room<DriveState>
       }
     }
 
-    private stepPlayer(sessionId: string, player: DrivePlayer): void {
-      const { race, brains } = player.sparring;
-      // The pacer runs the race once per sample, in order. On a tick with no sample the race
-      // may wait briefly and catch up afterwards; see InputPacer for why.
-      player.inputs.tick(player.connected, (control) => {
-        player.controls[PLAYER_CAR] = control;
-        const script = player.scenario?.brains[PLAYER_CAR];
-        if (script) {
-          // In a scenario the car keeps to its scripted lane and speed; the buttons are the
-          // client's own, so every fire command still crosses the wire and is judged here.
-          const driven = script.control(race, PLAYER_CAR);
-          driven.fire = control.fire ?? 0;
-          driven.use = control.use ?? 0;
-          driven.target = control.target ?? 0;
-          player.controls[PLAYER_CAR] = driven;
-        }
-        stepRaceWithBrains(race, player.controls, brains);
-        if (race.events.length > 0) this.forward(sessionId, player, race.events);
-        if (player.session.phase !== player.lastPhase) this.announcePhase(player);
-      });
-      this.writeState(player);
-    }
-
-    private writeState(player: DrivePlayer): void {
-      writeDriveState(this.state, player.session, player.inputs.ackSequence);
-      writeRaceState(this.state, player.sparring.race, PLAYER_CAR);
-    }
-
     /**
-     * Sends the step's events to the driver, in order. What only the other driver should know
-     * (its refused commands, its warnings) and its checkpoint crossings are left out. While the
-     * connection is down the events are held and delivered on reconnection.
+     * Sends one of the race's events to the driver. What only the other driver should know (its
+     * refused commands, its warnings, its checkpoint crossings, its hidden traps) has already
+     * been left out by the race host. While the connection is down the events are held and
+     * delivered on reconnection.
      */
-    private forward(sessionId: string, player: DrivePlayer, events: readonly RaceEvent[]): void {
+    private forward(sessionId: string, player: DrivePlayer, event: RaceEvent): void {
       const client = player.connected ? this.clients.getById(sessionId) : undefined;
-      for (const event of events) {
-        if (!eventVisibleTo(event, PLAYER_CAR)) continue;
-        if (client) client.send(ServerMessage.RACE_EVENT, event);
-        else if (player.heldEvents.length < MAX_HELD_EVENTS) player.heldEvents.push(event);
-      }
+      if (client) client.send(ServerMessage.RACE_EVENT, event);
+      else if (player.heldEvents.length < MAX_HELD_EVENTS) player.heldEvents.push(event);
     }
 
-    private announcePhase(player: DrivePlayer): void {
+    private announcePhase(phase: MatchPhase, player: DrivePlayer): void {
       const session = player.session;
-      player.lastPhase = session.phase;
       this.broadcast(ServerMessage.MATCH_PHASE, {
-        phase: session.phase,
+        phase,
         tick: session.tick,
       } satisfies MatchPhaseMessage);
-      this.log.info('phase_changed', { phase: session.phase, tick: session.tick });
+      this.log.info('phase_changed', { phase, tick: session.tick });
     }
 
     // --- Messages -----------------------------------------------------------------------------
@@ -554,8 +562,10 @@ export function createDriveRoom(deps: DriveRoomDeps): new () => Room<DriveState>
         this.strike(client, player);
         return;
       }
-      // Duplicates and stale sequences are normal traffic and are skipped without penalty.
-      player.inputs.accept(parsed.data.inputs);
+      // Duplicates, stale sequences and packets of a race that was reset are normal traffic
+      // and are skipped without penalty.
+      player.lastInputTick = this.roomTick;
+      player.host.accept(PLAYER_CAR, parsed.data.race, parsed.data.inputs);
     }
 
     private onResetCar(client: Client, message: unknown): void {
@@ -567,7 +577,7 @@ export function createDriveRoom(deps: DriveRoomDeps): new () => Room<DriveState>
       }
       if (this.roomTick - player.lastResetTick < RESET_COOLDOWN_TICKS) return;
       player.lastResetTick = this.roomTick;
-      player.inputs.touch();
+      player.lastInputTick = this.roomTick;
 
       // The whole race goes back to the grid: both cars repaired and reloaded, the rival's
       // choices replayed from the same seed.
@@ -577,12 +587,26 @@ export function createDriveRoom(deps: DriveRoomDeps): new () => Room<DriveState>
         for (const brain of player.scenario.brains) brain.reset();
         applyScenario(player.sparring.race, player.scenario.def);
       }
-      // Samples queued before the reset describe a car that is no longer there. The sequence
-      // high-water mark is kept so none of them can be replayed afterwards.
-      player.inputs.clear();
-      if (player.session.phase !== player.lastPhase) this.announcePhase(player);
-      this.writeState(player);
+      // A new race with a new number: samples of the old one are refused by it, and the
+      // client numbers its samples afresh. It waits on the grid for the first of them.
+      const previous = player.host;
+      player.host = this.createHost(client.sessionId, player, previous.raceId + 1);
+      // The client keeps numbering on; whatever it sent before the reset stays dead.
+      const before = previous.seat(PLAYER_CAR)?.input.highestSequence ?? -1;
+      player.host.seat(PLAYER_CAR)?.input.refuseBelow(before + 1);
+      this.announcePhase(player.sparring.race.phase, player);
+      player.host.writeViews();
       this.log.info('car_reset', { sessionId: client.sessionId });
+    }
+
+    private onNeutral(client: Client, message: unknown): void {
+      const player = this.admit(client);
+      if (!player) return;
+      if (message !== undefined && message !== null) {
+        this.strike(client, player);
+        return;
+      }
+      player.host.markAway(PLAYER_CAR);
     }
 
     private onLeaveRequest(client: Client): void {

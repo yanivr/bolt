@@ -226,11 +226,13 @@ that prediction only through numbers the snapshot carries:
   delay each way on the wire and the tow coming on, building, fading and going off
   (`tests/unit/towPrediction.test.ts`), against the same race with the tow switched off over
   the same ticks (about 1,460 client ticks, the tow taking hold, building, fading and letting
-  go): at 100 ms and at 200 ms each way the towed car is corrected exactly as often and by
+  go): at 100 ms and at 167 ms each way the towed car is corrected exactly as often and by
   exactly as much as the car without the tow, which is never (not one reconciliation moved the
-  car by any distance at all). At 400 ms each way, where the client is more than one period
-  ahead of its last snapshot, the tow adds 18 corrections, the largest 0.055 px (0 without it).
-  A client that ignored the three numbers would be corrected 469 times, by up to 0.15 px.
+  car by any distance at all). Since Milestone E the room also holds three ticks of input
+  delay, so at 200 ms each way the client is a whole period ahead of its acknowledgement and
+  the tow moves the car by at most 0.0003 px (no correction over 0.01 px). At 400 ms each way
+  the tow adds 18 corrections, the largest 0.076 px (0 without it). A client that ignored the
+  three numbers would be corrected again and again (`towPrediction.test.ts`).
 
 Not predicted, and so shown when the server says: firing (a shot appears with its `shot`
 event; there is no client-side muzzle flash ahead of the server), hits, damage, statuses,
@@ -238,10 +240,13 @@ hazards, the rival's motion (interpolated between snapshots), repairs. Impulses 
 viewer's own car arrive as a correction. Part 2 may want a predicted muzzle flash for fixed
 guns; the data to do it honestly is `modules[i].state` and `readyTick`.
 
-In this milestone the room advances its race once per input sample of its one human driver,
-so the offline link and the server run the same race tick for tick (asserted for all 33
-scenarios through a real room). A room with two human drivers must step on its own clock
-instead; that is Milestone E, and the seam is `InputPacer`.
+Until Milestone E the room advanced its race once per input sample of its one human driver.
+Since Milestone E part 1 every room (solo and friend) steps on its own 30 Hz clock and takes
+one input sample per driver per tick from a `TickInputBuffer`: a missing sample repeats the
+driver's last control, a late one is dropped (docs/MULTIPLAYER.md). `InputPacer` is gone. The
+offline link and the server still run the same race tick for tick when every sample arrives in
+time; the scenario tests feed the room on a real-time clock to keep that so
+(`tests/helpers/lockstep.ts`).
 
 ## Events
 
@@ -547,3 +552,31 @@ lane and speed to hold, and timed button presses.
 | `weapon_air` | Air Cannon | The pale cone, the pressure wave, the target thrown forward and aside. |
 | `weapon_boomerang` | Steel Boomerang | The spinning blade outbound, a slash, the turn, a second slash on the way back and the catch. |
 | `weapon_mortar` | Arc Mortar | Lock, the reticle counting down for 1.4 s, the heavy burst and its falloff from 25 at the centre to 8 at the edge. |
+
+## Protocol changes in Milestone E part 1
+
+`PROTOCOL_VERSION` is 9 (was 8). Older clients are refused with `VERSION_MISMATCH`.
+
+- `PLAYER_INPUT` may carry `race`, the room state's `raceId`. Samples stamped with another race
+  (a reset or a rematch started a new numbering) are dropped. The solo room accepts unstamped
+  packets for the current race.
+- `NEUTRAL` (no payload): the page was hidden; the room treats the car as away at once.
+- `RaceResult.reason` may be `forfeit`, with `forfeit: { car, cause: 'left' | 'disconnected' }`;
+  the `result` event's reason likewise. A forfeit is made by `concedeRace`
+  (`packages/shared/src/forfeit.ts`), which emits the forfeiting car's `finish` and the
+  `result` and clears the road, as a finish would.
+- The drive state gains `you` (the viewer's car index: a friend race puts a player on either
+  side), `raceId`, `held` (the race is on the grid waiting for both players to load; the
+  client's prediction clock stops), and `net` (the viewer's own input buffer: `delay`,
+  `depth`, `missing`, `late`, `grown`, `shrunk`, `reanchors`, `absent`).
+- `rivalBlueprint` in a friend race is the rival's blueprint with its name and creation time
+  replaced (`publicBlueprint`).
+- Hazards the other driver laid are not in a viewer's `hazards` until the simulation has
+  revealed them to that viewer, and their `placed`, `armed` and `expired` events are not sent
+  to that viewer (`raceEventVisibleTo`). This now applies to the AI rival too.
+- New error codes: `INVITE_EXPIRED` (404) and `LOBBY_FULL` (409).
+- The friend room's own messages (`SELECT_TRACK`, `LOCK_TRACK`, `ROOM_READY`, `SUBMIT_BUILD`,
+  `READY`, `REMATCH_VOTE`, `PROFILE`, `REOPEN`, `PING`, `LEAVE` from the client; `WELCOME`,
+  `MATCH_PHASE`, `BUILD_RESULT`, `BUILD_LOCKED`, `RACE_EVENT`, `RESULTS`, `PONG`, `ERROR` from
+  the server) are defined in `packages/shared/src/match.ts` and described in
+  docs/MULTIPLAYER.md.

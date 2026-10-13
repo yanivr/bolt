@@ -8,6 +8,7 @@ import {
   SIM_DT,
   STATUS_COUNT,
   countdownSeconds,
+  hazardVisibleTo,
   raceTimeMs,
   raceTimeOf,
   rivalTracked,
@@ -200,6 +201,31 @@ export const RaceInfoState = schema(
 export type RaceInfoState = SchemaType<typeof RaceInfoState>;
 
 /**
+ * How this driver's input is reaching the room (`TickInputBuffer`), for the connection
+ * indicator and the tests. Private to the driver, like everything in its view.
+ */
+export const NetState = schema(
+  {
+    /** Ticks of input delay the room is holding for this driver. */
+    delay: uint8(),
+    /** Samples that were waiting at the last tick. */
+    depth: uint8(),
+    /** Ticks that ran on a repeated control because the sample was not there yet. */
+    missing: uint16(),
+    /** Samples that came after their tick and were dropped. */
+    late: uint16(),
+    /** Times the delay grew and shrank by a tick, and times the stream was started again. */
+    grown: uint8(),
+    shrunk: uint8(),
+    reanchors: uint8(),
+    /** The room is driving this car because its driver is gone or silent. */
+    absent: bool(),
+  },
+  'NetState',
+);
+export type NetState = SchemaType<typeof NetState>;
+
+/**
  * Synchronized state of a drive room: the player's own car flat at the root, then the race
  * around it. Field names mirror `CarSnapshot` and `RaceSnapshot` in the shared protocol (the
  * car's `motion`, `progress`, `effects` and `combat` members are flattened here) so the client
@@ -216,6 +242,20 @@ export type RaceInfoState = SchemaType<typeof RaceInfoState>;
  */
 export const DriveState = schema(
   {
+    /** Index of this driver's car on the grid (0 or 1). The rival is the other one. */
+    you: uint8(),
+    /**
+     * Which race of the room this is. A reset or a rematch is a new race; input packets carry
+     * this number and a client starts its sample numbering again with it.
+     */
+    raceId: uint16(),
+    /**
+     * True while the room is holding the race on the grid: waiting for this driver's first
+     * samples (drive room) or for both players to load (match room). A client does not run its
+     * prediction clock while it is set.
+     */
+    held: bool(true),
+    net: NetState,
     tick: uint32(),
     phase: { type: 'string', default: 'COUNTDOWN' },
     countdown: uint8(),
@@ -401,7 +441,13 @@ function componentValues(car: CombatCar): number[] {
  * seen from outside, everything in flight and on the road, and the standings. Allocates only
  * when something new appears.
  */
-export function writeRaceState(state: DriveState, race: RaceSession, viewer: number): void {
+export function writeRaceState(
+  state: DriveState,
+  race: RaceSession,
+  viewer: number,
+  /** What this viewer is shown of the other car's blueprint; by default its canonical JSON. */
+  rivalBlueprintJson?: string,
+): void {
   const tick = race.tick;
   const me = race.cars[viewer]!;
   const rivalIndex = race.cars.length > 1 ? (viewer === 0 ? 1 : 0) : viewer;
@@ -469,7 +515,8 @@ export function writeRaceState(state: DriveState, race: RaceSession, viewer: num
   rival.ko = other.ko;
   rival.tow = Math.round(towShareOf(other) * 100);
   if (rival.buildHash !== other.buildHash) rival.buildHash = other.buildHash;
-  if (state.rivalBlueprint !== other.blueprintJson) state.rivalBlueprint = other.blueprintJson;
+  const rivalJson = rivalBlueprintJson ?? other.blueprintJson;
+  if (state.rivalBlueprint !== rivalJson) state.rivalBlueprint = rivalJson;
 
   // --- Projectiles: add the new, rewrite the ones that steer, drop the gone ----------------------
   const projectiles = state.projectiles;
@@ -496,13 +543,14 @@ export function writeRaceState(state: DriveState, race: RaceSession, viewer: num
       target.vy = source.syncVy / SIM_DT;
     }
   }
-  if (projectiles.size !== liveProjectiles) pruneMap(projectiles, race.projectiles);
+  if (projectiles.size !== liveProjectiles) pruneMap(projectiles, race.projectiles, -1);
 
   // --- Hazards -----------------------------------------------------------------------------------
   const hazards = state.hazards;
   let liveHazards = 0;
   for (const source of race.hazards) {
-    if (!source.active) continue;
+    // A trap the other car laid is not in this driver's state at all until it is revealed.
+    if (!source.active || !hazardVisibleTo(source, viewer)) continue;
     liveHazards++;
     const key = String(source.id);
     let target = hazards.get(key);
@@ -526,7 +574,7 @@ export function writeRaceState(state: DriveState, race: RaceSession, viewer: num
     if (target.endTick !== end) target.endTick = end;
     target.revealed = ((source.revealMask >> viewer) & 1) === 1;
   }
-  if (hazards.size !== liveHazards) pruneMap(hazards, race.hazards);
+  if (hazards.size !== liveHazards) pruneMap(hazards, race.hazards, viewer);
 
   standingOf(race, viewer, standing);
   info.position = standing.position;
@@ -551,14 +599,19 @@ const gone: string[] = [];
 
 function pruneMap(
   map: MapSchema<{ id: number }>,
-  live: ReadonlyArray<{ id: number; active: boolean }>,
+  live: ReadonlyArray<{ id: number; active: boolean; owner?: number; revealMask?: number }>,
+  viewer: number,
 ): void {
   gone.length = 0;
   map.forEach((value, key) => {
     let found = false;
     for (let i = 0; i < live.length; i++) {
       const item = live[i]!;
-      if (item.active && item.id === value.id) {
+      const visible =
+        viewer < 0 ||
+        item.revealMask === undefined ||
+        hazardVisibleTo({ owner: item.owner ?? -1, revealMask: item.revealMask }, viewer);
+      if (item.active && item.id === value.id && visible) {
         found = true;
         break;
       }

@@ -21,6 +21,9 @@ import { hudLive, setHudFrozen, startHudFeed, useCombat } from '../hud/hudStore.
 import type { HudLoadout } from '../hud/model.js';
 import { buildHudLoadout, formatRaceTime } from '../hud/model.js';
 import { DriveInput } from '../input/driveInput.js';
+import { startMatchDrive } from '../game/startMatchDrive.js';
+import { activeMatch, useMatch } from '../network/matchClient.js';
+import { MatchResultsActions, MatchRaceNotices } from './match/MatchRace.js';
 
 type LoadState =
   | { kind: 'loading'; stage: 'connecting' | 'track'; progress: number }
@@ -152,6 +155,9 @@ export function RaceScreen() {
   const linkStatus = useHud((s) => s.linkStatus);
   const linkMode = useHud((s) => s.linkMode);
   const portrait = usePortrait();
+  // Race a Friend: the race comes from the match room, and a rematch is a new race in it.
+  const inMatch = useMatch((s) => s.active);
+  const matchRaceId = useMatch((s) => s.raceId);
 
   useEffect(() => {
     const host = canvasHost.current;
@@ -169,13 +175,18 @@ export function RaceScreen() {
 
     void (async () => {
       try {
-        // The course: a showcase scenario brings its own; otherwise the one chosen on the
-        // preview, settled onto one this build may offer.
+        // The course: a showcase scenario brings its own; a friend match the one its host
+        // locked; otherwise the one chosen on the preview, settled onto one this build offers.
         const options = driveOptions();
         const scenario = options.scenarioId ? getScenario(options.scenarioId) : undefined;
+        const match = activeMatch();
         let course: Course;
         if (scenario) course = { trackId: scenario.trackId, presetId: scenario.weatherPresetId };
-        else {
+        else if (match) {
+          await bootAssets();
+          const state = useMatch.getState();
+          course = { trackId: state.trackId, presetId: state.weatherPresetId };
+        } else {
           // What may be offered is known once the art index has loaded.
           await bootAssets();
           const c = settleCourse(useApp.getState().course, courseOptions());
@@ -183,7 +194,9 @@ export function RaceScreen() {
         }
         const [m, setup] = await Promise.all([
           bootAssets().then(() => courseAssets(course)),
-          startDrive(course.trackId, course.presetId, useApp.getState().blueprint, options),
+          match
+            ? startMatchDrive(match)
+            : startDrive(course.trackId, course.presetId, useApp.getState().blueprint, options),
         ]);
         if ('error' in setup) {
           if (!cancelled) setLoad({ kind: 'error', reason: setup.error });
@@ -244,7 +257,12 @@ export function RaceScreen() {
           onLoadProgress: (progress) =>
             !cancelled && setLoad({ kind: 'loading', stage: 'track', progress }),
           onLoadError: () => !cancelled && setLoad({ kind: 'error', reason: 'assets' }),
-          onReady: () => !cancelled && setLoad({ kind: 'ready' }),
+          onReady: () => {
+            if (cancelled) return;
+            setLoad({ kind: 'ready' });
+            // The room starts the countdown when both players have the race on screen.
+            match?.roomReady();
+          },
         });
       } catch {
         if (!cancelled) setLoad({ kind: 'error', reason: 'assets' });
@@ -264,7 +282,18 @@ export function RaceScreen() {
       audio.dispose();
       setAudioRaceContext(null);
     };
-  }, [attempt]);
+  }, [attempt, matchRaceId]);
+
+  // Section 5.10: a page going to the background tells the room at once, so the car is driven
+  // safely rather than on whatever the last sample held.
+  useEffect(() => {
+    if (!inMatch) return;
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') activeMatch()?.away();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [inMatch]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -297,7 +326,11 @@ export function RaceScreen() {
     return () => window.clearTimeout(timer);
   }, [finished, result, summary]);
   const showResults = summary !== null && (result !== null || preview);
-  const goHome = useCallback(() => setScreen('home'), [setScreen]);
+  const goHome = useCallback(() => {
+    // Leaving a friend match from here gives up the seat (a forfeit if the race is on).
+    activeMatch()?.leave();
+    setScreen('home');
+  }, [setScreen]);
   // Back to the garage with the car that just raced, on a fresh build clock.
   const changeBuild = useCallback(() => setScreen('garage'), [setScreen]);
 
@@ -365,7 +398,9 @@ export function RaceScreen() {
         </div>
       )}
 
-      {load.kind === 'ready' && linkStatus !== 'connected' && (
+      {load.kind === 'ready' && inMatch && <MatchRaceNotices />}
+
+      {load.kind === 'ready' && linkStatus !== 'connected' && !inMatch && (
         <div className="overlay" role="alert">
           <div className="panel dialog">
             <p>
@@ -398,6 +433,7 @@ export function RaceScreen() {
           onRaceAgain={raceAgain}
           onChangeBuild={changeBuild}
           onHome={goHome}
+          {...(inMatch ? { actions: <MatchResultsActions onHome={goHome} /> } : {})}
         />
       )}
 
@@ -408,9 +444,11 @@ export function RaceScreen() {
           notice={<PauseNotice online={linkMode === 'online'} onTimeout={resume} />}
           actions={
             <>
-              <button className="btn" onClick={raceAgain}>
-                {STRINGS.race.raceAgain}
-              </button>
+              {!inMatch && (
+                <button className="btn" onClick={raceAgain}>
+                  {STRINGS.race.raceAgain}
+                </button>
+              )}
               <button className="btn btn-danger" onClick={() => setConfirmLeave(true)}>
                 {STRINGS.race.leave}
               </button>

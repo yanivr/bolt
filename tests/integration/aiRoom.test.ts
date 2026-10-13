@@ -22,17 +22,16 @@ import type {
 } from '@bolt/shared';
 import {
   AiBrain,
-  ClientMessage,
-  MAX_INPUTS_PER_PACKET,
   PROTOCOL_VERSION,
   ROOM_DRIVE,
   ServerMessage,
   buildTrack,
-  eventVisibleTo,
+  raceEventVisibleTo,
   stepRaceWithBrains,
 } from '@bolt/shared';
 import type { DriveState } from '../../apps/server/src/rooms/schema.js';
 import type { TestServer } from '../helpers/server.js';
+import { LOCKSTEP_INPUT_POLICY, feedLockstep } from '../helpers/lockstep.js';
 import { sleep, startTestServer, waitFor } from '../helpers/server.js';
 
 /**
@@ -45,13 +44,14 @@ import { sleep, startTestServer, waitFor } from '../helpers/server.js';
  * difficulty reach the room from the join.
  */
 
-const AHEAD = 6;
 let ctx: TestServer;
 let client: Client;
 let guest: GuestSessionResponse;
 
 beforeAll(async () => {
-  ctx = await startTestServer({ drive: { reconnectSeconds: 10 } });
+  ctx = await startTestServer({
+    drive: { reconnectSeconds: 10, inputPolicy: LOCKSTEP_INPUT_POLICY },
+  });
   client = new Client(ctx.wsUrl);
   guest = (await (
     await fetch(`${ctx.url}/api/v1/guest`, { method: 'POST' })
@@ -97,7 +97,8 @@ function mirror(
     });
     human[0] = own;
     stepRaceWithBrains(ai.race, human, ai.brains);
-    for (const event of ai.race.events) if (eventVisibleTo(event, 0)) events.push({ ...event });
+    for (const event of ai.race.events)
+      if (raceEventVisibleTo(ai.race, event, 0)) events.push({ ...event });
   }
   return { samples, events, rival: ai.rival.blueprint, ai };
 }
@@ -110,28 +111,6 @@ async function join(options: Partial<DriveJoinOptions>): Promise<DriveRoomClient
   });
   await waitFor(() => typeof room.state?.tick === 'number', 3000, 'the first state snapshot');
   return room;
-}
-
-/** Sends samples at the pace the room consumes them; false if the lockstep broke. */
-async function feed(room: DriveRoomClient, samples: readonly InputSample[]): Promise<boolean> {
-  const first = samples[0]!.sequence;
-  const last = samples[samples.length - 1]!.sequence;
-  const tickAtFirst = room.state.tick - (room.state.ackSequence - first + 1);
-  let sent = 0;
-  const deadline = Date.now() + samples.length * 34 + 8000;
-  for (;;) {
-    const ack = room.state.ackSequence;
-    if (ack >= first && room.state.tick - tickAtFirst > ack - first + 1) return false;
-    if (ack >= last) return true;
-    const limit = Math.min(samples.length, ack - first + 1 + AHEAD);
-    if (sent < limit) {
-      const batch = samples.slice(sent, Math.min(limit, sent + MAX_INPUTS_PER_PACKET));
-      room.send(ClientMessage.PLAYER_INPUT, { inputs: batch });
-      sent += batch.length;
-    }
-    if (Date.now() > deadline) throw new Error('the room stopped consuming input');
-    await sleep(8);
-  }
 }
 
 describe('the AI rival through a real room', () => {
@@ -160,7 +139,7 @@ describe('the AI rival through a real room', () => {
         ServerMessage.ERROR,
       ])
         room.onMessage(type, () => undefined);
-      const inStep = await feed(room, expected.samples);
+      const inStep = await feedLockstep(room, expected.samples);
       await sleep(150);
       rivalJson = room.state.rivalBlueprint;
       await room.leave();

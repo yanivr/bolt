@@ -2,9 +2,11 @@ import { DEFAULT_LOADOUT } from '@bolt/content';
 import type { BlueprintIssue, Catalog, RemovedPart, VehicleBlueprint } from '@bolt/shared';
 import {
   MAX_BLUEPRINT_NAME_LENGTH,
+  blueprintRecordIdSchema,
   blueprintSchema,
   buildHash,
   canonicalizeBlueprint,
+  isCanonicalCarCode,
   own,
   repairBlueprint,
   sanitizeBlueprintName,
@@ -12,8 +14,10 @@ import {
 } from '@bolt/shared';
 
 /**
- * My Blueprints, kept in local storage until the server stores them (Milestone E). Short
- * share codes need the server and are not here.
+ * My Blueprints, kept in local storage: the library works offline and never depends on the
+ * server to keep a car. A car that has been shared carries its server code (Section 5.12); the
+ * code names the exact build that was shared, so editing the car (rename, repair) drops it and
+ * the next share issues a new one. The old code keeps naming the old build.
  *
  * Everything read back is untrusted: an older build wrote it, or the player edited it. Each
  * entry goes through the strict blueprint schema and then the validator. An entry that is
@@ -32,7 +36,11 @@ export type SavedBlueprint = {
   blueprint: VehicleBlueprint;
   /** ISO 8601. */
   savedAt: string;
+  /** The server code issued for this exact build, and the server record's id for deleting it. */
+  share?: SavedShare;
 };
+
+export type SavedShare = { code: string; id: string };
 
 export type LibraryEntry = SavedBlueprint & {
   legal: boolean;
@@ -77,11 +85,12 @@ export function parseLibrary(raw: string | null, catalog: Catalog): LibraryEntry
   for (const item of stored.items as unknown[]) {
     if (entries.length >= MAX_SAVED_BLUEPRINTS) break;
     if (typeof item !== 'object' || item === null) continue;
-    const { id, blueprint, savedAt } = item as Record<string, unknown>;
+    const { id, blueprint, savedAt, share } = item as Record<string, unknown>;
     if (typeof id !== 'string' || !ID_PATTERN.test(id) || seen.has(id)) continue;
     const shaped = blueprintSchema.safeParse(blueprint);
     if (!shaped.success) continue;
     seen.add(id);
+    const shared = readShare(share);
     entries.push(
       entry(
         {
@@ -91,12 +100,21 @@ export function parseLibrary(raw: string | null, catalog: Catalog): LibraryEntry
             typeof savedAt === 'string' && TIME_PATTERN.test(savedAt)
               ? savedAt
               : shaped.data.createdAt,
+          ...(shared ? { share: shared } : {}),
         },
         catalog,
       ),
     );
   }
   return entries;
+}
+
+/** A stored share, or nothing: a malformed one is dropped, never trusted. */
+function readShare(value: unknown): SavedShare | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const { code, id } = value as Record<string, unknown>;
+  if (!isCanonicalCarCode(code) || !blueprintRecordIdSchema.safeParse(id).success) return undefined;
+  return { code, id: id as string };
 }
 
 export function readLibrary(storage: LibraryStorage | null, catalog: Catalog): LibraryEntry[] {
@@ -111,10 +129,11 @@ export function readLibrary(storage: LibraryStorage | null, catalog: Catalog): L
 export function serializeLibrary(entries: readonly SavedBlueprint[]): string {
   const stored: StoredLibrary = {
     version: LIBRARY_VERSION,
-    items: entries.map(({ id, blueprint, savedAt }) => ({
+    items: entries.map(({ id, blueprint, savedAt, share }) => ({
       id,
       blueprint: canonicalizeBlueprint(blueprint),
       savedAt,
+      ...(share ? { share: { code: share.code, id: share.id } } : {}),
     })),
   };
   return JSON.stringify(stored);
@@ -202,6 +221,7 @@ export function duplicateBlueprint(
   const source = list[at];
   if (!source) return { ok: false, entries: list, reason: 'missing' };
   if (list.length >= MAX_SAVED_BLUEPRINTS) return { ok: false, entries: list, reason: 'full' };
+  // A copy is a new card with a new name: it has no code until it is shared itself.
   const copy = entry(
     {
       id: freshId(list, now.getTime()),
@@ -225,13 +245,46 @@ export function renameSaved(
   const source = list[at];
   if (!source) return { ok: false, entries: list, reason: 'missing' };
   const name = sanitizeBlueprintName(rawName, source.blueprint.name);
-  const renamed = entry({ ...source, blueprint: { ...source.blueprint, name } }, catalog);
+  // The code names the build as it was shared, name included; a renamed car shares anew.
+  const { share: _old, ...rest } = source;
+  const kept = name === source.blueprint.name ? source : rest;
+  const renamed = entry({ ...kept, blueprint: { ...source.blueprint, name } }, catalog);
   list[at] = renamed;
   return { ok: true, entries: list, entry: renamed };
 }
 
 export function deleteSaved(entries: readonly LibraryEntry[], id: string): LibraryEntry[] {
   return entries.filter((e) => e.id !== id);
+}
+
+/**
+ * Records the code the server issued for a card, when the card still holds the build that was
+ * shared (the player may have renamed it while the request was in flight).
+ */
+export function attachShare(
+  entries: readonly LibraryEntry[],
+  id: string,
+  share: SavedShare,
+  sharedHash: string,
+  sharedName: string,
+): LibraryChange {
+  const list = [...entries];
+  const at = list.findIndex((e) => e.id === id);
+  const source = list[at];
+  if (!source || source.buildHash !== sharedHash || source.blueprint.name !== sharedName)
+    return { ok: false, entries: list, reason: 'missing' };
+  const shared: LibraryEntry = { ...source, share: { code: share.code, id: share.id } };
+  list[at] = shared;
+  return { ok: true, entries: list, entry: shared };
+}
+
+/** Clears every card's code, for a guest that no longer exists on the server. */
+export function clearShares(entries: readonly LibraryEntry[]): LibraryEntry[] {
+  return entries.map((e) => {
+    if (!e.share) return e;
+    const { share: _gone, ...rest } = e;
+    return rest;
+  });
 }
 
 /** The frame a saved car is rebuilt on when its own chassis has left the catalog. */
@@ -269,7 +322,8 @@ export function repairSaved(
     fallbackChassisId: REPAIR_CHASSIS_ID,
   });
   if (!result.ok) return { ok: false, entries: list };
-  const repaired = entry({ ...source, blueprint: result.blueprint }, catalog);
+  const { share: _shared, ...unshared } = source;
+  const repaired = entry({ ...unshared, blueprint: result.blueprint }, catalog);
   list[at] = repaired;
   return {
     ok: true,

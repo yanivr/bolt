@@ -15,6 +15,8 @@ export default defineConfig({
     include: [
       'tests/unit/**/*.test.ts',
       'tests/integration/**/*.test.ts',
+      // Race a Friend under simulated network conditions (latency, jitter, loss, outages).
+      'tests/net/**/*.test.ts',
       // Handling, frame pacing and netcode benches with their acceptance thresholds.
       'tests/feel/**/*.test.ts',
       // Combat balance: every shipped build against every other, and the weapon bench.

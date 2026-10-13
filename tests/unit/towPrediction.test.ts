@@ -8,7 +8,6 @@ import {
 } from '@bolt/content';
 import type { CarSnapshot, InputSample, RivalSnapshot } from '@bolt/shared';
 import {
-  MAX_QUEUED_INPUTS,
   TOW,
   buildTrack,
   carSnapshot,
@@ -21,7 +20,7 @@ import {
   towGapSeconds,
 } from '@bolt/shared';
 import { describe, expect, it } from 'vitest';
-import { InputPacer } from '../../apps/server/src/rooms/inputPacer.js';
+import { PacedServer } from '../helpers/pacedServer.js';
 import { Predictor } from '../../apps/web/src/network/prediction.js';
 
 /**
@@ -63,7 +62,7 @@ function run({ delayTicks, tamper, seconds = 90, towOff = false, ticks }: Option
   predictor.setBuild(player.build, conditions);
   predictor.setRivalBody(race.cars[1]!.baseParams);
   const scratch = createDriverScratch();
-  const pacer = new InputPacer(MAX_QUEUED_INPUTS);
+  const pacer = new PacedServer();
   const wire: Array<{ at: number; sample: InputSample }> = [];
   const back: Array<{ at: number; snap: CarSnapshot; rival: RivalSnapshot; tick: number }> = [];
   const levels: number[] = [];
@@ -88,7 +87,7 @@ function run({ delayTicks, tamper, seconds = 90, towOff = false, ticks }: Option
     const { sample } = predictor.step(control);
     wire.push({ at: tick + delayTicks, sample });
     while (wire.length > 0 && wire[0]!.at <= tick) pacer.accept([wire.shift()!.sample]);
-    pacer.tick(true, (input) => {
+    pacer.tick((input) => {
       stepRaceWithBrains(race, [input], brains);
       for (const event of race.events) {
         if (event.type !== 'catchup' || event.car !== 0) continue;
@@ -151,8 +150,11 @@ describe('predicting the local car while the tow comes and goes', () => {
     expect(r.predictor.session.motion.x).toBeCloseTo(r.me.session.motion.x, -3);
   });
 
-  it('is still exact at 200 ms each way, which is as far ahead as a playable client runs', () => {
-    const r = run({ delayTicks: 6 });
+  it('is still exact while the client runs less than a decision period ahead of the room', () => {
+    // 167 ms each way plus the room's three-tick input delay: about 13 unacknowledged ticks,
+    // under the 15-tick period. (At 200 ms each way the delay takes it to the period itself;
+    // the comparison below measures that case.)
+    const r = run({ delayTicks: 5 });
     expect(r.engagedAt).toBeGreaterThan(0);
     expect(r.releasedAt).toBeGreaterThan(r.engagedAt);
     expect(r.maxPending).toBeGreaterThan(9);
@@ -195,9 +197,10 @@ describe('predicting the local car while the tow comes and goes', () => {
   it('corrects a trailing car under tow no more than the same car in the same race without the tow', () => {
     // The same rig twice: once as above, once with the race's tow switched off, over exactly
     // the same number of client ticks. Any correction the tow caused would show as a
-    // difference. Through 200 ms each way there is none in either; at 400 ms, more than a
-    // decision period ahead, the tow adds a few corrections of a fraction of a pixel.
-    for (const delayTicks of [3, 6, 12]) {
+    // difference. While the client is less than a decision period ahead (round trip plus the
+    // room's input delay) there is none in either; from a period ahead (200 ms each way with the
+    // default input delay, and 400 ms) the tow adds a few corrections of a fraction of a pixel.
+    for (const delayTicks of [3, 5, 6, 12]) {
       const on = run({ delayTicks });
       const off = run({ delayTicks, towOff: true, ticks: on.played });
       const label = `${Math.round((delayTicks * 1000) / 30)} ms each way`;
@@ -212,7 +215,7 @@ describe('predicting the local car while the tow comes and goes', () => {
       expect(on.me.session.progress.courseProgress, label).toBeGreaterThan(
         off.me.session.progress.courseProgress + 50,
       );
-      if (delayTicks <= 6) {
+      if (delayTicks <= 5) {
         expect(on.predictor.corrections, label).toBe(off.predictor.corrections);
         expect(on.jumpMax, label).toBeLessThanOrEqual(off.jumpMax + 1e-9);
         expect(on.jumpSum, label).toBeLessThanOrEqual(off.jumpSum + 1e-9);

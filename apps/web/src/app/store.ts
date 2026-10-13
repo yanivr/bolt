@@ -20,7 +20,18 @@ import type { LinkMode, LinkStatus } from '../network/link.js';
  * The flow of Section 1.3: Home, Track Preview, the timed garage, the race. My Blueprints is
  * reached from Home; inside the garage it opens as an overlay so the build clock keeps running.
  */
-export type Screen = 'boot' | 'home' | 'preview' | 'garage' | 'race' | 'blueprints';
+export type Screen =
+  | 'boot'
+  | 'home'
+  | 'preview'
+  | 'garage'
+  | 'race'
+  | 'blueprints'
+  /** The privacy page (Section 16), opened at `/privacy`; Settings shows it as an overlay. */
+  | 'privacy'
+  /** Race a Friend (Sections 3.2 and 5.4): the friend lobby, and Join with Code. */
+  | 'lobby'
+  | 'join';
 
 /** Tutorial milestones kept in local storage (Section 4). */
 export const MILESTONE_BUILT = 'built';

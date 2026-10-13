@@ -22,7 +22,6 @@ import type {
 } from '@bolt/shared';
 import {
   ClientMessage,
-  MAX_INPUTS_PER_PACKET,
   PROTOCOL_VERSION,
   ROOM_DRIVE,
   ServerMessage,
@@ -30,12 +29,13 @@ import {
   buildTrack,
   towGapSeconds,
   towShareOf,
-  eventVisibleTo,
+  raceEventVisibleTo,
   stepRaceWithBrains,
 } from '@bolt/shared';
 import type { DriveState } from '../../apps/server/src/rooms/schema.js';
 import { CONTROL_WEAPONS } from '../balance/harness.js';
 import type { TestServer } from '../helpers/server.js';
+import { LOCKSTEP_INPUT_POLICY, feedLockstep } from '../helpers/lockstep.js';
 import { sleep, startTestServer, waitFor } from '../helpers/server.js';
 
 /**
@@ -53,7 +53,6 @@ import { sleep, startTestServer, waitFor } from '../helpers/server.js';
 const TRACK_ID = 'city_01';
 const WEATHER_ID = 'city_clear_night';
 /** Samples kept queued ahead of the last acknowledged one. The server holds at most eight. */
-const AHEAD = 6;
 
 let ctx: TestServer;
 let client: Client;
@@ -61,7 +60,9 @@ let guest: GuestSessionResponse;
 const track: TrackRuntime = buildTrack(getTrack(TRACK_ID)!);
 
 beforeAll(async () => {
-  ctx = await startTestServer({ drive: { reconnectSeconds: 10 } });
+  ctx = await startTestServer({
+    drive: { reconnectSeconds: 10, inputPolicy: LOCKSTEP_INPUT_POLICY },
+  });
   client = new Client(ctx.wsUrl);
   guest = (await (
     await fetch(`${ctx.url}/api/v1/guest`, { method: 'POST' })
@@ -103,37 +104,6 @@ async function roomCount(): Promise<number> {
   return ((await (await fetch(`${ctx.url}/api/v1/health`)).json()) as HealthResponse).rooms;
 }
 
-/**
- * Sends samples at the pace the room consumes them. Returns false when the room ran a step no
- * sample stood for (this process stalled for longer than the room waits), in which case the
- * room and the mirror have seen different input and the comparison is void.
- */
-async function feed(
-  room: DriveRoomClient,
-  samples: readonly InputSample[],
-  strict = true,
-): Promise<boolean> {
-  const first = samples[0]!.sequence;
-  const last = samples[samples.length - 1]!.sequence;
-  const tickAtFirst = room.state.tick - (room.state.ackSequence - first + 1);
-  let sent = 0;
-  const deadline = Date.now() + samples.length * 34 + 8000;
-  for (;;) {
-    const ack = room.state.ackSequence;
-    // One step for each sample consumed, and no more.
-    if (strict && ack >= first && room.state.tick - tickAtFirst > ack - first + 1) return false;
-    if (ack >= last) return true;
-    const limit = Math.min(samples.length, ack - first + 1 + AHEAD);
-    if (sent < limit) {
-      const batch = samples.slice(sent, Math.min(limit, sent + MAX_INPUTS_PER_PACKET));
-      room.send(ClientMessage.PLAYER_INPUT, { inputs: batch });
-      sent += batch.length;
-    }
-    if (Date.now() > deadline) throw new Error('the room stopped consuming input');
-    await sleep(8);
-  }
-}
-
 type Mirror = {
   samples: InputSample[];
   /** What the room should send its driver, in order. */
@@ -170,7 +140,8 @@ function mirror(def: ScenarioDefinition, limitTicks = Infinity): Mirror {
     });
     human[0] = own;
     stepRaceWithBrains(race, human, rivalOnly);
-    for (const event of race.events) if (eventVisibleTo(event, 0)) events.push({ ...event });
+    for (const event of race.events)
+      if (raceEventVisibleTo(race, event, 0)) events.push({ ...event });
     tow.set(race.tick, {
       tow: towShareOf(race.cars[0]!),
       bonus: race.cars[0]!.session.effects.tow,
@@ -200,7 +171,7 @@ async function play(id: string): Promise<Played> {
       weatherPresetId: def.weatherPresetId,
     });
     collect(room, received);
-    const inStep = await feed(room, expected.samples);
+    const inStep = await feedLockstep(room, expected.samples);
     // The last events of the last step are on their way.
     await sleep(120);
     await room.leave();
@@ -322,7 +293,7 @@ describe('the tow through a real room', () => {
           rival?.tow ?? -1,
         ]);
       });
-      const inStep = await feed(room, expected.samples);
+      const inStep = await feedLockstep(room, expected.samples);
       await sleep(120);
       await room.leave();
       if (inStep || attempt === 3)
@@ -381,13 +352,16 @@ describe('fire commands the server refuses', () => {
   let room: DriveRoomClient;
 
   function samples(count: number, fields: Partial<InputSample> = {}): InputSample[] {
+    // The room runs on its own clock and consumes a number every tick, sample or not: number
+    // these just ahead of where it is, so they are on time.
+    if (room?.state) sequence = Math.max(sequence, room.state.ackSequence + 12);
     return Array.from({ length: count }, () => {
       const s = sequence++;
       return { sequence: s, clientTick: s, steer: 0, brake: 0.5, coast: false, ...fields };
     });
   }
   async function send(count: number, fields: Partial<InputSample> = {}): Promise<void> {
-    await feed(room, samples(count, fields), false);
+    await feedLockstep(room, samples(count, fields), { strict: false });
     await sleep(100);
   }
   async function start(blueprint: unknown): Promise<void> {
@@ -396,7 +370,7 @@ describe('fire commands the server refuses', () => {
     room = await join({ blueprint, rivalTemplateId: 'baseline', seed: 7 });
     collect(room, events);
     // The countdown runs on samples: keep sending until the race is on.
-    while (room.state.phase !== 'RACING') await feed(room, samples(6), false);
+    while (room.state.phase !== 'RACING') await feedLockstep(room, samples(6), { strict: false });
     await sleep(100);
     events.length = 0;
   }
@@ -419,14 +393,14 @@ describe('fire commands the server refuses', () => {
 
   it('refuses firing faster than the cooldown, and a button the build has nothing on', async () => {
     await start(ROOKIE_BLUEPRINT);
-    await feed(room, [...samples(2, { fire: 1 }), ...samples(14)], false);
+    await feedLockstep(room, [...samples(2, { fire: 1 }), ...samples(14)], { strict: false });
     await sleep(60);
     // One burst of five, and the gun is now reloading for 1.4 seconds.
     expect(of('shot')).toHaveLength(5);
     const reloading = room.state.combat.modules[0]!;
     expect(reloading.readyTick).toBeGreaterThan(room.state.tick);
     // Hammering the button during the reload buys nothing.
-    await feed(
+    await feedLockstep(
       room,
       [
         ...samples(2, { fire: 1 }),
@@ -436,7 +410,7 @@ describe('fire commands the server refuses', () => {
         ...samples(2, { fire: 1 }),
         ...samples(2),
       ],
-      false,
+      { strict: false },
     );
     await sleep(100);
     expect(of('shot')).toHaveLength(5);
@@ -474,14 +448,16 @@ describe('fire commands the server refuses', () => {
     ];
     for (const payload of tampered) room.send(ClientMessage.PLAYER_INPUT, payload);
     await sleep(400);
-    // None of them was accepted as input, so none of them pressed anything.
-    expect(room.state.ackSequence).toBe(ack);
+    // None of them was accepted as input, so none of them pressed anything (the room's
+    // acknowledgement runs on with its clock regardless).
+    expect(room.state.ackSequence).toBeGreaterThan(ack);
     expect(of('shot')).toHaveLength(shots);
     expect(room.state.combat.modules[1]!.charges).toBe(spare);
     expect(room.state.phase).toBe('RACING');
     // The connection is still good and honest input still works.
+    const honest = sequence;
     await send(4);
-    expect(room.state.ackSequence).toBe(ack + 4);
+    expect(room.state.ackSequence).toBeGreaterThanOrEqual(honest + 3);
     // A spare wheel with nothing to replace is refused and kept.
     await send(2, { use: 1 });
     await send(2);
@@ -504,7 +480,7 @@ describe('reconnecting in the middle of a fight', () => {
     collect(room, received);
     // Up to the shell being in the air, with its reticle on the road.
     const upTo = expected.samples.filter((sample) => sample.sequence < telegraph.tick + 4);
-    expect(await feed(room, upTo)).toBe(true);
+    expect(await feedLockstep(room, upTo)).toBe(true);
     await waitFor(() => received.some((e) => e.type === 'telegraph'), 2000, 'the reticle');
     expect(received.some((event) => event.type === 'explosion')).toBe(false);
     const before = {
@@ -533,7 +509,8 @@ describe('reconnecting in the middle of a fight', () => {
     const state = room.state;
     expect(room.sessionId).toBe(sessionId);
     expect(state.tick).toBeGreaterThan(before.tick + 45);
-    expect(state.ackSequence).toBe(before.ack);
+    // The room's clock ran on, and with it the acknowledgement of the stand-in controls.
+    expect(state.ackSequence).toBeGreaterThan(before.ack + 45);
     // The fight went on without the client: the shell landed and hurt the other car.
     expect(state.projectiles.size).toBe(0);
     expect(state.rival.chassis).toBeLessThan(before.rivalChassis);
@@ -553,16 +530,24 @@ describe('reconnecting in the middle of a fight', () => {
     expect(again.some((event) => event.type === 'telegraph')).toBe(false);
     expect(again[0]!.id).toBeGreaterThan(received.at(-1)!.id);
 
-    // And the car answers to fresh input again.
-    const more = Array.from({ length: 6 }, (_, i) => ({
-      sequence: before.ack + 1 + i,
-      clientTick: before.ack + 1 + i,
-      steer: 0,
+    // Numbers from before the drop stay dead; fresh ones drive the car again.
+    const late = room.state.net.late;
+    room.send(ClientMessage.PLAYER_INPUT, {
+      inputs: [{ sequence: before.ack, clientTick: 0, steer: -1, brake: 0, coast: false }],
+    });
+    const next = room.state.ackSequence + 20;
+    const more = Array.from({ length: 12 }, (_, i) => ({
+      sequence: next + i,
+      clientTick: next + i,
+      steer: -1,
       brake: 0,
       coast: false,
     }));
-    await feed(room, more, false);
-    expect(room.state.ackSequence).toBe(before.ack + 6);
+    await feedLockstep(room, more, { strict: false });
+    expect(room.state.net.late).toBeGreaterThan(late);
+    // The scenario's script steers this car; what the room took from the fresh samples is
+    // that they were consumed in order, on time.
+    expect(room.state.ackSequence).toBeGreaterThanOrEqual(next + 11);
     await room.leave();
   });
 

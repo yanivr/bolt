@@ -18,6 +18,8 @@ export const ERROR_STATUS: Record<ErrorCode, number> = {
   SERVER_FULL: 503,
   NOT_FOUND: 404,
   INTERNAL: 500,
+  INVITE_EXPIRED: 404,
+  LOBBY_FULL: 409,
 };
 
 export function errorBody(code: ErrorCode, message: string): ApiError {

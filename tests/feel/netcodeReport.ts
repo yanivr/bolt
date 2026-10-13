@@ -1,6 +1,5 @@
-import type { DriveSession } from '@bolt/shared';
-import { MAX_QUEUED_INPUTS, stepDriveSession } from '@bolt/shared';
-import { InputPacer } from '../../apps/server/src/rooms/inputPacer.js';
+import type { ControlInput, DriveSession } from '@bolt/shared';
+import { TickInputBuffer, stepDriveSession } from '@bolt/shared';
 import type { Authority } from './netcode.js';
 import { NETWORKS, NET_HEADER, formatNet, runNet } from './netcode.js';
 
@@ -10,19 +9,30 @@ import { NETWORKS, NET_HEADER, formatNet, runNet } from './netcode.js';
  *   npx tsx tests/feel/netcodeReport.ts
  */
 
-/** The drive room's handling of one car, without the room around it. */
+/**
+ * One car under the room's input policy (Milestone E, `TickInputBuffer`), without the room
+ * around it: the car waits on the grid for its driver's first samples, as the drive room does,
+ * and from then on advances once per room tick whatever arrives.
+ */
 export function pacedAuthority(session: DriveSession): Authority {
-  const pacer = new InputPacer(MAX_QUEUED_INPUTS);
+  const buffer = new TickInputBuffer();
+  const control: ControlInput = { steer: 0, brake: 0, coast: true };
+  let started = false;
   return {
     session,
-    receive: (samples) => void pacer.accept(samples),
-    tick: () => void pacer.tick(true, (control) => stepDriveSession(session, control)),
-    ackSequence: () => pacer.ackSequence,
+    receive: (samples) => buffer.accept(samples),
+    tick: () => {
+      if (!started && buffer.queued < buffer.policy.initialDelay) return;
+      started = true;
+      buffer.step(control);
+      stepDriveSession(session, control);
+    },
+    ackSequence: () => buffer.ackSequence,
   };
 }
 
 if (process.argv[1]?.endsWith('netcodeReport.ts')) {
-  console.log('SHIPPED SERVER INPUT POLICY (each sample simulated exactly once), reference driver, 120 s\n');
+  console.log('SHIPPED SERVER INPUT POLICY (one control per room tick), reference driver, 120 s\n');
   console.log(NET_HEADER);
   for (const n of NETWORKS) console.log(formatNet(n.name, runNet(n.model, 120, pacedAuthority)));
 }

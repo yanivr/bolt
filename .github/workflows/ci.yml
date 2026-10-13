@@ -28,6 +28,35 @@ jobs:
         run: pnpm art:check
       - run: pnpm build
 
+  # The PostgreSQL suites (tests/integration/persistence*.test.ts, tests/unit/db*.test.ts)
+  # against a real database. In the check job above the PostgreSQL suite skips itself.
+  persistence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: bolt
+          POSTGRES_PASSWORD: bolt-ci-only
+          POSTGRES_DB: bolt_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bolt -d bolt_test"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:db
+        env:
+          BOLT_TEST_DATABASE_URL: postgres://bolt:bolt-ci-only@localhost:5432/bolt_test
+
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 25

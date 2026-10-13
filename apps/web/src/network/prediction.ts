@@ -68,6 +68,13 @@ export class Predictor {
   /** Largest single correction seen, in world pixels, for diagnostics. */
   maxCorrection = 0;
   corrections = 0;
+  /**
+   * Round trip to the authority in milliseconds, as the link measures it. Used only to pick
+   * where to number on from after this client fell behind the room's clock.
+   */
+  roundTripMs = 0;
+  /** Times the numbering jumped forward to catch up with the room. */
+  resyncs = 0;
 
   /** The local car's build, for re-deriving coefficients when a part fails or is repaired. */
   private build: ResolvedBuild | null = null;
@@ -172,6 +179,13 @@ export class Predictor {
     else resetEffects(s.effects);
     this.followDisabledParts(snapshot);
 
+    // The room runs on its own clock and acknowledges a number every tick, sample or not. If
+    // it is past everything sent, this page lost time (a hidden tab, a long freeze): number on
+    // from just ahead of the room, so the next samples are on time instead of all late.
+    if (snapshot.ackSequence >= this.sequence) {
+      this.sequence = snapshot.ackSequence + 3 + Math.ceil(this.roundTripMs / (SIM_DT * 1000));
+      this.resyncs += 1;
+    }
     let keep = 0;
     while (keep < this.pending.length && this.pending[keep]!.sequence <= snapshot.ackSequence)
       keep++;

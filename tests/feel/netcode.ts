@@ -83,6 +83,8 @@ export function runNet(
   const { client, server } = benchSessions();
   const authority = makeAuthority(server);
   const predictor = new Predictor(client);
+  // What the link would have measured; it only matters when the client falls behind the room.
+  predictor.roundTripMs = 2 * model.latencyMs + model.jitterMs;
   const driver = createDriverScratch();
   const up: Array<{ at: number; samples: InputSample[] }> = [];
   const down: Array<{ at: number; snap: CarSnapshot }> = [];
@@ -167,7 +169,13 @@ export function runNet(
     }
     lastFrame = now;
     for (let i = 0; i < steps; i++) {
-      const control = driveCenterline(client.track, client.motion, client.params, client.env, driver);
+      const control = driveCenterline(
+        client.track,
+        client.motion,
+        client.params,
+        client.env,
+        driver,
+      );
       outbox.push(predictor.step(control).sample);
       if (outbox.length >= 2 || now - lastSend > 60) {
         const at = Math.max(lastUp, now + delay());
@@ -199,11 +207,26 @@ export function runNet(
 }
 
 export const NETWORKS: Array<{ name: string; model: NetModel }> = [
-  { name: 'ideal LAN, steady frames', model: { latencyMs: 4, jitterMs: 0, hitchMs: 0, hitchEverySeconds: 0, seed: 11 } },
-  { name: 'home WiFi 15 ms + 0-12 ms jitter', model: { latencyMs: 15, jitterMs: 12, hitchMs: 0, hitchEverySeconds: 0, seed: 12 } },
-  { name: 'WiFi + 70 ms frame hitch every ~3 s', model: { latencyMs: 15, jitterMs: 12, hitchMs: 70, hitchEverySeconds: 3, seed: 13 } },
-  { name: 'mobile data 60 ms + 0-45 ms jitter', model: { latencyMs: 60, jitterMs: 45, hitchMs: 0, hitchEverySeconds: 0, seed: 14 } },
-  { name: 'mobile data + 110 ms hitch every ~4 s', model: { latencyMs: 60, jitterMs: 45, hitchMs: 110, hitchEverySeconds: 4, seed: 15 } },
+  {
+    name: 'ideal LAN, steady frames',
+    model: { latencyMs: 4, jitterMs: 0, hitchMs: 0, hitchEverySeconds: 0, seed: 11 },
+  },
+  {
+    name: 'home WiFi 15 ms + 0-12 ms jitter',
+    model: { latencyMs: 15, jitterMs: 12, hitchMs: 0, hitchEverySeconds: 0, seed: 12 },
+  },
+  {
+    name: 'WiFi + 70 ms frame hitch every ~3 s',
+    model: { latencyMs: 15, jitterMs: 12, hitchMs: 70, hitchEverySeconds: 3, seed: 13 },
+  },
+  {
+    name: 'mobile data 60 ms + 0-45 ms jitter',
+    model: { latencyMs: 60, jitterMs: 45, hitchMs: 0, hitchEverySeconds: 0, seed: 14 },
+  },
+  {
+    name: 'mobile data + 110 ms hitch every ~4 s',
+    model: { latencyMs: 60, jitterMs: 45, hitchMs: 110, hitchEverySeconds: 4, seed: 15 },
+  },
 ];
 
 export function formatNet(name: string, r: NetResult): string {

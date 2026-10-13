@@ -1,5 +1,6 @@
 import { createGameServer } from './app.js';
 import { ConfigError, loadConfigFromEnv } from './config.js';
+import { openPersistence } from './db/index.js';
 import { createLogger, errorFields } from './telemetry/log.js';
 
 /** Process entry point: read the environment, start listening, and shut down cleanly. */
@@ -20,13 +21,30 @@ async function main(): Promise<void> {
   }
   for (const message of loaded.warnings) logger.warn('config_warning', { message });
 
-  const server = createGameServer({ ...loaded.config, logger });
+  // PostgreSQL when DATABASE_URL is set (migrations run here, before any request is served);
+  // in memory otherwise, which the log states plainly. Production cannot get here without one.
+  let persistence;
+  try {
+    const attempts = Number(process.env.BOLT_DB_CONNECT_ATTEMPTS);
+    persistence = await openPersistence({
+      databaseUrl: loaded.config.databaseUrl,
+      logger,
+      ...(Number.isInteger(attempts) && attempts > 0 ? { connectAttempts: attempts } : {}),
+    });
+  } catch (error) {
+    logger.error('database_unavailable', errorFields(error));
+    process.exitCode = 1;
+    return;
+  }
+
+  const server = createGameServer({ ...loaded.config, logger, persistence });
   const port = await server.listen(loaded.port);
   logger.info('server_listening', {
     port,
     nodeEnv: loaded.config.nodeEnv ?? 'development',
     allowedOrigins: (loaded.config.allowedOrigins ?? []).join(','),
     trustProxy: loaded.config.trustProxy ?? false,
+    persistence: persistence.kind,
   });
 
   let stopping = false;
@@ -42,6 +60,7 @@ async function main(): Promise<void> {
     deadline.unref();
     server
       .shutdown()
+      .then(() => persistence.close())
       .then(() => {
         logger.info('server_stopped', {});
         process.exit(0);

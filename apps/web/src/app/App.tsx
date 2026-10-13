@@ -4,9 +4,16 @@ import { useEffect } from 'react';
 import { loadCoreManifests, loadCourseManifests } from '../game/assets.js';
 import type { CoreManifests, GameManifests } from '../game/assets.js';
 import { BootScreen } from '../pages/BootScreen.js';
+import { CodeHost } from '../garage/ui/CodeHost.js';
 import { BlueprintsScreen } from '../pages/BlueprintsScreen.js';
 import { GarageScreen } from '../pages/GarageScreen.js';
 import { HomeScreen } from '../pages/HomeScreen.js';
+import { JoinScreen } from '../pages/JoinScreen.js';
+import { LobbyScreen } from '../pages/LobbyScreen.js';
+import { MatchDirector } from '../pages/match/MatchDirector.js';
+import { openedAtInvite } from '../network/invite.js';
+import { MatchClient } from '../network/matchClient.js';
+import { PrivacyScreen, openedAtPrivacy } from '../pages/PrivacyScreen.js';
 import { RaceScreen } from '../pages/RaceScreen.js';
 import { TrackPreviewScreen } from '../pages/TrackPreviewScreen.js';
 import type { Course, CourseOption } from './course.js';
@@ -89,7 +96,9 @@ export function App() {
       .then(() => {
         if (cancelled) return;
         setBoot({ stage: 'ready' });
-        setScreen('home');
+        setScreen(openedAtPrivacy() ? 'privacy' : openedAtInvite() ? 'join' : 'home');
+        // A refresh in the middle of a friend match takes this tab's seat back, if it is kept.
+        if (!openedAtInvite()) void MatchClient.resume().catch(() => undefined);
       })
       .catch(() => {
         corePromise = null;
@@ -110,6 +119,11 @@ export function App() {
       {screen === 'garage' && <GarageScreen />}
       {screen === 'blueprints' && <BlueprintsScreen />}
       {screen === 'race' && <RaceScreen />}
+      {screen === 'privacy' && <PrivacyScreen />}
+      {screen === 'lobby' && <LobbyScreen />}
+      {screen === 'join' && <JoinScreen />}
+      <MatchDirector />
+      <CodeHost />
     </div>
   );
 }

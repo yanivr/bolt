@@ -5,6 +5,8 @@ import { courseAssets, courseOptions, getManifests } from '../app/App.js';
 import { settleCourse } from '../app/course.js';
 import type { CourseOption } from '../app/course.js';
 import { useApp } from '../app/store.js';
+import { activeMatch, useMatch } from '../network/matchClient.js';
+import { LeaveConfirm, useSecondsUntil } from './match/parts.js';
 import { layoutMinimap } from '../game/layout/layoutCanvas.js';
 import { Dialog } from '../components/Dialog.js';
 import { Glyph } from '../components/Glyph.js';
@@ -52,7 +54,17 @@ function useCourseMap(option: CourseOption): { src: string; width: number; heigh
  */
 export function TrackPreviewScreen() {
   const setScreen = useApp((s) => s.setScreen);
-  const wanted = useApp((s) => s.course);
+  const appCourse = useApp((s) => s.course);
+  // Race a Friend (Section 3.2): both players see the course the host locked, and nothing on
+  // this screen can change it. `Build Your Car` says this player has seen it.
+  const match = useMatch();
+  const inMatch = match.active && match.phase === 'TRACK_REVEAL';
+  const wanted = inMatch ? { trackId: match.trackId, presetId: match.weatherPresetId } : appCourse;
+  const [revealSeen, setRevealSeen] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const buildIn = useSecondsUntil(inMatch ? match.endsAt : 0);
+  const mySeat = match.seat >= 0 ? match.seats[match.seat] : null;
+  const rivalSeat = match.seat >= 0 ? match.seats[match.seat === 0 ? 1 : 0] : null;
   const setCourse = useApp((s) => s.setCourse);
   const difficulty = useApp((s) => s.difficulty);
   const setDifficulty = useApp((s) => s.setDifficulty);
@@ -60,7 +72,17 @@ export function TrackPreviewScreen() {
   const viewport = useViewport();
   const compact = viewport.width < 740 || viewport.height < 380;
   const options = useMemo(() => courseOptions(), []);
-  const current = settleCourse(wanted, options);
+  const wantedTrack = wanted.trackId;
+  const wantedPreset = wanted.presetId;
+  const current = useMemo(() => {
+    const course = { trackId: wantedTrack, presetId: wantedPreset };
+    return inMatch
+      ? (options.find((o) => o.trackId === wantedTrack && o.presetId === wantedPreset) ?? {
+          ...course,
+          art: 'baked' as const,
+        })
+      : settleCourse(course, options);
+  }, [inMatch, options, wantedTrack, wantedPreset]);
   const trackIds = useMemo(() => [...new Set(options.map((o) => o.trackId))], [options]);
   const track = getTrack(current.trackId);
   const preset = getWeatherPreset(current.presetId);
@@ -111,7 +133,10 @@ export function TrackPreviewScreen() {
   // Escape goes back, as the Back button does. An open dialog takes the key first.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setScreen('home');
+      if (event.key === 'Escape') {
+        if (useMatch.getState().active) setConfirmLeave(true);
+        else setScreen('home');
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -142,11 +167,14 @@ export function TrackPreviewScreen() {
           </span>
         )}
         <span className="preview-character">{track.character}</span>
-        <button className="btn btn-small preview-back" onClick={() => setScreen('home')}>
+        <button
+          className="btn btn-small preview-back"
+          onClick={() => (inMatch ? setConfirmLeave(true) : setScreen('home'))}
+        >
           <Glyph name="back" size={12} />
-          <span>{STRINGS.preview.back}</span>
+          <span>{inMatch ? STRINGS.match.leaveLobby : STRINGS.preview.back}</span>
         </button>
-        {trackIds.length > 1 && (
+        {trackIds.length > 1 && !inMatch && (
           <div
             className="preview-pick-track"
             role="group"
@@ -187,7 +215,7 @@ export function TrackPreviewScreen() {
               shadow="#0e1320"
             />
           </h1>
-          {weathers.length > 1 ? (
+          {weathers.length > 1 && !inMatch ? (
             <div
               className="preview-pick-weather"
               role="radiogroup"
@@ -217,25 +245,40 @@ export function TrackPreviewScreen() {
             </p>
           )}
         </div>
-        <div
-          className="preview-pick-weather preview-pick-rival"
-          role="radiogroup"
-          aria-label={STRINGS.preview.chooseRival}
-          data-testid="rival-difficulty"
-        >
-          <span className="preview-pick-label">{STRINGS.preview.chooseRival}</span>
-          {AI_DIFFICULTIES.map((level) => (
-            <button
-              key={level}
-              role="radio"
-              aria-checked={level === difficulty}
-              className={`weather-badge weather-choice${level === difficulty ? ' is-on' : ''}`}
-              onClick={() => setDifficulty(level)}
-            >
-              <span>{STRINGS.preview.rivalLevels[level]}</span>
-            </button>
-          ))}
-        </div>
+        {inMatch ? (
+          <div className="preview-match-status" role="status" data-testid="reveal-status">
+            <span className={`seat-tag${revealSeen || mySeat?.loaded ? ' is-ready' : ''}`}>
+              {STRINGS.match.you}:{' '}
+              {revealSeen || mySeat?.loaded
+                ? STRINGS.match.readyToBuild
+                : STRINGS.match.revealLooking}
+            </span>
+            <span className={`seat-tag is-rival${rivalSeat?.loaded ? ' is-ready' : ''}`}>
+              {STRINGS.match.rival}:{' '}
+              {rivalSeat?.loaded ? STRINGS.match.readyToBuild : STRINGS.match.revealLooking}
+            </span>
+          </div>
+        ) : (
+          <div
+            className="preview-pick-weather preview-pick-rival"
+            role="radiogroup"
+            aria-label={STRINGS.preview.chooseRival}
+            data-testid="rival-difficulty"
+          >
+            <span className="preview-pick-label">{STRINGS.preview.chooseRival}</span>
+            {AI_DIFFICULTIES.map((level) => (
+              <button
+                key={level}
+                role="radio"
+                aria-checked={level === difficulty}
+                className={`weather-badge weather-choice${level === difficulty ? ' is-on' : ''}`}
+                onClick={() => setDifficulty(level)}
+              >
+                <span>{STRINGS.preview.rivalLevels[level]}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <dl className="preview-facts">
           <div>
             <dt>{STRINGS.preview.laps}</dt>
@@ -273,15 +316,40 @@ export function TrackPreviewScreen() {
           >
             {STRINGS.preview.details}
           </button>
-          <button
-            className="btn btn-primary preview-go"
-            onClick={() => setScreen('garage')}
-            autoFocus
-          >
-            {STRINGS.preview.buildYourCar}
-          </button>
+          {inMatch && (revealSeen || mySeat?.loaded) ? (
+            <p className="preview-wait" data-testid="reveal-wait">
+              {buildIn > 0
+                ? STRINGS.match.revealIn.replace('{seconds}', String(buildIn))
+                : STRINGS.match.revealWaiting}
+            </p>
+          ) : (
+            <button
+              className="btn btn-primary preview-go"
+              onClick={() => {
+                if (inMatch) {
+                  setRevealSeen(true);
+                  activeMatch()?.roomReady();
+                } else setScreen('garage');
+              }}
+              autoFocus
+              data-testid="build-your-car"
+            >
+              {STRINGS.preview.buildYourCar}
+            </button>
+          )}
         </div>
       </section>
+      {confirmLeave && (
+        <LeaveConfirm
+          text={STRINGS.match.leaveLobbyConfirm}
+          leaveLabel={STRINGS.match.leaveLobby}
+          onLeave={() => {
+            activeMatch()?.leave();
+            setScreen('home');
+          }}
+          onStay={() => setConfirmLeave(false)}
+        />
+      )}
       {detailsOpen && (
         <Dialog
           title={STRINGS.preview.details}

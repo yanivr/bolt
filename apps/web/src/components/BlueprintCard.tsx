@@ -16,6 +16,8 @@ type Props = {
   warning?: string;
   /** A small tag beside the name, such as "Current car". */
   tag?: string;
+  /** The server code this car was shared under, shown in the code face. */
+  code?: string;
   /** The buttons. */
   children: ReactNode;
 };
@@ -29,7 +31,7 @@ export function isDrawable(manifests: GameManifests, blueprint: VehicleBlueprint
  * One car as a card: a thumbnail composed from the real sprites, its name, its exact cost
  * and its actions. Used for saved blueprints, starter cars and the Quick Build list.
  */
-export function BlueprintCard({ manifests, blueprint, note, warning, tag, children }: Props) {
+export function BlueprintCard({ manifests, blueprint, note, warning, tag, code, children }: Props) {
   const drawable = isDrawable(manifests, blueprint);
   const cost = blueprintCost(blueprint, CATALOG).total;
   // A chassis the catalog no longer has (a retired frame) is not "art in progress": the
@@ -59,6 +61,16 @@ export function BlueprintCard({ manifests, blueprint, note, warning, tag, childr
           </span>
           <span>{chassis}</span>
         </p>
+        {code && (
+          <p
+            className="bp-code"
+            data-testid="card-code"
+            aria-label={fill(STRINGS.codes.codeLabel, { code })}
+          >
+            <Glyph name="share" size={12} />
+            <span className="code-mono">{code}</span>
+          </p>
+        )}
         {note && <p className="bp-note">{note}</p>}
         {!drawable && known && (
           <p className="bp-flag">

@@ -27,6 +27,8 @@ export interface GuestSessionStore {
   touch(id: string, now: Date, rotation?: GuestSessionRotation): Promise<boolean>;
   /** Deletes every session that expired at or before `now` and resolves the number removed. */
   expire(now: Date): Promise<number>;
+  /** Forgets one guest at its own request (Section 16). Resolves false when it was not known. */
+  delete(id: string): Promise<boolean>;
   count(): Promise<number>;
 }
 
@@ -38,8 +40,8 @@ export type InMemoryGuestStoreOptions = {
 const DEFAULT_MAX_SESSIONS = 100_000;
 
 /**
- * Process-local store used through the early milestones. Sessions vanish on restart, which
- * is acceptable while nothing durable (saved blueprints, match history) hangs off a guest.
+ * Process-local store, used when no database is configured (development and tests). Sessions
+ * vanish on restart. With PostgreSQL configured, `db/postgres.ts` implements the same interface.
  */
 export class InMemoryGuestStore implements GuestSessionStore {
   private readonly sessions = new Map<string, GuestSessionRecord>();
@@ -90,6 +92,10 @@ export class InMemoryGuestStore implements GuestSessionStore {
       }
     }
     return removed;
+  }
+
+  async delete(id: string): Promise<boolean> {
+    return this.sessions.delete(id);
   }
 
   async count(): Promise<number> {

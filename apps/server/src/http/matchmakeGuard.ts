@@ -19,6 +19,11 @@ export type MatchmakeGuardOptions = {
   trustProxy: boolean;
   maxBodyBytes: number;
   logger: Logger;
+  /**
+   * Room names that `create` and `joinOrCreate` may name. Others are reached another way (a
+   * match room only through its code) and only `reconnect` is let through for them.
+   */
+  creatableRooms?: readonly string[];
 };
 
 const MATCHMAKE_MARKER = '/matchmake';
@@ -64,7 +69,12 @@ export function installMatchmakeGuard(server: HttpServer, options: MatchmakeGuar
 
     const path = url.split('?', 1)[0] ?? '';
     const method = req.method ?? '';
-    if (!ALLOWED_PATH.test(path) || (method !== 'POST' && method !== 'OPTIONS')) {
+    const [, , action = '', target = ''] = path.split('/');
+    const creatable =
+      action === 'reconnect' ||
+      options.creatableRooms === undefined ||
+      options.creatableRooms.includes(target);
+    if (!ALLOWED_PATH.test(path) || !creatable || (method !== 'POST' && method !== 'OPTIONS')) {
       refuse(res, 404, JOIN_ERROR_CODES.BAD_REQUEST, 'There is nothing at this address.');
       return;
     }

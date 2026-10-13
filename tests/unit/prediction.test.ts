@@ -19,7 +19,6 @@ import type {
   VehicleParams,
 } from '@bolt/shared';
 import {
-  MAX_QUEUED_INPUTS,
   buildTrack,
   deriveVehicleParams,
   installPart,
@@ -31,7 +30,7 @@ import {
   stepDriveSession,
 } from '@bolt/shared';
 import { describe, expect, it } from 'vitest';
-import { InputPacer } from '../../apps/server/src/rooms/inputPacer.js';
+import { PacedServer } from '../helpers/pacedServer.js';
 import { OfflineLink } from '../../apps/web/src/network/offlineLink.js';
 import { Predictor } from '../../apps/web/src/network/prediction.js';
 
@@ -54,7 +53,7 @@ function harness(
   const server = createDriveSession(track, env, params);
   const predictor = new Predictor(createDriveSession(track, env, params));
   const scratch = createDriverScratch();
-  const pacer = new InputPacer(MAX_QUEUED_INPUTS);
+  const pacer = new PacedServer();
   const wire: Array<{ at: number; sample: InputSample }> = [];
   const back: Array<{ at: number; snap: CarSnapshot }> = [];
   const run = (ticks: number, from = 0) => {
@@ -63,19 +62,30 @@ function harness(
       const { sample } = predictor.step(control);
       if (!drop(tick)) wire.push({ at: tick + delayTicks, sample });
       while (wire.length > 0 && wire[0]!.at <= tick) pacer.accept([wire.shift()!.sample]);
-      pacer.tick(true, (input) => stepDriveSession(server, input));
+      pacer.tick((input) => stepDriveSession(server, input));
       if (tick % 2 === 0)
         back.push({ at: tick + delayTicks, snap: snapshot(server, pacer.ackSequence) });
       while (back.length > 0 && back[0]!.at <= tick) predictor.reconcile(back.shift()!.snap);
     }
   };
-  return { server, predictor, pacer, run };
+  /** Lets the room consume every sample already sent, so it reaches where the client is. */
+  const drain = () => {
+    while (pacer.buffer.queued > 0 || wire.length > 0) {
+      while (wire.length > 0) pacer.accept([wire.shift()!.sample]);
+      pacer.tick((input) => stepDriveSession(server, input));
+    }
+  };
+  return { server, predictor, pacer, run, drain };
 }
 
 describe('client prediction and reconciliation (Section 15.4)', () => {
   it('stays exactly on the authoritative car with zero latency', () => {
-    const { server, predictor, run } = harness(0);
+    const { server, predictor, run, drain } = harness(0);
     run(30 * 20);
+    expect(predictor.maxCorrection).toBeLessThan(1e-6);
+    // The room runs the input delay behind the client; once it has used every sample sent,
+    // it is exactly where the client predicted.
+    drain();
     expect(predictor.session.motion.x).toBeCloseTo(server.motion.x, 6);
     expect(predictor.session.motion.y).toBeCloseTo(server.motion.y, 6);
     expect(predictor.maxCorrection).toBeLessThan(1e-6);
@@ -109,14 +119,15 @@ describe('client prediction and reconciliation (Section 15.4)', () => {
     expect(server.progress.lap).toBeGreaterThanOrEqual(1);
   });
 
-  it('leads the server by the one-way delay, so its inputs land on the intended tick', () => {
+  it('leads the server by the one-way delay plus the input delay, so its inputs land on the intended tick', () => {
     const { server, predictor, run } = harness(4);
     run(30 * 4);
     expect(server.phase).toBe('RACING');
     expect(predictor.session.phase).toBe('RACING');
+    // Four ticks on the wire, and the room starts consuming once three samples are buffered.
     const lead = predictor.session.raceTicks - server.raceTicks;
-    expect(lead).toBeGreaterThanOrEqual(3);
-    expect(lead).toBeLessThanOrEqual(5);
+    expect(lead).toBeGreaterThanOrEqual(5);
+    expect(lead).toBeLessThanOrEqual(7);
   });
 });
 
@@ -182,7 +193,7 @@ describe('prediction with heat, energy and engine state', () => {
       const server = createDriveSession(track, env, params);
       const predictor = new Predictor(createDriveSession(track, env, params));
       const scratch = createDriverScratch();
-      const pacer = new InputPacer(MAX_QUEUED_INPUTS);
+      const pacer = new PacedServer();
       const wire: Array<{ at: number; sample: InputSample }> = [];
       const back: Array<{ at: number; snap: CarSnapshot }> = [];
       for (let tick = 0; tick < 30 * 30; tick++) {
@@ -190,7 +201,7 @@ describe('prediction with heat, energy and engine state', () => {
         const { sample } = predictor.step(control);
         wire.push({ at: tick + 3, sample });
         while (wire.length > 0 && wire[0]!.at <= tick) pacer.accept([wire.shift()!.sample]);
-        pacer.tick(true, (input) => stepDriveSession(server, input));
+        pacer.tick((input) => stepDriveSession(server, input));
         if (tick % 2 === 0) {
           const snap = snapshot(server, pacer.ackSequence);
           // A snapshot that forgets one field, as the old schema would have.

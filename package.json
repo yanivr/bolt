@@ -22,7 +22,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "check": "pnpm lint && pnpm typecheck && pnpm test"
+    "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "db:dev": "bash scripts/db-dev.sh",
+    "test:db": "BOLT_TEST_DATABASE_URL=${BOLT_TEST_DATABASE_URL:-postgresql://bolt@localhost:5499/bolt_test} vitest run tests/integration/persistence tests/unit/db",
+    "test:e2e:codes": "playwright test tests/e2e/codes.spec.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.37.0",

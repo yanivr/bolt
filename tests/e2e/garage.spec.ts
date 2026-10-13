@@ -813,8 +813,9 @@ test('My Blueprints saves, duplicates, renames and deletes across reloads', asyn
   await library.getByRole('button', { name: 'Save This Car' }).tap();
   await expect(library.getByRole('status')).toHaveText('This car is already saved.');
   await expect(library.getByRole('article')).toHaveCount(1);
-  // There is no share-code control: codes need the server.
-  await expect(library.getByText(/code/i)).toHaveCount(0);
+  // A saved car offers Copy Code; it has no code until it is shared (tests/e2e/codes.spec.ts).
+  await expect(saved.getByRole('button', { name: 'Copy Code' })).toBeVisible();
+  await expect(saved.getByTestId('card-code')).toHaveCount(0);
   // Starter cars are one tab away.
   await library.getByRole('tab', { name: 'Starter Cars' }).tap();
   await expect(library.getByRole('article', { name: 'Rookie' })).toBeVisible();

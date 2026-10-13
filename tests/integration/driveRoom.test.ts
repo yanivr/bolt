@@ -38,6 +38,7 @@ import {
   createGuestTokenSigner,
   generateGuestId,
 } from '../../apps/server/src/security/guestTokens.js';
+import { Feeder } from '../helpers/feeder.js';
 import type { TestServer } from '../helpers/server.js';
 import { TEST_ORIGIN, TEST_SECRET, sleep, startTestServer, waitFor } from '../helpers/server.js';
 
@@ -436,7 +437,7 @@ describe('joining the drive room', () => {
 
 describe('driving', () => {
   let room: DriveRoomClient;
-  let sequence = 0;
+  let feeder: Feeder;
   const phases: MatchPhaseMessage[] = [];
   const events: RaceEvent[] = [];
   const errors: ApiError['error'][] = [];
@@ -451,27 +452,21 @@ describe('driving', () => {
     target.onLeave((code) => (left = code));
   }
 
-  /** Sends one fresh full-throttle sample per call, the way the client does every tick. */
-  function drive(steer = 0): void {
-    room.send(ClientMessage.PLAYER_INPUT, { inputs: [sample(sequence, steer)] });
-    sequence += 1;
+  function sendTo(target: () => DriveRoomClient) {
+    return (inputs: InputSample[]) => {
+      try {
+        target().send(ClientMessage.PLAYER_INPUT, { inputs });
+      } catch {
+        // Between connections.
+      }
+    };
   }
 
-  async function driveFor(ms: number, steer = 0): Promise<void> {
-    const until = Date.now() + ms;
-    while (Date.now() < until) {
-      drive(steer);
-      await sleep(33);
-    }
-  }
-
-  /** Waits until the server has consumed everything sent so far. */
-  async function settle(): Promise<void> {
-    await waitFor(
-      () => room.state.ackSequence === sequence - 1,
-      3000,
-      `ackSequence to reach ${sequence - 1}`,
-    );
+  /** Drives on the room's clock (one sample per 30 Hz step of wall time) for `ms`. */
+  async function driveFor(ms: number, steer = 0, brake = 0): Promise<void> {
+    feeder.control = { steer, brake, coast: false };
+    feeder.start();
+    await sleep(ms);
   }
 
   function distanceFromSpawn(): number {
@@ -479,12 +474,14 @@ describe('driving', () => {
   }
 
   afterAll(async () => {
+    feeder?.stop();
     if (left === undefined) await room?.leave();
   });
 
   it('joins with a valid guest token and the baseline blueprint, held on the grid', async () => {
     room = await join();
     listen(room);
+    feeder = new Feeder(sendTo(() => room));
     const state = room.state;
     expect(state.phase).toBe('COUNTDOWN');
     expect(state.countdown).toBeGreaterThanOrEqual(COUNTDOWN_SECONDS - 1);
@@ -504,9 +501,17 @@ describe('driving', () => {
     expect(state.batteryEnergy).toBe(40);
     expect(state.thermalLimited).toBe(false);
     expect(state.engineCharge).toBe(1);
+    // The driver's car is car 0 of race 1, and the race waits for its first samples without
+    // asking the client to stop its clock (only the match room holds clients).
+    expect(state.you).toBe(0);
+    expect(state.raceId).toBe(1);
+    expect(state.held).toBe(false);
+    // The grid waits for the driver: with nothing sent, no tick runs.
+    await sleep(300);
+    expect(room.state.tick).toBe(0);
   });
 
-  it('carries every CarSnapshot field in the synchronized state', () => {
+  it('carries every CarSnapshot field and the input statistics in the synchronized state', () => {
     const state = room.state as unknown as Record<string, unknown>;
     const numeric = [
       'tick',
@@ -539,18 +544,24 @@ describe('driving', () => {
       'lastCheckpointMs',
       'wrongWaySeconds',
       'finishedAtMs',
+      'you',
+      'raceId',
     ];
     for (const field of numeric) expect(typeof state[field], field).toBe('number');
     expect(typeof state.phase).toBe('string');
     expect(typeof state.reversing).toBe('boolean');
     expect(typeof state.thermalLimited).toBe('boolean');
+    expect(typeof state.held).toBe('boolean');
     expect(typeof state.buildHash).toBe('string');
     expect(Array.from(state.wheelIntegrity as Iterable<number>)).toHaveLength(4);
+    const net = state.net as Record<string, unknown>;
+    for (const field of ['delay', 'depth', 'missing', 'late', 'grown', 'shrunk', 'reanchors'])
+      expect(typeof net[field], field).toBe('number');
   });
 
   it('does not let the car move before the countdown ends, whatever the client sends', async () => {
-    await driveFor(400);
-    await settle();
+    await driveFor(500);
+    expect(room.state.tick).toBeGreaterThan(5);
     expect(room.state.phase).toBe('COUNTDOWN');
     expect(distanceFromSpawn()).toBe(0);
     expect(room.state.velocityX).toBe(0);
@@ -572,24 +583,26 @@ describe('driving', () => {
     );
     expect(phases.map((message) => message.phase)).toEqual(['RACING']);
     const announced = phases[0]!;
-    // Thirty ticks per second for the whole countdown, measured from the join.
+    // Thirty ticks per second for the whole countdown, counted from the first sample.
     expect(announced.tick).toBe(COUNTDOWN_SECONDS * 30);
   });
 
-  it('moves the car under full-throttle straight input and acknowledges each sample', async () => {
+  it('runs one tick per 30 Hz step and consumes exactly one sample per tick', async () => {
     const tickBefore = room.state.tick;
     const ackBefore = room.state.ackSequence;
+    const missingBefore = room.state.net.missing;
     const startedAt = performance.now();
     await driveFor(1500);
     const elapsedTicks = ((performance.now() - startedAt) / 1000) * 30;
-    // The simulation tracks wall-clock time at 30 Hz. The tolerance covers snapshot
-    // granularity (two ticks per patch) and timer jitter on a busy machine.
+    // The room keeps wall-clock time at 30 Hz. The tolerance covers snapshot granularity (two
+    // ticks per patch) and timer jitter on a busy machine.
     expect(Math.abs(room.state.tick - tickBefore - elapsedTicks)).toBeLessThan(8);
-    await settle();
-
     const state = room.state;
-    expect(state.ackSequence).toBeGreaterThan(ackBefore + 20);
-    expect(state.tick).toBeGreaterThan(tickBefore + 30);
+    // One number per tick: the acknowledgement moves with the room clock.
+    expect(state.ackSequence - ackBefore).toBe(state.tick - tickBefore);
+    // A sender that keeps time is almost never late on loopback.
+    expect(state.net.missing - missingBefore).toBeLessThan(6);
+    expect(state.net.delay).toBeGreaterThanOrEqual(1);
     expect(state.raceTimeMs).toBeGreaterThan(1000);
     expect(distanceFromSpawn()).toBeGreaterThan(40);
     expect(Math.hypot(state.velocityX, state.velocityY)).toBeGreaterThan(40);
@@ -600,51 +613,39 @@ describe('driving', () => {
     expect(state.lap).toBe(1);
   });
 
-  it('ignores duplicate and old sequence numbers', async () => {
-    await settle();
+  it('drops duplicate, old and late sequence numbers without applying them', async () => {
+    await driveFor(300);
     const ack = room.state.ackSequence;
-    const x = room.state.steeringInput;
+    const lateBefore = room.state.net.late;
     // Replays of consumed samples, carrying a hard-left steer that must never be applied.
     room.send(ClientMessage.PLAYER_INPUT, { inputs: [sample(ack, -1), sample(ack, -1)] });
     room.send(ClientMessage.PLAYER_INPUT, {
       inputs: [sample(0, -1), sample(ack - 1, -1), sample(ack, -1)],
     });
     await sleep(300);
-    expect(room.state.ackSequence).toBe(ack);
-    expect(room.state.steeringInput).toBeGreaterThanOrEqual(Math.min(x, 0) - 1e-9);
-
-    // A packet that repeats old samples and adds one new one advances by exactly one.
-    room.send(ClientMessage.PLAYER_INPUT, {
-      inputs: [sample(ack - 1, -1), sample(ack, -1), sample(ack + 1)],
-    });
-    sequence = ack + 2;
-    await settle();
-    expect(room.state.ackSequence).toBe(ack + 1);
-    expect(room.state.steeringInput).toBeGreaterThanOrEqual(-1e-9);
+    expect(room.state.net.late - lateBefore).toBeGreaterThanOrEqual(5);
+    expect(room.state.steeringInput).toBeGreaterThanOrEqual(-0.05);
   });
 
-  it('keeps only the newest queued samples when the client outruns the simulation', async () => {
-    await settle();
-    const first = sequence;
-    const burst = MAX_QUEUED_INPUTS * 3;
+  it('keeps only what fits when the client floods ahead of the room', async () => {
+    const first = feeder.sequence + 2;
+    const burst = MAX_QUEUED_INPUTS * 30;
     for (let sent = 0; sent < burst; sent += MAX_INPUTS_PER_PACKET) {
       const inputs = Array.from({ length: MAX_INPUTS_PER_PACKET }, (_, i) =>
-        sample(first + sent + i),
+        sample(first + sent + i, 0.5),
       );
       room.send(ClientMessage.PLAYER_INPUT, { inputs });
     }
-    sequence = first + burst;
-    const tickBefore = room.state.tick;
-    await settle();
-    // Draining at one sample per tick can take at most a queue's worth of ticks (plus
-    // snapshot granularity), far fewer than the number of samples sent.
-    expect(room.state.tick - tickBefore).toBeLessThan(burst);
+    await sleep(400);
+    // The buffer holds 64 samples at most; the rest were refused as overflow. The room did
+    // not run faster than its clock to use them.
+    expect(room.state.phase).toBe('RACING');
+    expect(room.state.net.depth).toBeLessThanOrEqual(64);
   });
 
-  it('rejects malformed input without crashing the room or moving ackSequence', async () => {
-    await settle();
-    const ack = room.state.ackSequence;
-    const next = sequence;
+  it('rejects malformed input without crashing the room or applying it', async () => {
+    await driveFor(300);
+    const next = feeder.sequence + 100;
     const good = sample(next, -1);
     const malformed: unknown[] = [
       { inputs: [{ ...good, steer: Number.NaN }] },
@@ -657,6 +658,7 @@ describe('driving', () => {
       { inputs: [{ ...good, sequence: '7' }] },
       { inputs: [{ ...good, sequence: 1.5 }] },
       { inputs: [{ ...good, sequence: -1 }] },
+      { race: 'one', inputs: [good] },
     ];
     expect(malformed.length).toBeLessThanOrEqual(MAX_MALFORMED);
     for (const payload of malformed) room.send(ClientMessage.PLAYER_INPUT, payload);
@@ -664,34 +666,44 @@ describe('driving', () => {
 
     expect(left).toBeUndefined();
     expect(errors).toEqual([]);
-    expect(room.state.ackSequence).toBe(ack);
     expect(room.state.phase).toBe('RACING');
-
+    expect(room.state.steeringInput).toBeGreaterThanOrEqual(-0.05);
     const tick = room.state.tick;
-    drive();
-    await settle();
-    expect(room.state.ackSequence).toBe(next);
+    await sleep(200);
     expect(room.state.tick).toBeGreaterThan(tick);
   });
 
-  it('coasts on neutral input once the client goes quiet', async () => {
-    await driveFor(300, 1);
-    await settle();
+  it('repeats the last control while samples are missing, then drives on neutral', async () => {
+    await driveFor(400, 1);
     expect(room.state.steeringInput).toBeGreaterThan(0.2);
+    feeder.stop();
+    const missing = room.state.net.missing;
     const ack = room.state.ackSequence;
-    // Half a second of held input, then neutral: the wheels come back to center.
+    // Half a second of repeated input, then neutral: the wheels come back to center while
+    // the room clock, and so the acknowledgement, runs on.
     await waitFor(
       () => Math.abs(room.state.steeringInput) < 0.02,
       3000,
       'the steering to return to center',
     );
-    expect(room.state.ackSequence).toBe(ack);
+    expect(room.state.net.missing).toBeGreaterThan(missing + 10);
+    expect(room.state.net.absent).toBe(true);
+    expect(room.state.ackSequence).toBeGreaterThan(ack + 10);
     expect(room.state.phase).toBe('RACING');
+  });
+
+  it('starts the stream again when a client that stood still comes back behind the room', async () => {
+    const reanchors = room.state.net.reanchors;
+    // The feeder's numbering is now far behind the room, as after a hidden tab.
+    await driveFor(800, -1);
+    await waitFor(() => room.state.net.reanchors > reanchors, 3000, 'the stream to restart');
+    await waitFor(() => room.state.steeringInput < -0.2, 3000, 'the new steering to apply');
+    expect(room.state.net.absent).toBe(false);
   });
 
   it('resumes the same car after a dropped connection', async () => {
     await driveFor(300);
-    await settle();
+    feeder.stop();
     const before = {
       ...(room.state.toJSON() as unknown as Record<string, number | string | boolean>),
     };
@@ -714,7 +726,6 @@ describe('driving', () => {
 
     expect(room.sessionId).toBe(sessionId);
     expect(state.phase).toBe('RACING');
-    expect(state.ackSequence).toBe(before.ackSequence);
     expect(state.lap).toBe(before.lap);
     expect(state.checkpointIndex).toBeGreaterThanOrEqual(before.checkpointIndex as number);
     expect(state.bestLapMs).toBe(before.bestLapMs);
@@ -725,15 +736,14 @@ describe('driving', () => {
     expect(state.courseProgress).toBeGreaterThan(100);
     expect(distanceFromSpawn()).toBeGreaterThan(40);
 
-    // Old sequences stay dead across the reconnect and fresh ones are accepted again.
-    room.send(ClientMessage.PLAYER_INPUT, {
-      inputs: [sample(0, -1), sample(before.ackSequence as number, -1)],
-    });
+    // Old sequences stay dead across the reconnect; the numbering that continues is accepted
+    // and drives the car again.
+    const late = room.state.net.late;
+    room.send(ClientMessage.PLAYER_INPUT, { inputs: [sample(0, -1), sample(1, -1)] });
     await sleep(200);
-    expect(room.state.ackSequence).toBe(before.ackSequence);
-    drive();
-    await settle();
-    expect(room.state.ackSequence).toBe((before.ackSequence as number) + 1);
+    expect(room.state.net.late).toBeGreaterThanOrEqual(late + 2);
+    await driveFor(600, -1);
+    await waitFor(() => room.state.steeringInput < -0.2, 3000, 'steering after the reconnect');
 
     // Event ids keep increasing for the room; none are reused after the reconnect.
     const ids = events.map((event) => event.id);
@@ -742,33 +752,36 @@ describe('driving', () => {
     expect(events.length).toBeGreaterThanOrEqual(eventsBefore);
   });
 
-  it('puts the car back on the grid on RESET_CAR, at most once per second', async () => {
-    await settle();
-    const ack = room.state.ackSequence;
+  it('puts the car back on the grid on RESET_CAR as a new race, at most once per second', async () => {
+    feeder.stop();
     const phasesBefore = phases.length;
+    const raceBefore = room.state.raceId;
     room.send(ClientMessage.RESET_CAR);
     await waitFor(() => room.state.phase === 'COUNTDOWN', 2000, 'the countdown after a reset');
     expect(distanceFromSpawn()).toBe(0);
     expect(room.state.lap).toBe(0);
     expect(room.state.raceTimeMs).toBe(0);
-    expect(room.state.ackSequence).toBe(ack);
+    expect(room.state.raceId).toBe(raceBefore + 1);
+    expect(room.state.ackSequence).toBe(-1);
     await waitFor(() => phases.length > phasesBefore, 2000, 'the COUNTDOWN announcement');
     expect(phases[phases.length - 1]!.phase).toBe('COUNTDOWN');
 
     // The grid waits for its driver: with no samples arriving, the countdown does not run.
+    const held = room.state.tick;
     await sleep(400);
-    expect(room.state.tick).toBe(phases[phases.length - 1]!.tick);
+    expect(room.state.tick).toBe(held);
 
-    // A second reset right away is dropped, so the countdown is not restarted. The client
-    // keeps sending samples through the countdown, as the real one does.
-    const countdownTick = phases[phases.length - 1]!.tick;
+    // A second reset right away is dropped, so the countdown is not restarted.
     room.send(ClientMessage.RESET_CAR);
-    const deadline = Date.now() + (COUNTDOWN_SECONDS + 3) * 1000;
-    while (room.state.phase !== 'RACING' && Date.now() < deadline) {
-      drive();
-      await sleep(33);
-    }
-    expect(room.state.phase).toBe('RACING');
+    // Samples from before the reset cannot be replayed into the new race.
+    room.send(ClientMessage.PLAYER_INPUT, {
+      inputs: [sample(0, -1), sample(3, -1), sample(4, -1)],
+    });
+    await sleep(200);
+    expect(room.state.tick).toBe(held);
+    const countdownTick = room.state.tick;
+    await driveFor((COUNTDOWN_SECONDS + 1) * 1000);
+    await waitFor(() => room.state.phase === 'RACING', 3000, 'RACING after the reset');
     await waitFor(
       () => phases[phases.length - 1]!.phase === 'RACING',
       2000,
@@ -776,16 +789,11 @@ describe('driving', () => {
     );
     const racing = phases[phases.length - 1]!;
     expect(racing.tick - countdownTick).toBe(COUNTDOWN_SECONDS * 30);
-
-    // Samples from before the reset cannot be replayed into the new run.
-    await settle();
-    const latest = room.state.ackSequence;
-    room.send(ClientMessage.PLAYER_INPUT, { inputs: [sample(ack, -1)] });
-    await sleep(200);
-    expect(room.state.ackSequence).toBe(latest);
+    feeder.stop();
   });
 
   it('disposes the room when the player leaves on purpose', async () => {
+    feeder.stop();
     await room.leave();
     expect(left).toBe(4000);
     await waitFor(() => left !== undefined, 1000, 'the leave to complete');

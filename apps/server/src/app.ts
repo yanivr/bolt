@@ -14,16 +14,27 @@ import type {
 } from 'express';
 import express from 'express';
 import helmet from 'helmet';
-import { ROOM_DRIVE } from '@bolt/shared';
+import { CATALOG, CATALOG_VERSION } from '@bolt/content';
+import { ROOM_DRIVE, ROOM_MATCH } from '@bolt/shared';
 import type { GameServerConfig, ResolvedConfig } from './config.js';
 import { resolveConfig } from './config.js';
+import { createBlueprintService } from './db/blueprintService.js';
+import { createMemoryPersistence } from './db/memory.js';
+import { createMatchRecorder } from './db/matchRecorder.js';
+import { startRetentionJob } from './db/retention.js';
+import type { DatabaseHealth } from './db/types.js';
 import { sendError } from './http/errors.js';
 import { installMatchmakeGuard } from './http/matchmakeGuard.js';
-import { InMemoryGuestStore } from './persistence/guestStore.js';
 import { createDriveRoom } from './rooms/DriveRoom.js';
+import { createMatchRoom } from './rooms/MatchRoom.js';
+import { MatchCodeRegistry } from './rooms/matchCodes.js';
+import { setMatchRecorder } from './rooms/matchLog.js';
+import type { BlueprintRoutes } from './routes/blueprints.js';
+import { blueprintRoutes } from './routes/blueprints.js';
 import { catalogRoutes } from './routes/catalog.js';
 import { guestRoutes } from './routes/guest.js';
 import { healthRoutes } from './routes/health.js';
+import { matchLinks, matchRoutes } from './routes/match.js';
 import { trackRoutes } from './routes/tracks.js';
 import type { GuestSessions } from './security/guestSessions.js';
 import { createGuestSessions } from './security/guestSessions.js';
@@ -66,13 +77,46 @@ export function createGameServer(input: GameServerConfig): GameServer {
     api: createRateLimiter(config.rateLimits.api),
     guest: createRateLimiter(config.rateLimits.guest),
     join: createRateLimiter(config.rateLimits.join),
+    match: createRateLimiter(config.rateLimits.match),
+    code: createRateLimiter(config.rateLimits.code),
   };
+  // Race a Friend: the friend codes of this node's open lobbies.
+  const matchCodes = new MatchCodeRegistry();
+  // Section 15.8 persistence: PostgreSQL when main.ts opened one, otherwise in memory.
+  const persistence = input.persistence ?? createMemoryPersistence();
   const guests = createGuestSessions({
     signer: createGuestTokenSigner(config.guestTokenSecret),
-    store: input.guestStore ?? new InMemoryGuestStore(),
+    store: input.guestStore ?? persistence.guests,
     ttlSeconds: config.guestTokenTtlSeconds,
     rotateWithinSeconds: config.guestTokenRotateSeconds,
+    // A database remembers every session across restarts, so a signed token it does not know
+    // has been deleted (Section 16 reset) or expired, and must not come back. The in-memory
+    // store forgets everything on restart and keeps re-registering valid tokens instead.
+    adoptUnknownSessions: persistence.kind === 'memory',
   });
+  const blueprints = blueprintRoutes({
+    service: createBlueprintService({
+      repo: persistence.blueprints,
+      catalog: CATALOG,
+      catalogVersion: CATALOG_VERSION,
+      ...(input.blueprintLimits ? { limits: input.blueprintLimits } : {}),
+      ...(input.generateCarCode ? { generateCode: input.generateCarCode } : {}),
+    }),
+    persistence,
+    guests,
+    logger,
+    trustProxy: config.trustProxy,
+    catalogVersion: CATALOG_VERSION,
+    ...(input.blueprintRouteLimits ? { limits: input.blueprintRouteLimits } : {}),
+  });
+  // The rooms' match hook stores into this layer from now on (Section 15.8 `matches`).
+  const matchStore = createMatchRecorder({
+    repo: persistence.matches,
+    pseudonymKey: config.guestTokenSecret,
+    logger,
+  });
+  setMatchRecorder(matchStore.record);
+  const retention = startRetentionJob(persistence, logger, input.retentionIntervalMs);
   const roomCount = (): number => matchMaker.stats.local.roomCount;
 
   const app = createExpressApp({
@@ -83,13 +127,24 @@ export function createGameServer(input: GameServerConfig): GameServer {
     guests,
     startedAtMs,
     roomCount,
+    blueprints,
+    databaseHealth: () => persistence.health(),
+    match: matchRoutes({
+      guests,
+      codes: matchCodes,
+      createLimit: limiters.match,
+      codeLimit: limiters.code,
+      trustProxy: config.trustProxy,
+      logger,
+    }),
   });
   const httpServer = http.createServer(app);
 
   const transport = new WebSocketTransport({
     server: httpServer,
-    // Input packets are a few hundred bytes. Anything larger is not from this game.
-    maxPayload: 4 * 1024,
+    // Input packets are a few hundred bytes and a whole blueprint (a build submission) a few
+    // kilobytes at most. Anything larger is not from this game and closes the socket.
+    maxPayload: 8 * 1024,
     verifyClient: (info: { origin?: string; req: http.IncomingMessage }) =>
       origins.allows(info.origin || undefined, info.req.headers.host),
   });
@@ -104,18 +159,34 @@ export function createGameServer(input: GameServerConfig): GameServer {
     ROOM_DRIVE,
     createDriveRoom({ guests, logger, tuning: config.drive, maxRooms: config.maxRooms, roomCount }),
   );
+  gameServer.define(
+    ROOM_MATCH,
+    createMatchRoom({
+      guests,
+      logger,
+      tuning: config.match,
+      codes: matchCodes,
+      maxRooms: config.maxRooms,
+      roomCount,
+    }),
+  );
   installMatchmakeGuard(httpServer, {
     origins,
     limiter: limiters.join,
     trustProxy: config.trustProxy,
     maxBodyBytes: MATCHMAKE_BODY_LIMIT_BYTES,
     logger,
+    // Match rooms are entered only through /api/v1/match, which finds them by code.
+    creatableRooms: [ROOM_DRIVE],
   });
 
   const sweepTimer = setInterval(() => {
     limiters.api.sweep();
     limiters.guest.sweep();
     limiters.join.sweep();
+    limiters.match.sweep();
+    limiters.code.sweep();
+    blueprints.sweep();
     guests
       .sweep()
       .catch((error: unknown) => logger.error('guest_sweep_failed', errorFields(error)));
@@ -136,6 +207,7 @@ export function createGameServer(input: GameServerConfig): GameServer {
     shutdown() {
       shuttingDown ??= (async () => {
         clearInterval(sweepTimer);
+        retention.stop();
         const wasListening = httpServer.listening;
         const closed = new Promise<void>((resolve) => {
           if (!wasListening) resolve();
@@ -147,6 +219,9 @@ export function createGameServer(input: GameServerConfig): GameServer {
         const forced = setTimeout(() => httpServer.closeAllConnections(), HTTP_DRAIN_MS);
         await closed;
         clearTimeout(forced);
+        // Rooms that finished during shutdown handed their records over; store them first.
+        await matchStore.flush();
+        setMatchRecorder(null);
       })();
       return shuttingDown;
     },
@@ -157,10 +232,14 @@ type AppDeps = {
   config: ResolvedConfig;
   logger: Logger;
   origins: OriginPolicy;
-  limiters: Record<'api' | 'guest' | 'join', RateLimiter>;
+  limiters: Record<'api' | 'guest' | 'join' | 'match' | 'code', RateLimiter>;
   guests: GuestSessions;
   startedAtMs: number;
   roomCount: () => number;
+  blueprints: BlueprintRoutes;
+  databaseHealth: () => Promise<DatabaseHealth>;
+  /** Race a Friend: open a lobby, join one by code. */
+  match: express.Router;
 };
 
 function createExpressApp(deps: AppDeps): Express {
@@ -175,7 +254,13 @@ function createExpressApp(deps: AppDeps): Express {
   api.use(corsGate(origins, logger));
   api.use(rateLimit(deps.limiters.api, config.trustProxy));
   api.use(express.json({ limit: JSON_BODY_LIMIT, strict: true }));
-  api.use(healthRoutes({ startedAtMs: deps.startedAtMs, roomCount: deps.roomCount }));
+  api.use(
+    healthRoutes({
+      startedAtMs: deps.startedAtMs,
+      roomCount: deps.roomCount,
+      database: deps.databaseHealth,
+    }),
+  );
   api.use(
     guestRoutes({
       guests: deps.guests,
@@ -185,7 +270,13 @@ function createExpressApp(deps: AppDeps): Express {
   );
   api.use(trackRoutes());
   api.use(catalogRoutes());
+  api.use(deps.blueprints.api);
+  api.use(deps.match);
   app.use('/api/v1', api);
+  // Share links, `/car/CAR-XXXXXX-XX`: redirected into the app before the static files.
+  app.use(deps.blueprints.links);
+  // Invite links, `/join/<code>`, likewise.
+  app.use(matchLinks());
 
   const webIndex = config.webDist ? path.join(config.webDist, 'index.html') : undefined;
   if (config.webDist && webIndex && fs.existsSync(webIndex)) {

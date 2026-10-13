@@ -2,6 +2,8 @@ import { STRINGS } from '@bolt/content';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { useApp } from '../app/store.js';
+import { Glyph } from '../components/Glyph.js';
+import { PrivacyView } from '../components/PrivacyView.js';
 import type { AudioPrefs } from '../game/audio/index.js';
 import {
   getAudioPrefs,
@@ -120,17 +122,31 @@ export function SettingsPanel({ onClose, notice, actions, closeLabel }: Props) {
   // preferences (docs/DECISIONS.md, entry 135); this panel is where the player sets them.
   const [audio, setAudio] = useState<AudioPrefs>(() => getAudioPrefs());
   useEffect(() => onAudioPrefs(setAudio), []);
+  // Privacy Info (Section 5.13) opens the privacy page over the settings.
+  const [privacyOpen, setPrivacyOpen] = useState(false);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        // A confirmation on the privacy page handles its own Escape.
+        if (privacyOpen && document.querySelector('[role="alertdialog"]')) return;
         event.stopPropagation();
-        onClose();
+        if (privacyOpen) setPrivacyOpen(false);
+        else onClose();
       }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [onClose]);
+  }, [onClose, privacyOpen]);
+
+  if (privacyOpen)
+    return (
+      <div className="overlay" role="dialog" aria-modal="true" aria-label={STRINGS.privacy.title}>
+        <div className="panel sheet sheet-full">
+          <PrivacyView onClose={() => setPrivacyOpen(false)} closeLabel={STRINGS.settings.title} />
+        </div>
+      </div>
+    );
 
   return (
     <div className="overlay" role="dialog" aria-modal="true" aria-label={STRINGS.settings.title}>
@@ -263,6 +279,13 @@ export function SettingsPanel({ onClose, notice, actions, closeLabel }: Props) {
             ]}
             onChange={(v) => update({ speedUnit: v })}
           />
+          <div className="setting-row">
+            <span>{STRINGS.privacy.title}</span>
+            <button className="btn btn-small" onClick={() => setPrivacyOpen(true)}>
+              <Glyph name="privacy" size={24} />
+              <span>{STRINGS.privacy.open}</span>
+            </button>
+          </div>
         </div>
         {actions && <footer className="settings-actions">{actions}</footer>}
       </div>

@@ -645,8 +645,9 @@ export class RaceScene extends Phaser.Scene {
     const input = this.cfg.input;
     input.mode = settings.steering;
     // Solo and offline sessions simply stop sampling while the menu is open. An online race
-    // keeps running on the server, so the car receives neutral input instead.
-    const frozen = app.paused && this.cfg.link.mode === 'offline';
+    // keeps running on the server, so the car receives neutral input instead. While the
+    // authority holds the race on the grid (both players loading), nothing is predicted.
+    const frozen = (app.paused && this.cfg.link.mode === 'offline') || this.cfg.link.held === true;
     input.enabled = !app.paused;
 
     const steps = this.pipeline.begin(time, frozen);

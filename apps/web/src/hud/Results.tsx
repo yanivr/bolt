@@ -1,8 +1,10 @@
 import { STRINGS, getPart } from '@bolt/content';
 import type { RaceResult } from '@bolt/shared';
+import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef } from 'react';
 import { PartIcon } from '../components/PartIcon.js';
 import { PixelText } from '../components/PixelText.js';
+import { ResultsShare } from '../garage/ui/ResultsShare.js';
 import type { GameManifests } from '../game/assets.js';
 import { hudLive } from './hudStore.js';
 import type { HudLoadout } from './model.js';
@@ -39,6 +41,10 @@ function verdictLine(verdict: Verdict): string {
       return r.youKo;
     case 'draw':
       return r.drawLine;
+    case 'rival_forfeit':
+      return verdict.forfeitCause === 'left' ? r.rivalLeftForfeit : r.rivalForfeit;
+    case 'you_forfeit':
+      return r.youForfeit;
     default:
       return r.timeout;
   }
@@ -88,6 +94,11 @@ type Props = {
   onRaceAgain: () => void;
   onChangeBuild: () => void;
   onHome: () => void;
+  /**
+   * Race a Friend: the rematch votes and the way home, in place of Race Again, Change My Build
+   * and Back Home (Section 5.11: no new race without both players).
+   */
+  actions?: ReactNode;
 };
 
 type Column = {
@@ -114,6 +125,7 @@ export function Results({
   onRaceAgain,
   onChangeBuild,
   onHome,
+  actions,
 }: Props) {
   const r = STRINGS.results;
   const again = useRef<HTMLButtonElement>(null);
@@ -363,17 +375,28 @@ export function Results({
           </section>
         </div>
 
-        <footer className="dialog-actions results-actions">
-          <button className="btn btn-primary" onClick={onRaceAgain} ref={again}>
-            {STRINGS.race.raceAgain}
-          </button>
-          <button className="btn" onClick={onChangeBuild}>
-            {STRINGS.race.changeBuild}
-          </button>
-          <button className="btn" onClick={onHome}>
-            {STRINGS.race.backHome}
-          </button>
-        </footer>
+        {actions ? (
+          <footer className="results-match">
+            {actions}
+            <div className="dialog-actions results-actions">
+              <ResultsShare />
+            </div>
+          </footer>
+        ) : (
+          <footer className="dialog-actions results-actions">
+            <button className="btn btn-primary" onClick={onRaceAgain} ref={again}>
+              {STRINGS.race.raceAgain}
+            </button>
+            <button className="btn" onClick={onChangeBuild}>
+              {STRINGS.race.changeBuild}
+            </button>
+            {/* Save This Car and Share Blueprint (Section 5.11), owned by the garage code. */}
+            <ResultsShare />
+            <button className="btn" onClick={onHome}>
+              {STRINGS.race.backHome}
+            </button>
+          </footer>
+        )}
       </div>
     </div>
   );
