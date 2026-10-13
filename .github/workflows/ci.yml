@@ -20,7 +20,14 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - name: Install
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm install --frozen-lockfile 2>&1 | tee install.log || {
+            tail -n 30 install.log | while IFS= read -r line; do echo "::error title=pnpm install::$line"; done
+            exit 1
+          }
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
@@ -52,7 +59,14 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - name: Install
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm install --frozen-lockfile 2>&1 | tee install.log || {
+            tail -n 30 install.log | while IFS= read -r line; do echo "::error title=pnpm install::$line"; done
+            exit 1
+          }
       - run: pnpm test:db
         env:
           BOLT_TEST_DATABASE_URL: postgres://bolt:bolt-ci-only@localhost:5432/bolt_test
@@ -68,7 +82,14 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - name: Install
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm install --frozen-lockfile 2>&1 | tee install.log || {
+            tail -n 30 install.log | while IFS= read -r line; do echo "::error title=pnpm install::$line"; done
+            exit 1
+          }
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm build
       - run: pnpm test:e2e
