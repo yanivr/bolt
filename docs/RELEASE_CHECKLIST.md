@@ -13,7 +13,7 @@ Last updated: October 11, 2026, Milestone B implemented: rules, garage and art f
 Deliverables:
 
 - [x] Monorepo, strict TypeScript, shared types, lint, tests. `pnpm check` passes: 314 unit, integration and feel-bench tests.
-- [x] CI workflow written (`.github/workflows/ci.yml`). **Not yet run**: the repository could not be reached from the build session.
+- [x] CI runs on GitHub (`.github/workflows/ci.yml`, repository yanivr/bolt): lint, typecheck, unit tests and the art check; the PostgreSQL suite against a real database; the full Playwright suite. All three jobs green on October 13, 2026 after fixing a dependency that needed SSH (the unused `colyseus` meta package), shipping the interface font so layouts match on every machine, and three timing-sensitive tests.
 - [x] Phaser canvas, WebGL first with Canvas fallback configured. Canvas fallback is untested on a device without WebGL.
 - [x] Basic server: Express API, Colyseus 0.16 drive room, fixed 30 Hz authoritative loop, input validation, reconnect.
 - [x] Guest session: signed anonymous tokens, in-memory store behind the interface PostgreSQL will implement.
