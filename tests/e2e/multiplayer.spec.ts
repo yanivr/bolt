@@ -208,7 +208,9 @@ for (const [hostSize, guestSize] of [
     await expect(host.getByTestId('results-line')).toHaveText(
       'Your rival disconnected. You win by forfeit.',
     );
-    await expect(host.getByTestId('reopen')).toBeVisible({ timeout: 10_000 });
+    // The forfeited seat is freed when its results grace runs out (30 s), then the host may
+    // invite someone new.
+    await expect(host.getByTestId('reopen')).toBeVisible({ timeout: 45_000 });
     await shot(host, 'results_forfeit');
     await host.getByTestId('match-home').tap();
     await expect(host.getByTestId('challenge-friend')).toBeVisible();

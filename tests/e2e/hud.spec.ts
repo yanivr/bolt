@@ -1542,9 +1542,12 @@ test('a whole race to the flag: the finish, then results that agree with the ser
     await page.waitForTimeout(400);
     await page.keyboard.up('Space');
     await page.keyboard.up('KeyE');
-    await page.waitForTimeout(1600);
-    if (!sawFinal && (await page.getByRole('img', { name: 'FINAL LAP' }).count()) > 0)
-      sawFinal = true;
+    // The banner is up for a moment only: look for it several times in each pause.
+    for (let look = 0; look < 4; look++) {
+      if (!sawFinal && (await page.getByRole('img', { name: 'FINAL LAP' }).count()) > 0)
+        sawFinal = true;
+      await page.waitForTimeout(400);
+    }
   }
   await expect(results).toBeVisible({ timeout: 30_000 });
   expect(sawFinal).toBe(true);
