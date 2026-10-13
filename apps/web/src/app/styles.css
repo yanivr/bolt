@@ -1,3 +1,37 @@
+/* The interface face: Inter (SIL Open Font License), subset to Latin, shipped with the game so
+   every device lays the interface out the same way. */
+@font-face {
+  font-family: 'Bolt Sans';
+  src: url('/assets/fonts/ui/inter-regular.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Bolt Sans';
+  src: url('/assets/fonts/ui/inter-semibold.woff') format('woff');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Bolt Sans';
+  src: url('/assets/fonts/ui/inter-bold.woff') format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Bolt Sans';
+  src: url('/assets/fonts/ui/inter-extrabold.woff') format('woff');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 /*
  * BOLT RIVALS interface styles. Fixed visual language from Section 5.1: dark navy metal
  * panels, off-white text, cyan for the local driver, coral for the rival, gold for credits and
@@ -25,6 +59,7 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
   font-family:
+    'Bolt Sans',
     ui-sans-serif,
     system-ui,
     -apple-system,
